@@ -110,11 +110,18 @@ check_and_prepare_volumes() {
     )
 
     for PATH_ITEM in "${FILES_TO_CHECK[@]}"; do
-        if [[ "$PATH_ITEM" == *"/.ssh" ]] && [ ! -d "$PATH_ITEM" ]; then
-            echo "  📁 建立目錄: $PATH_ITEM"
-            mkdir -p "$PATH_ITEM"
-            chmod 700 "$PATH_ITEM"
+        if [[ "$PATH_ITEM" == *"/.ssh" ]] || [[ "$PATH_ITEM" == *"/.config/gh" ]]; then
+            if [ ! -d "$PATH_ITEM" ]; then
+                echo "  📁 建立目錄: $PATH_ITEM"
+                mkdir -p "$PATH_ITEM"
+                if [[ "$PATH_ITEM" == *"/.ssh" ]]; then
+                    chmod 700 "$PATH_ITEM"
+                fi
+            else
+                echo "  ✅ 已存在: $PATH_ITEM"
+            fi
         elif [ ! -e "$PATH_ITEM" ]; then
+            mkdir -p "$(dirname "$PATH_ITEM")"
             if [[ "$PATH_ITEM" == *"/.ssh/known_hosts" ]]; then
                 echo "  📁 建立檔案: $PATH_ITEM"
                 touch "$PATH_ITEM"
@@ -128,6 +135,47 @@ check_and_prepare_volumes() {
             echo "  ✅ 已存在: $PATH_ITEM"
         fi
     done
+
+    check_gh_cli
+}
+
+check_gh_cli() {
+    echo
+    if command -v gh &> /dev/null; then
+        echo "  ✅ GitHub CLI (gh) 已安裝: $(gh --version | head -1)"
+        if ! gh auth status &> /dev/null; then
+            echo "  ⚠️  gh 尚未登入，容器內的 git 操作可能無法使用 GitHub"
+            echo "     請執行: gh auth login"
+        fi
+        return
+    fi
+
+    echo "  ⚠️  未偵測到 GitHub CLI (gh)"
+    echo "     gh 可讓容器內直接操作 GitHub PR / Issue / Repo"
+    echo
+    read -p "  是否立即安裝 gh？(y/N): " INSTALL_GH
+    case "$INSTALL_GH" in
+        y|Y)
+            echo "  正在安裝 GitHub CLI..."
+            if command -v apt-get &> /dev/null; then
+                curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
+                sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+                    | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+                sudo apt-get update -qq && sudo apt-get install -y gh
+                echo "  ✅ gh 安裝完成，請執行 gh auth login 登入"
+            elif command -v brew &> /dev/null; then
+                brew install gh
+                echo "  ✅ gh 安裝完成，請執行 gh auth login 登入"
+            else
+                echo "  ❌ 無法自動安裝，請手動安裝: https://cli.github.com/"
+            fi
+            ;;
+        *)
+            echo "  跳過 gh 安裝。若日後需要，請參考: https://cli.github.com/"
+            ;;
+    esac
 }
 
 download_files() {
