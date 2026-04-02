@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://raw.githubusercontent.com/tryweb/opencode-openchamber/main"
+REPO_URL="https://raw.githubusercontent.com/tryweb/codeforge/main"
 
 check_system() {
     echo "========================================"

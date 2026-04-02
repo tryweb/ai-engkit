@@ -30,7 +30,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ai-dev
+    container_name: codeforge
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:

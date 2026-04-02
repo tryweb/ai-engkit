@@ -1,4 +1,4 @@
-# OpenChamber
+# CodeForge
 
 A self-hosted AI development environment powered by [OpenCode](https://opencode.ai) and [OpenChamber](https://openchamber.dev/), running on Ubuntu 24.04 with Ollama integration.
 
@@ -17,8 +17,8 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 
 ```bash
 # Clone the repository
-git clone https://github.com/tryweb/opencode-openchamber.git
-cd opencode-openchamber
+git clone https://github.com/tryweb/codeforge.git
+cd codeforge
 
 # Configure environment (optional)
 cp .env.example .env
@@ -105,7 +105,7 @@ This builds the image from scratch, starts all services, runs 39 verification te
 
 3. GitHub Actions will automatically:
    - Build and test the image
-   - Push to `ghcr.io/{owner}/opencode-openchamber:{version}`
+   - Push to `ghcr.io/{owner}/codeforge:{version}`
    - Create a GitHub Release with notes
 
 ## Project Structure

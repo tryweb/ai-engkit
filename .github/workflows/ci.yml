@@ -78,7 +78,7 @@ jobs:
         with:
           context: .
           outputs: type=docker,dest=/tmp/image.tar
-          tags: opencode-openchamber:test
+          tags: codeforge:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -87,7 +87,7 @@ jobs:
 
       - name: Start services
         run: |
-          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: opencode-openchamber:test' docker-compose.dev.yml
+          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: codeforge:test' docker-compose.dev.yml
           sed -i 's/container_name: ai-dev/container_name: ci-test/' docker-compose.dev.yml
           docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services..."
@@ -129,7 +129,7 @@ jobs:
         with:
           context: .
           outputs: type=docker,dest=/tmp/image.tar
-          tags: opencode-openchamber:scan
+          tags: codeforge:scan
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -139,7 +139,7 @@ jobs:
       - name: Run Grype vulnerability scan
         uses: anchore/scan-action@v7
         with:
-          image: "opencode-openchamber:scan"
+          image: "codeforge:scan"
           output-format: sarif
           output-file: grype-results.sarif
           severity-cutoff: critical

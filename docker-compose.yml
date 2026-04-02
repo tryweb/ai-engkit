@@ -27,8 +27,8 @@ services:
     restart: unless-stopped
 
   ai-dev:
-    image: ghcr.io/tryweb/opencode-openchamber:latest
-    container_name: ai-dev
+    image: ghcr.io/tryweb/codeforge:latest
+    container_name: codeforge
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:

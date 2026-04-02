@@ -32,14 +32,14 @@ jobs:
         with:
           context: .
           load: true
-          tags: opencode-openchamber:current
+          tags: codeforge:current
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Check for package updates
         id: check
         run: |
-          UPDATES=$(docker run --rm opencode-openchamber:current bash -c '
+          UPDATES=$(docker run --rm codeforge:current bash -c '
             apt-get update -qq 2>/dev/null
             apt-get upgrade -s 2>/dev/null | grep "^Inst " || true
           ')
@@ -68,7 +68,7 @@ jobs:
       - name: Scan current image
         uses: anchore/scan-action@v7
         with:
-          image: "opencode-openchamber:current"
+          image: "codeforge:current"
           output-format: sarif
           output-file: grype-current.sarif
           severity-cutoff: high
@@ -97,7 +97,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: opencode-openchamber:updated
+          tags: codeforge:updated
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -106,7 +106,7 @@ jobs:
       - name: Run Grype scan on updated image
         uses: anchore/scan-action@v7
         with:
-          image: "opencode-openchamber:updated"
+          image: "codeforge:updated"
           output-format: sarif
           output-file: grype-updated.sarif
           severity-cutoff: high
@@ -121,7 +121,7 @@ jobs:
 
       - name: Start services
         run: |
-          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: opencode-openchamber:updated' docker-compose.dev.yml
+          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: codeforge:updated' docker-compose.dev.yml
           sed -i 's/container_name: ai-dev/container_name: ci-test/' docker-compose.dev.yml
           docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services..."
