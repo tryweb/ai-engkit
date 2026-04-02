@@ -88,7 +88,7 @@ jobs:
       - name: Start services
         run: |
           sed -i '/build:/,/dockerfile: Dockerfile/c\    image: codeforge:test' docker-compose.dev.yml
-          sed -i 's/container_name: ai-dev/container_name: ci-test/' docker-compose.dev.yml
+          sed -i 's/container_name: codeforge/container_name: ci-test/' docker-compose.dev.yml
           docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services..."
           sleep 30
