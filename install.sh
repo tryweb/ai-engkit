@@ -44,6 +44,34 @@ check_system() {
     else
         echo "  ✅ 磁碟空間符合建議規格"
     fi
+
+    CPU_FLAGS=$(grep -m1 '^flags' /proc/cpuinfo 2>/dev/null || echo "")
+    HAS_AVX=false
+    HAS_AVX2=false
+    if echo "$CPU_FLAGS" | grep -qw 'avx'; then
+        HAS_AVX=true
+    fi
+    if echo "$CPU_FLAGS" | grep -qw 'avx2'; then
+        HAS_AVX2=true
+    fi
+
+    if [ "$HAS_AVX" = "true" ] && [ "$HAS_AVX2" = "true" ]; then
+        echo "  ✅ CPU 指令集: AVX + AVX2 支援"
+    else
+        echo ""
+        echo "  ❌ CPU 缺少必要的 SIMD 指令集:"
+        if [ "$HAS_AVX" = "false" ]; then
+            echo "     - AVX  未支援 (opencode 標準版需要)"
+        fi
+        if [ "$HAS_AVX2" = "false" ]; then
+            echo "     - AVX2 未支援 (lancedb prebuilt binary 需要)"
+        fi
+        echo ""
+        echo "  這些指令集為 opencode + lancedb-opencode-pro 的必要條件。"
+        echo "  常見不支援的環境: 舊型 CPU、部分雲端 VM (t2.micro 等)、QEMU 預設模式"
+        echo "  建議: 使用支援 AVX2 的機器 (Intel Haswell 2013+ / AMD Excavator 2015+)"
+        exit 1
+    fi
 }
 
 check_docker() {

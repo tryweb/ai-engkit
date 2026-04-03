@@ -40,6 +40,28 @@ This test:
 
 If the test fails, stop and report. Do not proceed with release.
 
+### 1.5. Check for Uncommitted Changes
+
+Before proceeding with version bump and release, check if there are any uncommitted files:
+
+```bash
+git status --short
+```
+
+**If there are uncommitted changes:**
+1. **Ask the user** if they want to commit them before release
+2. If user confirms, create a descriptive commit message following conventional commits:
+   - `feat:` for new features
+   - `fix:` for bug fixes
+   - `chore:` for maintenance tasks
+   - `docs:` for documentation
+3. **Commit before continuing** with the release
+
+**If working tree is clean:**
+- Proceed to version determination
+
+Do not release with uncommitted changes. All changes must be committed before tagging.
+
 ### 2. Determine Current and Next Version
 
 ```bash
@@ -115,6 +137,7 @@ After push, inform the user:
 ## Rules
 
 - Never skip the test step
+- Never release with uncommitted changes (must commit first)
 - Never push without user confirmation
 - If `git log` is empty since last tag, warn the user
 - Use semver format: `v{MAJOR}.{MINOR}.{PATCH}`

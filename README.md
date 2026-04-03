@@ -16,15 +16,7 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 ## Quick Start
 
 ```bash
-# Clone the repository
-git clone https://github.com/tryweb/codeforge.git
-cd codeforge
-
-# Configure environment (optional)
-cp .env.example .env
-
-# Start with pre-built image
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/tryweb/Codeforge/refs/heads/main/install.sh | bash
 ```
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
@@ -92,38 +84,42 @@ This builds the image from scratch, starts all services, runs 39 verification te
 
 ## Release Process
 
-1. Ensure all tests pass locally:
-   ```bash
-   ./test/run-tests.sh
-   ```
+```bash
+/release
+```
 
-2. Create and push a version tag:
-   ```bash
-   git tag v0.1.0
-   git push origin main --tags
-   ```
+This runs the automated release skill which:
+1. Runs local tests (including memory plugin E2E verification)
+2. Calculates version bump (MAJOR/MINOR/PATCH)
+3. Generates release notes
+4. Prompts for confirmation
+5. Tags and pushes to GitHub
 
-3. GitHub Actions will automatically:
-   - Build and test the image
-   - Push to `ghcr.io/{owner}/codeforge:{version}`
-   - Create a GitHub Release with notes
+GitHub Actions will automatically:
+- Build and test the image
+- Push to `ghcr.io/{owner}/codeforge:{version}`
+- Create a GitHub Release with notes
 
 ## Project Structure
 
 ```
 ├── .env.example              # Environment template
 ├── .github/workflows/ci.yml  # CI/CD pipeline
-├── docker-compose.yml        # User-facing (uses pre-built image)
-├── docker-compose.dev.yml    # Developer (builds from Dockerfile)
-├── Dockerfile                # Ubuntu 24.04 based image
-├── entrypoint.sh             # Main entrypoint
-├── entrypoint.d/             # Initialization scripts
+├── .opencode/skills/          # OpenCode skill definitions
+│   └── release.md             # Release workflow skill
+├── docker-compose.yml         # User-facing (uses pre-built image)
+├── docker-compose.dev.yml     # Developer (builds from Dockerfile)
+├── Dockerfile                 # Ubuntu 24.04 based image
+├── entrypoint.sh              # Main entrypoint
+├── entrypoint.d/              # Initialization scripts
 │   ├── 00-fix-perms.sh       # Fix volume permissions
 │   ├── 01-install-packages.sh # Dynamic package installation
 │   └── 02-init-config.sh     # Auto-generate default configs
 └── test/
-    ├── run-tests.sh          # Integration test suite
-    └── test-full.sh          # Full build-test pipeline
+    ├── run-tests.sh           # Integration test suite
+    ├── test-full.sh           # Full build-test pipeline
+    ├── test-memory-e2e.sh     # Memory plugin E2E test
+    └── release-memory-test.sh # Release gate test
 ```
 
 ## License
