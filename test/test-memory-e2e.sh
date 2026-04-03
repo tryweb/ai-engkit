@@ -88,11 +88,11 @@ fi
 echo ""
 echo "--- LanceDB Dependencies ---"
 LANCEDB_CACHE=$(docker exec "$CONTAINER" sh -c \
-  'ls -la /home/devuser/.bun/install/cache/@lancedb 2>/dev/null | grep -q lancedb && echo "found" || echo "not_found"' 2>/dev/null || echo "error")
+  'ls -la /home/devuser/.cache/opencode/node_modules/@lancedb 2>/dev/null | grep -q lancedb && echo "found" || echo "not_found"' 2>/dev/null || echo "error")
 if [ "$LANCEDB_CACHE" = "found" ]; then
-  pass "LanceDB native addon is cached"
+  pass "LanceDB native addon is installed"
 else
-  fail "LanceDB native addon not found in bun cache"
+  fail "LanceDB native addon not found"
   EXIT_CODE=1
 fi
 
