@@ -19,4 +19,12 @@ echo "Running:"
 echo "$@"
 echo
 
-exec "$@"
+# sg docker ensures the final command runs with correct group membership.
+# The docker group was added by 03-fix-docker-gid.sh, but running processes
+# cannot dynamically update their groups. sg starts a new shell that re-reads
+# /etc/group, giving the service processes proper docker group access.
+if getent group docker > /dev/null 2>&1; then
+  exec sg docker -c "$*"
+else
+  exec "$@"
+fi
