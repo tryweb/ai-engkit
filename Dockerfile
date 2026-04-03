@@ -84,7 +84,9 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
 # ── Global npm 套件（opencode / openchamber / openspec）
-RUN bun install -g opencode-ai@${OPENCODE_VERSION} && \
+# 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
+RUN rm -rf ~/.bun/install/cache && \
+    bun install -g opencode-ai@${OPENCODE_VERSION} && \
     bun install -g @openchamber/web@${OPENCHAMBER_VERSION} && \
     bun install -g @fission-ai/openspec && \
     # bun 作為 node shim：讓呼叫 `node` 的腳本也能運作
