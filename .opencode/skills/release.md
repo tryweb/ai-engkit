@@ -19,6 +19,27 @@ When the user asks to release, follow these steps in order:
 
 If any test fails, stop and report the failures. Do not proceed with release.
 
+### 1.1. Run Memory Plugin Release Test
+
+This test validates that `lancedb-opencode-pro` plugin works correctly with the current OpenCode version. **This is a critical gate** - if it fails, the release is blocked.
+
+```bash
+./test/release-memory-test.sh
+```
+
+This test:
+- Starts the full `docker-compose.dev.yml` stack (Ollama + ai-dev)
+- Waits for Ollama health check (includes `nomic-embed-text` model)
+- Waits for openchamber to be ready
+- Executes `memory_stats` via `opencode run --attach`
+- Verifies the plugin returns valid JSON
+
+**Common failure: OpenCode v1.3.8+** causes "Memory store unavailable" due to NAPI addon bug (Issue #20623). If this occurs:
+- Downgrade OpenCode to v1.3.7 in Dockerfile
+- Or wait for OpenCode team to fix Issue #20623
+
+If the test fails, stop and report. Do not proceed with release.
+
 ### 2. Determine Current and Next Version
 
 ```bash

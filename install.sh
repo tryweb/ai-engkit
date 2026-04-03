@@ -236,29 +236,34 @@ setup_env() {
     fi
 
     echo "  請選擇 Workspace 類型:"
-    echo "    1) Named Volume (預設，建議)"
-    echo "    2) Bind Mount (自訂路徑)"
-    read -p "  選擇 [1/2]: " WS_CHOICE
+    echo "    1) Bind Mount ./workspace (預設)"
+    echo "    2) Named Volume (完全 Docker 管理)"
+    echo "    3) 自訂路徑"
+    read -p "  選擇 [1/2/3]: " WS_CHOICE
 
     case "$WS_CHOICE" in
         2)
-            echo "  請輸入主機上的 workspace 路徑:"
-            read -p "  WORKSPACE_PATH: " WS_PATH
-            if [ -n "$WS_PATH" ]; then
-                if [ ! -d "$WS_PATH" ]; then
-                    echo "  📁 建立目錄: $WS_PATH"
-                    mkdir -p "$WS_PATH"
-                fi
-                sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=$WS_PATH|" .env 2>/dev/null || true
-                echo "  ✅ WORKSPACE_PATH 已設定為: $WS_PATH"
-            else
-                echo "  ⚠️  使用預設 named volume"
-                sed -i "s|^WORKSPACE_PATH=.*|# WORKSPACE_PATH=|" .env 2>/dev/null || true
-            fi
-            ;;
-        *)
             echo "  ✅ 使用 named volume"
             sed -i "s|^WORKSPACE_PATH=.*|# WORKSPACE_PATH=|" .env 2>/dev/null || true
+            ;;
+        3)
+            echo "  請輸入主機上的 workspace 路徑:"
+            read -p "  WORKSPACE_PATH: " WS_PATH
+            WS_PATH="${WS_PATH:-./workspace}"
+            if [ ! -d "$WS_PATH" ]; then
+                echo "  📁 建立目錄: $WS_PATH"
+                mkdir -p "$WS_PATH"
+            fi
+            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=$WS_PATH|" .env 2>/dev/null || true
+            echo "  ✅ WORKSPACE_PATH 已設定為: $WS_PATH"
+            ;;
+        *)
+            if [ ! -d "./workspace" ]; then
+                echo "  📁 建立目錄: ./workspace"
+                mkdir -p "./workspace"
+            fi
+            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=./workspace|" .env 2>/dev/null || true
+            echo "  ✅ WORKSPACE_PATH 已設定為: ./workspace"
             ;;
     esac
 }
@@ -330,6 +335,8 @@ show_info() {
 
 main() {
     cd "$(dirname "$0")"
+
+    [ -t 0 ] || exec < /dev/tty
 
     check_system
     check_docker

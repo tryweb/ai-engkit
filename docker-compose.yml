@@ -32,7 +32,7 @@ services:
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:
-      - ${WORKSPACE_PATH:-workspace}:/home/devuser/workspace
+      - ${WORKSPACE_PATH:-./workspace}:/home/devuser/workspace
       - opencode-data:/home/devuser/.local/share/opencode
       - opencode-config:/home/devuser/.config/opencode
       - opencode-cache:/home/devuser/.cache/opencode
