@@ -34,8 +34,6 @@ jobs:
           context: .
           load: true
           tags: codeforge:current
-          cache-from: type=gha,mode=min
-          cache-to: type=gha,mode=min
 
       - name: Check for package updates
         id: check
@@ -99,8 +97,6 @@ jobs:
           context: .
           load: true
           tags: codeforge:updated
-          cache-from: type=gha,mode=min
-          cache-to: type=gha,mode=min
           build-args: |
             UPGRADE_PACKAGES=true
 
