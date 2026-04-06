@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload current scan results
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && fileExists('grype-current.sarif')
+        if: always()
         with:
           sarif_file: grype-current.sarif
           category: dependency-check-current
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload updated scan results
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && fileExists('grype-updated.sarif')
+        if: always()
         with:
           sarif_file: grype-updated.sarif
           category: dependency-check-updated
