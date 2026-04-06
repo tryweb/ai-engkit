@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   issues: write
+  security-events: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -33,8 +34,8 @@ jobs:
           context: .
           load: true
           tags: codeforge:current
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,mode=min
+          cache-to: type=gha,mode=min
 
       - name: Check for package updates
         id: check
@@ -76,7 +77,7 @@ jobs:
 
       - name: Upload current scan results
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && fileExists('grype-current.sarif')
         with:
           sarif_file: grype-current.sarif
           category: dependency-check-current
@@ -98,8 +99,8 @@ jobs:
           context: .
           load: true
           tags: codeforge:updated
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,mode=min
+          cache-to: type=gha,mode=min
           build-args: |
             UPGRADE_PACKAGES=true
 
@@ -114,7 +115,7 @@ jobs:
 
       - name: Upload updated scan results
         uses: github/codeql-action/upload-sarif@v4
-        if: always()
+        if: always() && fileExists('grype-updated.sarif')
         with:
           sarif_file: grype-updated.sarif
           category: dependency-check-updated
