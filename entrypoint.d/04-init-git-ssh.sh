@@ -11,6 +11,7 @@ init_file() {
     return 0
   fi
 
+  rm -rf "$file"
   mkdir -p "$(dirname "$file")"
   touch "$file"
   chown devuser:devuser "$file"
