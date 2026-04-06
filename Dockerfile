@@ -121,8 +121,15 @@ WORKDIR /home/${USERNAME}/workspace
 VOLUME [ \
     "/home/${USERNAME}/workspace", \
     "/home/${USERNAME}/.local/share/opencode", \
+    "/home/${USERNAME}/.config/opencode", \
+    "/home/${USERNAME}/.cache/opencode", \
+    "/home/${USERNAME}/.cache/oh-my-opencode", \
     "/home/${USERNAME}/.config/openchamber", \
-    "/home/${USERNAME}/.ssh" \
+    "/home/${USERNAME}/.ssh", \
+    "/home/${USERNAME}/.gitconfig", \
+    "/home/${USERNAME}/.git-credentials", \
+    "/home/${USERNAME}/.config/gh", \
+    "/root/.ollama" \
 ]
 
 EXPOSE 3000 4095
