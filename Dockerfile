@@ -77,7 +77,7 @@ ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 
-RUN brew install gh
+RUN brew install gh glab
 
 # ── Bun ────────────────────────────────────────────────
 RUN curl -fsSL https://bun.sh/install | bash
