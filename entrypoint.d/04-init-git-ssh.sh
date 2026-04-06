@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_DIR="$HOME/.ssh"
-GIT_CONFIG_DIR="$HOME/.config/git"
+DEVUSER_HOME="/home/devuser"
+SSH_DIR="$DEVUSER_HOME/.ssh"
+GIT_CONFIG_DIR="$DEVUSER_HOME/.config/git"
 
 init_file() {
   local file="$1"
@@ -57,8 +58,8 @@ init_file "$GIT_CONFIG_DIR/.gitconfig"
 init_file "$GIT_CONFIG_DIR/.git-credentials"
 init_file "$GIT_CONFIG_DIR/config"
 
-create_symlink "$GIT_CONFIG_DIR/.gitconfig" "$HOME/.gitconfig"
-create_symlink "$GIT_CONFIG_DIR/.git-credentials" "$HOME/.git-credentials"
+create_symlink "$GIT_CONFIG_DIR/.gitconfig" "$DEVUSER_HOME/.gitconfig"
+create_symlink "$GIT_CONFIG_DIR/.git-credentials" "$DEVUSER_HOME/.git-credentials"
 
 echo "=== Git/SSH volumes initialized ==="
 echo
