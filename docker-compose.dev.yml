@@ -41,11 +41,8 @@ services:
       - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode
       - openchamber-data:/home/devuser/.config/openchamber
       - ollama-data:/root/.ollama
-      - git-config:/home/devuser/.gitconfig
-      - git-credentials:/home/devuser/.git-credentials
-      - gh-config:/home/devuser/.config/gh
+      - git-config:/home/devuser/.config/git
       - ssh-keys:/home/devuser/.ssh
-      - ssh-known-hosts:/home/devuser/.ssh/known_hosts
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -72,7 +69,4 @@ volumes:
   openchamber-data:
   ollama-data:
   git-config:
-  git-credentials:
-  gh-config:
   ssh-keys:
-  ssh-known-hosts:

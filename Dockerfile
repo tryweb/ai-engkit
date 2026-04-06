@@ -126,9 +126,7 @@ VOLUME [ \
     "/home/${USERNAME}/.cache/oh-my-opencode", \
     "/home/${USERNAME}/.config/openchamber", \
     "/home/${USERNAME}/.ssh", \
-    "/home/${USERNAME}/.gitconfig", \
-    "/home/${USERNAME}/.git-credentials", \
-    "/home/${USERNAME}/.config/gh", \
+    "/home/${USERNAME}/.config/git", \
     "/root/.ollama" \
 ]
 
