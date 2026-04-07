@@ -8,7 +8,7 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 - **OpenChamber Web UI** — Browser-based interface for managing AI sessions ([openchamber.dev](https://openchamber.dev/))
 - **Ollama Integration** — Local LLM inference with embedding support
 - **OpenSpec** — Spec-driven development tooling
-- **GitHub CLI** — Built-in `gh` for repository management
+- **GitHub CLI** — Built-in `gh` and `glab` for repository management
 - **Full Dev Toolchain** — git, jq, tree, tmux, python3, ssh, rsync, and more
 - **Persistent Configuration** — All settings and data survive container restarts
 - **Zero-Config Setup** — Automatic initialization of default configs on first run
