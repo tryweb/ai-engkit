@@ -1,11 +1,14 @@
 services:
-  ollama:
+  ollama-dev:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: ollama-dev
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${OLLAMA_DEV_PORT:-11435}:11434"
     volumes:
-      - ollama-data:/root/.ollama
+      - ollama-data-dev:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
     entrypoint: [""]
@@ -30,43 +33,43 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: codeforge
+    container_name: codeforge-dev
     ports:
-      - "${CHAMBER_PORT:-8000}:3000"
+      - "${CHAMBER_DEV_PORT:-8001}:3000"
     volumes:
-      - workspace:/home/devuser/workspace
-      - opencode-data:/home/devuser/.local/share/opencode
-      - opencode-config:/home/devuser/.config/opencode
-      - opencode-cache:/home/devuser/.cache/opencode
-      - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode
-      - openchamber-data:/home/devuser/.config/openchamber
-      - ollama-data:/root/.ollama
-      - git-config:/home/devuser/.config/git
-      - ssh-keys:/home/devuser/.ssh
+      - workspace-dev:/home/devuser/workspace
+      - opencode-data-dev:/home/devuser/.local/share/opencode
+      - opencode-config-dev:/home/devuser/.config/opencode
+      - opencode-cache-dev:/home/devuser/.cache/opencode
+      - ohmyopencode-cache-dev:/home/devuser/.cache/oh-my-opencode
+      - openchamber-data-dev:/home/devuser/.config/openchamber
+      - ollama-data-dev:/root/.ollama
+      - git-config-dev:/home/devuser/.config/git
+      - ssh-keys-dev:/home/devuser/.ssh
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama-dev:11434}
       - LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER=${LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER:-ollama}
       - LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL=${LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL:-nomic-embed-text}
-      - LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL=${LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL:-http://ollama:11434}
+      - LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL=${LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL:-http://ollama-dev:11434}
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-devonly}
       - OPENCODE_PLUGINS=${OPENCODE_PLUGINS:-oh-my-opencode,lancedb-opencode-pro}
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
       - OPENCHAMBER_HOST=0.0.0.0
     depends_on:
-      ollama:
+      ollama-dev:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:
-  workspace:
-  opencode-data:
-  opencode-config:
-  opencode-cache:
-  ohmyopencode-cache:
-  openchamber-data:
-  ollama-data:
-  git-config:
-  ssh-keys:
+  workspace-dev:
+  opencode-data-dev:
+  opencode-config-dev:
+  opencode-cache-dev:
+  ohmyopencode-cache-dev:
+  openchamber-data-dev:
+  ollama-data-dev:
+  git-config-dev:
+  ssh-keys-dev:

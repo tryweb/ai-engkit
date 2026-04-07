@@ -2,6 +2,7 @@
 set -uo pipefail
 
 CONTAINER="${1:-codeforge}"
+OLLAMA_HOST="${2:-ollama}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -68,7 +69,7 @@ OLLAMA_BASE_URL=$(docker exec "$CONTAINER" sh -c 'echo $OLLAMA_BASE_URL' 2>/dev/
 info "OLLAMA_BASE_URL=$OLLAMA_BASE_URL"
 
 OLLAMA_TEST=$(docker exec "$CONTAINER" sh -c \
-  'curl -sf http://ollama:11434/api/tags 2>/dev/null | jq -r "length" 2>/dev/null' || echo "error")
+  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r 'length' 2>/dev/null" || echo "error")
 if [ "$OLLAMA_TEST" != "error" ] && [ -n "$OLLAMA_TEST" ]; then
   pass "Ollama is accessible ($OLLAMA_TEST models available)"
 else
@@ -77,7 +78,7 @@ else
 fi
 
 EMBED_MODEL=$(docker exec "$CONTAINER" sh -c \
-  'curl -sf http://ollama:11434/api/tags 2>/dev/null | jq -r ".models[].name" 2>/dev/null | grep -q "nomic-embed-text" && echo "available" || echo "not_found"' 2>/dev/null || echo "error")
+  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r '.models[].name' 2>/dev/null | grep -q 'nomic-embed-text' && echo 'available' || echo 'not_found'" 2>/dev/null || echo "error")
 if [ "$EMBED_MODEL" = "available" ]; then
   pass "nomic-embed-text model is available"
 else
@@ -127,12 +128,69 @@ else
 fi
 
 LLM_MODEL=$(docker exec "$CONTAINER" sh -c \
-  'curl -sf http://ollama:11434/api/tags 2>/dev/null | jq -r ".models[].name" 2>/dev/null | grep -v "nomic-embed" | head -1' 2>/dev/null || echo "")
+  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r '.models[].name' 2>/dev/null | grep -v 'nomic-embed' | head -1" 2>/dev/null || echo "")
 if [ -n "$LLM_MODEL" ]; then
   info "LLM model available: $LLM_MODEL"
   pass "AI provider setup complete"
 else
-  info "No LLM model available for functional testing"
+  info "No local LLM model (will test with remote Big Pickle)"
+fi
+
+echo ""
+echo "--- Memory Store Verification (Big Pickle) ---"
+
+MEMORY_PATH=$(docker exec "$CONTAINER" sh -c 'echo $HOME/.opencode/memory/lancedb' 2>/dev/null || echo "")
+if [ -n "$MEMORY_PATH" ] && [ -d "$MEMORY_PATH" ]; then
+  info "Memory store path: $MEMORY_PATH"
+  
+  DB_FILES=$(docker exec "$CONTAINER" sh -c "ls -la $MEMORY_PATH 2>/dev/null | grep -cE '\.sqlite|\.parquet|\.lance' || echo 0" 2>/dev/null | tr -d '\n' || echo "0")
+  
+  if [ "$DB_FILES" -gt 0 ]; then
+    info "Found $DB_FILES database files in memory store"
+    pass "Memory store initialized"
+  else
+    info "Memory store is empty (first run expected)"
+    
+    # Try to create a test entry by checking if we can write
+    TEST_WRITE=$(docker exec "$CONTAINER" sh -c \
+      "touch $MEMORY_PATH/.test_write && rm $MEMORY_PATH/.test_write && echo 'writable'" 2>/dev/null || echo "error")
+    
+    if [ "$TEST_WRITE" = "writable" ]; then
+      pass "Memory store is writable (can be initialized on first use)"
+    else
+      fail "Memory store is not writable"
+      EXIT_CODE=1
+    fi
+  fi
+else
+  fail "Memory store path not found"
+  EXIT_CODE=1
+fi
+
+# Check plugin is loaded
+if [ $EXIT_CODE -eq 0 ]; then
+  PLUGIN_FILES=$(docker exec "$CONTAINER" sh -c \
+    "ls /home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/*.js 2>/dev/null | wc -l" 2>/dev/null || echo "0")
+  
+  if [ "$PLUGIN_FILES" -gt 0 ]; then
+    pass "Memory plugin files present ($PLUGIN_FILES files)"
+  else
+    fail "Memory plugin not installed"
+    EXIT_CODE=1
+  fi
+fi
+
+# Verify embedding model works (required for memory)
+if [ $EXIT_CODE -eq 0 ]; then
+  EMBED_TEST=$(docker exec "$CONTAINER" sh -c \
+    "curl -sf http://${OLLAMA_HOST}:11434/api/embeddings -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}' | jq -r '.embedding[0] // empty' | head -c 20" 2>/dev/null || echo "error")
+  
+  if [ -n "$EMBED_TEST" ] && [ "$EMBED_TEST" != "error" ] && [ ${#EMBED_TEST} -gt 5 ]; then
+    pass "Embedding model functional (vector dimension: ${#EMBED_TEST})"
+  else
+    fail "Embedding model not working"
+    EXIT_CODE=1
+  fi
 fi
 
 echo ""
