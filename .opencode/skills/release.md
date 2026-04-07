@@ -61,6 +61,11 @@ Ask the user if they want to:
 
 If the user chooses to update now, stop and wait for them to make the changes. Then re-check.
 
+**IMPORTANT**: After successful release, you **MUST** update `docs/CHANGELOG.md`:
+1. Move the "[Unreleased]" section content to a new version section (e.g., `## [VERSION] - DATE`)
+2. Add new "[Unreleased]" section at the top
+3. Commit the changes
+
 ### 1.6. Check for Uncommitted Changes
 
 After checking documentation, verify the working tree status:

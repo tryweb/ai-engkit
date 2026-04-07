@@ -1,6 +1,6 @@
 # 變更日誌
 
-本檔案記錄 OpenChamber 專案的所有重要變更。
+本檔案記錄 CodeForge 專案的所有重要變更。
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
@@ -14,6 +14,36 @@
 
 ### 變更
 - 改善 README.md 文件結構
+
+## [0.5.2] - 2026-04-07
+
+### 修復
+- 修正 CI workflow 中的 sed 命令，正確替換 container name
+
+## [0.5.1] - 2026-04-07
+
+### 新增
+- Release skill 新增檢查文檔更新步驟
+
+### 變更
+- 重新排序 release 步驟，先檢查文檔再 commit
+
+### 修復
+- 修正 dev 環境 OLLAMA_BASE_URL 被主機環境覆蓋的問題
+
+## [0.5.0] - 2026-04-07
+
+### 新增
+- 新增多模型切換功能
+- 新增 named volume 作為預設 workspace
+- 新增 glab (GitLab CLI)
+
+### 變更
+- 使用 named volumes 作為預設儲存策略
+- 更新 install.sh 與 .env.example
+
+### 架構
+- 改善 entrypoint 腳本
 
 ## [0.3.3] - 2026-04-02
 
