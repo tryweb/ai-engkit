@@ -32,17 +32,15 @@ services:
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:
-      - ${WORKSPACE_PATH:-./workspace}:/home/devuser/workspace
+      - workspace:/home/devuser/workspace
       - opencode-data:/home/devuser/.local/share/opencode
       - opencode-config:/home/devuser/.config/opencode
       - opencode-cache:/home/devuser/.cache/opencode
       - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode
       - openchamber-data:/home/devuser/.config/openchamber
-      - ${HOME}/.gitconfig:/home/devuser/.gitconfig:ro
-      - ${HOME}/.git-credentials:/home/devuser/.git-credentials:ro
-      - ${HOME}/.config/gh:/home/devuser/.config/gh:ro
-      - ${HOME}/.ssh:/home/devuser/.ssh:ro
-      - ${HOME}/.ssh/known_hosts:/home/devuser/.ssh/known_hosts
+      - ollama-data:/root/.ollama
+      - git-config:/home/devuser/.config/git
+      - ssh-keys:/home/devuser/.ssh
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -68,3 +66,5 @@ volumes:
   ohmyopencode-cache:
   openchamber-data:
   ollama-data:
+  git-config:
+  ssh-keys:

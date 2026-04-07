@@ -77,7 +77,7 @@ ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 
-RUN brew install gh
+RUN brew install gh glab
 
 # ── Bun ────────────────────────────────────────────────
 RUN curl -fsSL https://bun.sh/install | bash
@@ -121,8 +121,13 @@ WORKDIR /home/${USERNAME}/workspace
 VOLUME [ \
     "/home/${USERNAME}/workspace", \
     "/home/${USERNAME}/.local/share/opencode", \
+    "/home/${USERNAME}/.config/opencode", \
+    "/home/${USERNAME}/.cache/opencode", \
+    "/home/${USERNAME}/.cache/oh-my-opencode", \
     "/home/${USERNAME}/.config/openchamber", \
-    "/home/${USERNAME}/.ssh" \
+    "/home/${USERNAME}/.ssh", \
+    "/home/${USERNAME}/.config/git", \
+    "/root/.ollama" \
 ]
 
 EXPOSE 3000 4095
