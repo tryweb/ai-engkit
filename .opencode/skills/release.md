@@ -40,9 +40,30 @@ This test:
 
 If the test fails, stop and report. Do not proceed with release.
 
-### 1.5. Check for Uncommitted Changes
+### 1.5. Check Documentation Updates
 
-Before proceeding with version bump and release, check if there are any uncommitted files:
+Check if documentation files need to be updated based on recent changes:
+
+```bash
+# Check which docs have uncommitted changes
+git status --short README.md docs/CHANGELOG.md docs/ARCHITECTURE.md
+```
+
+If any of these files have uncommitted changes, inform the user that they should be reviewed before release:
+- **README.md** - Main project documentation
+- **docs/CHANGELOG.md** - Changelog file (update the "[Unreleased]" section)
+- **docs/ARCHITECTURE.md** - Architecture documentation
+
+Ask the user if they want to:
+1. Update the documentation now before proceeding
+2. Proceed with release and update later
+3. Skip documentation update entirely
+
+If the user chooses to update now, stop and wait for them to make the changes. Then re-check.
+
+### 1.6. Check for Uncommitted Changes
+
+After checking documentation, verify the working tree status:
 
 ```bash
 git status --short
