@@ -119,52 +119,22 @@ check_docker() {
 check_and_prepare_volumes() {
     echo
     echo "========================================"
-    echo "3. 檢查並準備 Volumes 檔案"
+    echo "3. 檢查並準備 Volumes (選用)"
     echo "========================================"
+
+    # v0.5.0+ 使用 named volumes，entrypoint 會自動建立預設檔案
+    # 這裡只檢查是否有可選的 host 端設定需要同步
 
     DOWNLOAD_TOOL="curl -fsSL"
     if ! command -v curl &> /dev/null; then
         DOWNLOAD_TOOL="wget -qO-"
     fi
 
-    echo "  正在解析 docker-compose.yml..."
-
-    FILES_TO_CHECK=(
-        "${HOME}/.gitconfig"
-        "${HOME}/.git-credentials"
-        "${HOME}/.ssh"
-        "${HOME}/.ssh/known_hosts"
-        "${HOME}/.config/gh"
-    )
-
-    for PATH_ITEM in "${FILES_TO_CHECK[@]}"; do
-        if [[ "$PATH_ITEM" == *"/.ssh" ]] || [[ "$PATH_ITEM" == *"/.config/gh" ]]; then
-            if [ ! -d "$PATH_ITEM" ]; then
-                echo "  📁 建立目錄: $PATH_ITEM"
-                mkdir -p "$PATH_ITEM"
-                if [[ "$PATH_ITEM" == *"/.ssh" ]]; then
-                    chmod 700 "$PATH_ITEM"
-                fi
-            else
-                echo "  ✅ 已存在: $PATH_ITEM"
-            fi
-        elif [ ! -e "$PATH_ITEM" ]; then
-            mkdir -p "$(dirname "$PATH_ITEM")"
-            if [[ "$PATH_ITEM" == *"/.ssh/known_hosts" ]]; then
-                echo "  📁 建立檔案: $PATH_ITEM"
-                touch "$PATH_ITEM"
-                chmod 600 "$PATH_ITEM"
-            else
-                echo "  📁 建立檔案: $PATH_ITEM"
-                touch "$PATH_ITEM"
-                chmod 644 "$PATH_ITEM"
-            fi
-        else
-            echo "  ✅ 已存在: $PATH_ITEM"
-        fi
-    done
+    echo "  使用 named volumes (由容器自動管理)"
+    echo ""
 
     check_gh_cli
+    check_glab_cli
 }
 
 check_gh_cli() {
@@ -204,6 +174,21 @@ check_gh_cli() {
             echo "  跳過 gh 安裝。若日後需要，請參考: https://cli.github.com/"
             ;;
     esac
+}
+
+check_glab_cli() {
+    if command -v glab &> /dev/null; then
+        echo "  ✅ GitLab CLI (glab) 已安裝: $(glab --version | head -1)"
+        if ! glab auth status &> /dev/null; then
+            echo "  ⚠️  glab 尚未登入，容器內的 git 操作可能無法使用 GitLab"
+            echo "     請執行: glab auth login"
+        fi
+        return
+    fi
+
+    echo "  ℹ️  未偵測到 GitLab CLI (glab)"
+    echo "     glab 可讓容器內直接操作 GitLab MR / Issue / Repo"
+    echo "     如有需要，可在容器內執行: sudo apt-get install -y glab"
 }
 
 download_files() {
@@ -264,15 +249,19 @@ setup_env() {
     fi
 
     echo "  請選擇 Workspace 類型:"
-    echo "    1) Bind Mount ./workspace (預設)"
-    echo "    2) Named Volume (完全 Docker 管理)"
+    echo "    1) Named Volume (預設，完全 Docker 管理)"
+    echo "    2) Bind Mount ./workspace (可直接用本地 IDE 編輯)"
     echo "    3) 自訂路徑"
     read -p "  選擇 [1/2/3]: " WS_CHOICE
 
     case "$WS_CHOICE" in
         2)
-            echo "  ✅ 使用 named volume"
-            sed -i "s|^WORKSPACE_PATH=.*|# WORKSPACE_PATH=|" .env 2>/dev/null || true
+            if [ ! -d "./workspace" ]; then
+                echo "  📁 建立目錄: ./workspace"
+                mkdir -p "./workspace"
+            fi
+            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=./workspace|" .env 2>/dev/null || true
+            echo "  ✅ 使用 bind mount: ./workspace"
             ;;
         3)
             echo "  請輸入主機上的 workspace 路徑:"
@@ -286,12 +275,8 @@ setup_env() {
             echo "  ✅ WORKSPACE_PATH 已設定為: $WS_PATH"
             ;;
         *)
-            if [ ! -d "./workspace" ]; then
-                echo "  📁 建立目錄: ./workspace"
-                mkdir -p "./workspace"
-            fi
-            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=./workspace|" .env 2>/dev/null || true
-            echo "  ✅ WORKSPACE_PATH 已設定為: ./workspace"
+            sed -i "s|^WORKSPACE_PATH=.*|# WORKSPACE_PATH=|" .env 2>/dev/null || true
+            echo "  ✅ 使用 named volume (預設)"
             ;;
     esac
 }
