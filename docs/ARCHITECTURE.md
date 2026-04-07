@@ -15,19 +15,20 @@
 
 ## 系統概覽
 
-OpenChamber 是一個基於 Docker 的自託管 AI 開發環境，整合了 OpenCode AI 助手、OpenChamber Web UI 以及 Ollama 本地 LLM 推論引擎。
+OpenChamber 是一個基於 Docker 的自託管 AI 開發環境，整合了 OpenCode AI 助手（後端）、OpenChamber Web UI（前端的 Web 介面）以及 Ollama 本地 LLM 推論引擎。
 
 ```mermaid
 graph TB
     subgraph "使用者端"
-        BROWSER["🌐 瀏覽器<br/>Web UI"]
-        TERMINAL["💻 終端機<br/>CLI 工具"]
+        BROWSER["🌐 瀏覽器<br/>OpenChamber Web UI"]
+        TERMINAL["💻 終端機<br/>OpenCode CLI"]
     end
 
     subgraph "Docker 環境"
         subgraph "ai-dev 容器"
-            OC["OpenCode<br/>AI 助手"]
-            CH["OpenChamber<br/>Web 伺服器"]
+            OC["OpenCode<br/>AI 助手 (後端)"]
+            CH["OpenChamber<br/>Web 伺服器 (前端)"]
+            API["API :4095"]
             TOOLS["開發工具<br/>git, python, tmux..."]
         end
 
@@ -41,10 +42,11 @@ graph TB
         HOST_DOCKER["Docker Socket"]
     end
 
-    BROWSER <-->|"HTTP/WS :3000"| CH
+    BROWSER -->|"HTTP/WS :3000"| CH
+    CH -->|"WebSocket :4095"| API
     TERMINAL -->|"命令列"| OC
-    CH <-->|"API :11434"| OLLAMA
-    OC <-->|"API :11434"| OLLAMA
+    OC -->|"API :4095"| API
+    API <-->|"API :11434"| OLLAMA
     
     OC -.->|"透過 named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
     OC -.->|"讀寫"| HOST_DOCKER
@@ -53,6 +55,7 @@ graph TB
     style TERMINAL fill:#e8f5e9
     style OC fill:#fff3e0
     style CH fill:#f3e5f5
+    style API fill:#e3f2fd
     style OLLAMA fill:#fce4ec
     style GIT_VOLS fill:#e8f5e9
 ```
@@ -65,8 +68,8 @@ graph TB
 graph LR
     subgraph "ai-dev 服務"
         direction TB
-        PORT3000[":3000 Web 伺服器"]
-        PORT4095[":4095 OpenCode API"]
+        PORT3000[":3000 OpenChamber<br/>Web UI"]
+        OC_API[":4095 OpenCode<br/>API Server"]
         ENTRYPOINT["entrypoint.sh"]
         INIT_SCRIPTS["初始化腳本"]
     end
@@ -78,13 +81,14 @@ graph LR
         PULL_MODEL["自動拉取模型"]
     end
 
-    PORT3000 --> PORT4095
+    PORT3000 -->|"WebSocket"| OC_API
+    OC_API -->|"API :11434"| PORT11434
     ENTRYPOINT --> INIT_SCRIPTS
     PORT11434 --> HEALTHCHECK
     HEALTHCHECK --> PULL_MODEL
 
-    style PORT3000 fill:#e3f2fd
-    style PORT4095 fill:#e3f2fd
+    style PORT3000 fill:#f3e5f5
+    style OC_API fill:#e3f2fd
     style PORT11434 fill:#fce4ec
 ```
 
@@ -94,15 +98,19 @@ graph LR
 graph TD
     A["ai-dev 啟動"] --> B{"等待依賴"}
     B --> C["ollama healthy"]
-    C --> D["初始化完成"]
-    D --> E["開啟 Web UI"]
+    C --> D["OpenCode API :4095 就緒"]
+    D --> E["OpenChamber Web :3000 啟動"]
+    E --> F["開啟 Web UI"]
 
-    F["使用者訪問"] --> G{":8000"}
-    G --> H["ai-dev :3000"]
+    G["使用者訪問 :8000"] --> H["OpenChamber :3000"]
+    H -->|"WebSocket/SSE"| I["OpenCode :4095"]
+    I -->|"API"| J["ollama :11434"]
     
     style A fill:#fff3e0
-    style E fill:#c8e6c9
-    style H fill:#e3f2fd
+    style D fill:#e3f2fd
+    style E fill:#f3e5f5
+    style H fill:#f3e5f5
+    style I fill:#e3f2fd
 ```
 
 ## 容器架構
@@ -196,20 +204,23 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant U as 使用者
-    participant UI as Web UI
-    participant OC as OpenCode
+    participant UI as OpenChamber Web UI
+    participant API as OpenCode API
+    participant OC as OpenCode Engine
     participant DB as 資料庫
     participant OL as Ollama
 
     U->>UI: 輸入提示詞
-    UI->>OC: WebSocket 請求
+    UI->>API: WebSocket/SSE 請求
+    API->>OC: 轉發請求
     OC->>DB: 儲存對話記錄
     OC->>OL: 生成請求 (嵌入)
     OL-->>OC: 向量結果
     OC->>OL: 生成請求 (LLM)
     OL-->>OC: 生成回應
     OC->>DB: 儲存回應
-    OC-->>UI: 串流回應
+    OC-->>API: SSE 回應
+    API-->>UI: SSE 回應
     UI-->>U: 顯示結果
 ```
 
@@ -236,29 +247,31 @@ flowchart LR
 ```mermaid
 graph TB
     subgraph "Host Network"
-        HOST_PORT_8000[":8000"]
-        HOST_PORT_11434[":11434"]
+        HOST_PORT_8000[":8000 OpenChamber UI"]
+        HOST_PORT_11434[":11434 Ollama API"]
     end
 
     subgraph "Docker Bridge Network"
         subgraph "ai-dev"
-            CONTAINER_3000["3000 (Web UI)"]
-            CONTAINER_4095["4095 (OpenCode API)"]
+            CONTAINER_3000["3000 OpenChamber<br/>Web Server"]
+            CONTAINER_4095["4095 OpenCode<br/>API Server"]
         end
 
         subgraph "ollama"
-            CONTAINER_11434["11434 (Ollama API)"]
+            CONTAINER_11434["11434 Ollama API"]
         end
     end
 
     HOST_PORT_8000 -->|"映射"| CONTAINER_3000
     HOST_PORT_11434 -->|"映射"| CONTAINER_11434
     
-    CONTAINER_3000 -.->|"內部"| CONTAINER_11434
-    CONTAINER_4095 -.->|"內部"| CONTAINER_11434
+    CONTAINER_3000 -->|"WebSocket/SSE"| CONTAINER_4095
+    CONTAINER_4095 -->|"API"| CONTAINER_11434
 
-    style HOST_PORT_8000 fill:#e8eaf6
+    style HOST_PORT_8000 fill:#f3e5f5
     style HOST_PORT_11434 fill:#e8eaf6
+    style CONTAINER_3000 fill:#f3e5f5
+    style CONTAINER_4095 fill:#e3f2fd
     style CONTAINER_11434 fill:#fce4ec
 ```
 
@@ -394,21 +407,26 @@ flowchart LR
 
 | 屬性 | 說明 |
 |------|------|
-| 功能 | 終端機 AI 程式碼助手 |
+| 功能 | AI 程式碼助手（後端引擎） |
 | 版本 | 1.3.13 |
 | 設定檔 | `~/.config/opencode/opencode.json` |
 | 資料庫 | `~/.local/share/opencode/opencode.db` |
-| API 埠號 | 4095 (內部) |
+| API 埠號 | 4095 |
+| 通訊協定 | HTTP + SSE (Server-Sent Events) |
+| SDK | `@opencode-ai/sdk/v2` |
 
 ### OpenChamber
 
 | 屬性 | 說明 |
 |------|------|
-| 功能 | 瀏覽器 Web UI |
+| 功能 | OpenCode 的 Web/Desktop UI（前端的 GUI） |
 | 版本 | 1.9.3 |
-| 設定檔 | `~/.config/openchamber/settings.json` |
+| 與 OpenCode 關係 | 獨立專案，透過 API 連線至 OpenCode |
 | 服務埠號 | 3000 (映射至主機 8000) |
-| 前端框架 | React |
+| 通訊方式 | WebSocket (terminal) + SSE (chat) |
+| 前端框架 | React (Tauri for desktop) |
+
+> 📝 **架構說明**：OpenChamber 並非 OpenCode 的一部分，而是獨立的專案（[openchamber/openchamber](https://github.com/openchamber/openchamber)）。它作為客戶端，透過 `@opencode-ai/sdk/v2` 連線至 OpenCode 伺服器，可選擇本地自動啟動或連線至遠端伺服器。
 
 ### Ollama
 
