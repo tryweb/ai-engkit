@@ -231,16 +231,20 @@ docker compose up -d
 
 ### SSH 金鑰權限
 
+> ⚠️ v0.5.0+ SSH 設定使用 named volume (`ssh-keys`)，由容器自動管理。
+> 若要使用自訂 SSH 金鑰，請參考 [初始化腳本](./ARCHITECTURE.md#初始化腳本執行順序)。
+
 ```bash
-# 檢查金鑰權限
-ls -la ~/.ssh/
+# 檢查容器內金鑰權限
+docker exec ai-dev ls -la /home/devuser/.ssh/
 # 應該是：
+# drwx------ (700) 目錄
 # -rw------- (600) 私鑰
 # -rw-r--r-- (644) 公鑰
 
-# 修復權限
-chmod 600 ~/.ssh/id_*
-chmod 644 ~/.ssh/*.pub
+# 修復權限（如有問題）
+docker exec ai-dev chmod 600 /home/devuser/.ssh/id_*
+docker exec ai-dev chmod 644 /home/devuser/.ssh/*.pub
 ```
 
 ### Docker Socket 存取

@@ -38,8 +38,6 @@ graph TB
     end
 
     subgraph "主機資源"
-        HOST_SSH["SSH 金鑰"]
-        HOST_GIT["Git 設定"]
         HOST_DOCKER["Docker Socket"]
     end
 
@@ -48,8 +46,7 @@ graph TB
     CH <-->|"API :11434"| OLLAMA
     OC <-->|"API :11434"| OLLAMA
     
-    OC -.->|"唯讀"| HOST_SSH
-    OC -.->|"唯讀"| HOST_GIT
+    OC -.->|"透過 named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
     OC -.->|"讀寫"| HOST_DOCKER
 
     style BROWSER fill:#e1f5fe
@@ -57,6 +54,7 @@ graph TB
     style OC fill:#fff3e0
     style CH fill:#f3e5f5
     style OLLAMA fill:#fce4ec
+    style GIT_VOLS fill:#e8f5e9
 ```
 
 ## 服務架構
@@ -133,7 +131,8 @@ graph TB
             CONFIG["~/.config/"]
             DATA["~/.local/share/"]
             CACHE["~/.cache/"]
-            SSH["~/.ssh/ (唯讀)"]
+            SSH["~/.ssh/ (named volume)"]
+            GIT["~/.config/git/ (named volume)"]
         end
     end
 
@@ -147,6 +146,8 @@ graph TB
 
     OC_SERVER --> CONFIG
     OC_SERVER --> DATA
+    OC_SERVER --> GIT
+    OC_SERVER --> SSH
     OC_SERVER --> CACHE
     CH_SERVER --> CONFIG
     OC_SERVER --> SSH
@@ -285,6 +286,8 @@ graph TB
         VOL_OHMY["ohmyopencode-cache<br/>插件快取"]
         VOL_CHAMBER["openchamber-data<br/>UI 設定"]
         VOL_OLLAMA["ollama-data<br/>模型檔案"]
+        VOL_GIT["git-config<br/>Git 設定"]
+        VOL_SSH["ssh-keys<br/>SSH 金鑰"]
     end
 
     subgraph "容器路徑"
@@ -295,6 +298,8 @@ graph TB
         C_OHMY["~/.cache/oh-my-opencode"]
         C_CHAMBER["~/.config/openchamber"]
         O_OLLAMA["/root/.ollama"]
+        C_GIT["~/.config/git<br/>~/.gitconfig"]
+        C_SSH["~/.ssh"]
     end
 
     VOL_WS --> C_WS
@@ -304,10 +309,14 @@ graph TB
     VOL_OHMY --> C_OHMY
     VOL_CHAMBER --> C_CHAMBER
     VOL_OLLAMA --> O_OLLAMA
+    VOL_GIT --> C_GIT
+    VOL_SSH --> C_SSH
 
     style VOL_WS fill:#fff3e0
     style VOL_DATA fill:#e3f2fd
     style VOL_OLLAMA fill:#fce4ec
+    style VOL_GIT fill:#e8f5e9
+    style VOL_SSH fill:#e8f5e9
 ```
 
 ### 資料持久化策略
@@ -317,6 +326,8 @@ graph TB
 | 專案檔案 | workspace | 重要 | 定期備份到 Git |
 | 對話記錄 | opencode-data | 重要 | 定期匯出 |
 | 使用者設定 | opencode-config | 重要 | 納入版本控制 |
+| Git 設定 | git-config | 重要 | 包含 .gitconfig, .git-credentials |
+| SSH 金鑰 | ssh-keys | 重要 | 包含 known_hosts |
 | 快取資料 | opencode-cache | 可重建 | 不需備份 |
 | AI 模型 | ollama-data | 可重建 | 不需備份 |
 | UI 設定 | openchamber-data | 一般 | 不需備份 |
@@ -347,6 +358,8 @@ sequenceDiagram
     Note over I: 02-init-config.sh<br/>初始化設定檔
     
     Note over I: 03-fix-docker-gid.sh<br/>修復 Docker GID (需要 sudo)
+
+    Note over I: 04-init-git-ssh.sh<br/>初始化 Git/SSH 設定 (named volumes)
     
     I->>A: 初始化完成
     A->>A: 啟動 OpenCode Server
@@ -362,15 +375,17 @@ flowchart LR
     B --> C["01-install-packages.sh"]
     C --> D["02-init-config.sh"]
     D --> E["03-fix-docker-gid.sh"]
-    E --> F["執行 CMD"]
+    E --> F["04-init-git-ssh.sh"]
+    F --> G["執行 CMD"]
     
     B -->|"修復"| PERMS["Volume 權限"]
     C -->|"安裝"| PKGS["apt/brew/bun 套件"]
     D -->|"建立"| CONFIGS["預設設定檔"]
     E -->|"修正"| DOCKER["Docker 群組"]
+    F -->|"初始化"| GITSETUP["Git/SSH 設定"]
 
     style A fill:#fff3e0
-    style F fill:#c8e6c9
+    style G fill:#c8e6c9
 ```
 
 ## 元件說明
@@ -412,6 +427,7 @@ graph LR
     subgraph "版本控制"
         GIT["git"]
         GH["gh (GitHub CLI)"]
+        GLAB["glab (GitLab CLI)"]
     end
 
     subgraph "執行環境"
@@ -440,6 +456,8 @@ graph LR
     end
 
     style GIT fill:#e8f5e9
+    style GH fill:#e8f5e9
+    style GLAB fill:#e8f5e9
     style BUN fill:#fff3e0
     style DOCKER fill:#e3f2fd
 ```
@@ -468,7 +486,7 @@ BUN_PACKAGES="typescript"
 
 | 模式 | 設定 | 優點 | 缺點 |
 |------|------|------|------|
-| Volume | 不設定 `WORKSPACE_PATH` | 容器管理，乾淨 | 需要 `docker cp` 存取 |
+| Named Volume | 不設定 `WORKSPACE_PATH` (v0.5.0 預設) | 容器管理，自動初始化 git/SSH 設定 | 需要 `docker cp` 存取 |
 | Bind Mount | `WORKSPACE_PATH=./workspace` | 可直接用本機 IDE 編輯 | 權限問題較常見 |
 | 主機路徑 | `WORKSPACE_PATH=/home/user/projects` | 存取現有專案 | 需注意權限 |
 
