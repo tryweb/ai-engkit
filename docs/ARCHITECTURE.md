@@ -301,6 +301,7 @@ graph TB
         VOL_OLLAMA["ollama-data<br/>模型檔案"]
         VOL_GIT["git-config<br/>Git 設定"]
         VOL_SSH["ssh-keys<br/>SSH 金鑰"]
+        VOL_GH["gh-config<br/>GitHub CLI 設定"]
     end
 
     subgraph "容器路徑"
@@ -313,6 +314,7 @@ graph TB
         O_OLLAMA["/root/.ollama"]
         C_GIT["~/.config/git<br/>~/.gitconfig"]
         C_SSH["~/.ssh"]
+        C_GH["~/.config/gh"]
     end
 
     VOL_WS --> C_WS
@@ -324,12 +326,14 @@ graph TB
     VOL_OLLAMA --> O_OLLAMA
     VOL_GIT --> C_GIT
     VOL_SSH --> C_SSH
+    VOL_GH --> C_GH
 
     style VOL_WS fill:#fff3e0
     style VOL_DATA fill:#e3f2fd
     style VOL_OLLAMA fill:#fce4ec
     style VOL_GIT fill:#e8f5e9
     style VOL_SSH fill:#e8f5e9
+    style VOL_GH fill:#e8f5e9
 ```
 
 ### 資料持久化策略
@@ -341,6 +345,7 @@ graph TB
 | 使用者設定 | opencode-config | 重要 | 納入版本控制 |
 | Git 設定 | git-config | 重要 | 包含 .gitconfig, .git-credentials |
 | SSH 金鑰 | ssh-keys | 重要 | 包含 known_hosts |
+| GitHub CLI 設定 | gh-config | 重要 | 包含主機認證、快取 |
 | 快取資料 | opencode-cache | 可重建 | 不需備份 |
 | AI 模型 | ollama-data | 可重建 | 不需備份 |
 | UI 設定 | openchamber-data | 一般 | 不需備份 |
@@ -374,6 +379,8 @@ sequenceDiagram
 
     Note over I: 04-init-git-ssh.sh<br/>初始化 Git/SSH 設定 (named volumes)
     
+    Note over I: 05-init-gh-cli.sh<br/>初始化 GitHub CLI 設定 (named volume)
+    
     I->>A: 初始化完成
     A->>A: 啟動 OpenCode Server
     A->>A: 啟動 OpenChamber Server
@@ -389,13 +396,15 @@ flowchart LR
     C --> D["02-init-config.sh"]
     D --> E["03-fix-docker-gid.sh"]
     E --> F["04-init-git-ssh.sh"]
-    F --> G["執行 CMD"]
+    F --> G["05-init-gh-cli.sh"]
+    G --> H["執行 CMD"]
     
     B -->|"修復"| PERMS["Volume 權限"]
     C -->|"安裝"| PKGS["apt/brew/bun 套件"]
     D -->|"建立"| CONFIGS["預設設定檔"]
     E -->|"修正"| DOCKER["Docker 群組"]
     F -->|"初始化"| GITSETUP["Git/SSH 設定"]
+    G -->|"初始化"| GH_SETUP["GitHub CLI 設定"]
 
     style A fill:#fff3e0
     style G fill:#c8e6c9

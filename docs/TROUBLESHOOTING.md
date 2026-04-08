@@ -247,6 +247,20 @@ docker exec ai-dev chmod 600 /home/devuser/.ssh/id_*
 docker exec ai-dev chmod 644 /home/devuser/.ssh/*.pub
 ```
 
+### GitHub CLI 權限
+
+> ⚠️ v0.6.0+ GitHub CLI 設定使用 named volume (`gh-config`)，由容器自動管理。
+
+```bash
+# 檢查容器內 GitHub CLI 設定權限
+docker exec ai-dev ls -la /home/devuser/.config/gh/
+# 應該是：
+# drwx------ (700) 目錄
+
+# 修復權限（如有問題）
+docker exec ai-dev sudo chown -R devuser:devuser /home/devuser/.config/gh/
+```
+
 ### Docker Socket 存取
 
 ```bash
