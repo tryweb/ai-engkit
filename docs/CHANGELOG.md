@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-04-08
+
+### 新增
+- 新增 05-init-gh-cli.sh 初始化腳本，自動建立 ~/.config/gh 目錄
+- 新增 gh-config-dev volume 至 docker-compose.dev.yml
+
+### 變更
+- entrypoint.sh 新增 05-init-gh-cli.sh 使用 sudo 執行
+- 更新 docs/ARCHITECTURE.md 加入 gh-config volume 說明
+- 更新 docs/TROUBLESHOOTING.md 加入 GitHub CLI 權限故障排除
+
 ## [0.5.5] - 2026-04-08
 
 ### 新增
