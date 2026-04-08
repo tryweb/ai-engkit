@@ -4,6 +4,13 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [Unreleased]
+
+## [0.5.5] - 2026-04-08
+
+### 新增
+- 新增 gh-config named volume 讓 gh auth 資料可以持久化
+
 ## [0.5.4] - 2026-04-08
 
 ### 新增
