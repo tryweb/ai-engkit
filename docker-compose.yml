@@ -41,6 +41,7 @@ services:
       - ollama-data:/root/.ollama
       - git-config:/home/devuser/.config/git
       - ssh-keys:/home/devuser/.ssh
+      - gh-config:/home/devuser/.config/gh
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
@@ -68,3 +69,4 @@ volumes:
   ollama-data:
   git-config:
   ssh-keys:
+  gh-config:

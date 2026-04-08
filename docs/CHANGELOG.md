@@ -4,6 +4,24 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [0.5.4] - 2026-04-08
+
+### 新增
+- 新增完整 Memory E2E 測試腳本 (test-memory-e2e.sh)
+- 新增 Memory plugin 重試機制 (最多 3 次)
+- Release skill 新增版本資訊提取步驟
+- README.md 新增版本徽章
+
+### 變更
+- OpenCode 版本降級至 1.3.7 (相容 lancedb-opencode-pro)
+- OpenChamber 版本升級至 1.9.4
+- 修正 docker-compose 命令相容性問題
+- 修正 release-memory-test.sh 容器名稱 (codeforge-dev, ollama-dev)
+
+### 修復
+- 修正 Memory plugin 在 OpenCode 1.3.7 下的初始化問題
+- 修正 release-memory-test.sh 測試失敗應停止的邏輯
+
 ## [0.5.2] - 2026-04-07
 
 ### 修復
