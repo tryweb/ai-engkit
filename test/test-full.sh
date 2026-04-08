@@ -18,16 +18,16 @@ NC='\033[0m'
 
 echo -e "${GREEN}=== Step 1: Cleanup ===${NC}"
 cd "$PROJECT_DIR"
-docker compose down --remove-orphans 2>/dev/null || true
-docker compose down -v --remove-orphans 2>/dev/null || true
+docker-compose down --remove-orphans 2>/dev/null || true
+docker-compose down -v --remove-orphans 2>/dev/null || true
 sleep 2
 
 echo -e "${GREEN}=== Step 2: Build ===${NC}"
-docker compose build --no-cache
+docker-compose build --no-cache
 echo -e "${GREEN}Build complete${NC}"
 
 echo -e "${GREEN}=== Step 3: Start ===${NC}"
-docker compose up -d
+docker-compose up -d
 echo "Waiting for services to stabilize..."
 sleep 20
 
@@ -44,7 +44,7 @@ fi
 
 echo ""
 echo -e "${YELLOW}=== Step 5: Cleanup ===${NC}"
-docker compose down --remove-orphans 2>/dev/null || true
+docker-compose down --remove-orphans 2>/dev/null || true
 echo -e "${YELLOW}Services stopped${NC}"
 
 exit $TEST_EXIT

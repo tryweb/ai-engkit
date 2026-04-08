@@ -2,6 +2,11 @@
 
 A self-hosted AI development environment powered by [OpenCode](https://opencode.ai) and [OpenChamber](https://openchamber.dev/), running on Ubuntu 24.04 with Ollama integration.
 
+![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
+![OpenCode](https://img.shields.io/badge/OpenCode-1.3.7-blue?style=for-the-badge&logoColor=white)
+![OpenChamber](https://img.shields.io/badge/OpenChamber-1.9.4-blue?style=for-the-badge&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-latest-blue?style=for-the-badge&logoColor=white)
+
 ## Features
 
 - **OpenCode AI** — Terminal-based AI coding assistant
@@ -73,6 +78,22 @@ This allows you to edit files with your local IDE while the container runs.
 ```bash
 ./test/run-tests.sh
 ```
+
+### Memory Plugin E2E Test
+
+Tests the full memory write/search flow with LanceDB and Ollama embedding:
+
+```bash
+./test/test-memory-e2e.sh codeforge-dev ollama-dev 4096
+```
+
+This verifies:
+- opencode CLI availability
+- Plugin configuration (lancedb-opencode-pro)
+- Ollama embedding model (nomic-embed-text)
+- LanceDB storage initialization
+- Memory write via API (session/message)
+- Memory search functionality
 
 ### Full Build + Test Cycle
 

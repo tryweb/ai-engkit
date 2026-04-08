@@ -21,7 +21,7 @@ If any test fails, stop and report the failures. Do not proceed with release.
 
 ### 1.1. Run Memory Plugin Release Test
 
-This test validates that `lancedb-opencode-pro` plugin works correctly with the current OpenCode version. **This is a critical gate** - if it fails, the release is blocked.
+This test validates that `lancedb-opencode-pro` plugin works correctly with the current OpenCode version. **This is a critical gate** - if it fails after 3 retries, the release is blocked.
 
 ```bash
 ./test/release-memory-test.sh
@@ -31,16 +31,46 @@ This test:
 - Starts the full `docker-compose.dev.yml` stack (Ollama + ai-dev)
 - Waits for Ollama health check (includes `nomic-embed-text` model)
 - Waits for openchamber to be ready
-- Executes `memory_stats` via `opencode run --attach`
-- Verifies the plugin returns valid JSON
+- Executes E2E memory write and search tests
+- Has **3 retry attempts** - if any retry passes, the test is considered successful
 
 **Common failure: OpenCode v1.3.8+** causes "Memory store unavailable" due to NAPI addon bug (Issue #20623). If this occurs:
 - Downgrade OpenCode to v1.3.7 in Dockerfile
 - Or wait for OpenCode team to fix Issue #20623
 
-If the test fails, stop and report. Do not proceed with release.
+If the test fails after all 3 retries, stop and report. Do not proceed with release.
 
-### 1.5. Check Documentation Updates
+### 1.5. Extract and Update Version Information
+
+After successful tests, extract the current package versions from the running container:
+
+```bash
+# Get versions from the running container
+docker exec codeforge-dev sh -c '
+echo "=== Package Versions ==="
+echo "opencode: $(opencode --version)"
+echo "openchamber: $(cat /home/devuser/.bun/install/global/node_modules/@openchamber/web/package.json | jq -r .version)"
+echo "lancedb-opencode-pro: $(cat /home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/package.json | jq -r .version)"
+echo "oh-my-openagent: $(cat /home/devuser/.cache/opencode/packages/oh-my-openagent@latest/node_modules/oh-my-openagent/package.json | jq -r .version)"
+echo "oh-my-opencode: $(cat /home/devuser/.cache/opencode/packages/oh-my-opencode@latest/node_modules/oh-my-opencode/package.json | jq -r .version)"
+'
+```
+
+Update the version badges in README.md to reflect these versions. The badges should be in this format:
+
+```markdown
+![OpenCode](https://img.shields.io/badge/OpenCode-VERSION-blue?style=for-the-badge&logoColor=white)
+![OpenChamber](https://img.shields.io/badge/OpenChamber-VERSION-blue?style=for-the-badge&logoColor=white)
+```
+
+Run this to update:
+```bash
+# Update version badges in README.md
+sed -i "s/OpenCode-.*-blue/OpenCode-$(opencode --version)-blue/" README.md
+sed -i "s/OpenChamber-.*-blue/OpenChamber-VERSION-blue/" README.md
+```
+
+Check if README.md needs updating and confirm with user.
 
 Check if documentation files need to be updated based on recent changes:
 

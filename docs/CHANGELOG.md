@@ -4,17 +4,6 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
-## [未發布]
-
-### 新增
-- `docs/SECURITY.md` - 安全政策文件
-- `docs/TROUBLESHOOTING.md` - 故障排除指南
-- `docs/ARCHITECTURE.md` - 架構說明文件
-- `docs/CONTRIBUTING.md` - 貢獻指南
-
-### 變更
-- 改善 README.md 文件結構
-
 ## [0.5.2] - 2026-04-07
 
 ### 修復
@@ -66,6 +55,18 @@
 - 支援 bind mount 本地開發模式
 - 健康檢查與自動重啟
 - 動態套件安裝支援
+
+## [0.3.0] - 2026-04-02
+
+### 新增
+- `docs/SECURITY.md` - 安全政策文件
+- `docs/TROUBLESHOOTING.md` - 故障排除指南
+- `docs/ARCHITECTURE.md` - 架構說明文件
+- `docs/CONTRIBUTING.md` - 貢獻指南
+
+### 變更
+- 改善 README.md 文件結構
+
 
 ---
 

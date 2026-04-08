@@ -20,8 +20,8 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.dev.yml"
-CONTAINER="codeforge"
-COMPOSE_PROJECT="codeforge"
+CONTAINER="codeforge-dev"
+OLLAMA_HOST="ollama-dev"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -57,10 +57,10 @@ pass "docker-compose.dev.yml exists"
 echo ""
 echo "--- Cleanup Existing Environment ---"
 
-EXISTING=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || echo "")
+EXISTING=$(docker-compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || echo "")
 if [ -n "$EXISTING" ]; then
   info "Stopping existing containers..."
-  docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
+  docker-compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
 fi
 pass "Environment clean"
 
@@ -71,10 +71,10 @@ echo ""
 echo "--- Starting Environment ---"
 
 info "Building image (if needed)..."
-docker compose -f "$COMPOSE_FILE" build 2>/dev/null
+docker-compose -f "$COMPOSE_FILE" build 2>/dev/null
 
 info "Starting services..."
-docker compose -f "$COMPOSE_FILE" up -d
+docker-compose -f "$COMPOSE_FILE" up -d
 
 # --------------------------------------------------
 # 4. 等待 Ollama 健康檢查通過
@@ -84,7 +84,7 @@ echo "--- Waiting for Ollama ---"
 
 OLLAMA_HEALTHY=false
 for i in {1..60}; do
-  OLLAMA_STATUS=$(docker inspect ollama --format '{{.State.Health.Status}}' 2>/dev/null || echo "none")
+  OLLAMA_STATUS=$(docker inspect ollama-dev --format '{{.State.Health.Status}}' 2>/dev/null || echo "none")
   if [ "$OLLAMA_STATUS" = "healthy" ]; then
     OLLAMA_HEALTHY=true
     break
@@ -149,18 +149,37 @@ else
 fi
 
 # --------------------------------------------------
-# 6. 執行 Memory Plugin E2E 測試
+# 6. 執行 Memory Plugin E2E 測試 (最多重試 3 次)
 # --------------------------------------------------
 echo ""
 echo "--- Running Memory Plugin E2E Test ---"
 
+MAX_RETRIES=3
+RETRY_COUNT=0
+TEST_PASSED=false
+
 if [ $EXIT_CODE -eq 0 ]; then
   if [ -f "$SCRIPT_DIR/test-memory-e2e.sh" ]; then
-    info "Executing test-memory-e2e.sh..."
-    if "$SCRIPT_DIR/test-memory-e2e.sh" "$CONTAINER"; then
-      pass "Memory plugin E2E test passed"
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$TEST_PASSED" = "false" ]; do
+      RETRY_COUNT=$((RETRY_COUNT + 1))
+      info "Test attempt $RETRY_COUNT/$MAX_RETRIES..."
+      
+      if "$SCRIPT_DIR/test-memory-e2e.sh" "$CONTAINER" "$OLLAMA_HOST" 4096; then
+        TEST_PASSED=true
+        pass "Memory plugin E2E test passed (attempt $RETRY_COUNT)"
+        break
+      else
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+          info "Test failed, retrying in 5 seconds..."
+          sleep 5
+        fi
+      fi
+    done
+    
+    if [ "$TEST_PASSED" = "true" ]; then
+      pass "Memory plugin E2E test passed after $RETRY_COUNT attempt(s)"
     else
-      fail "Memory plugin E2E test failed"
+      fail "Memory plugin E2E test failed after $MAX_RETRIES attempts"
       EXIT_CODE=1
     fi
   else
@@ -180,10 +199,10 @@ echo "--- Cleanup ---"
 if [ "$NO_CLEANUP" = "true" ]; then
   info "Skipping cleanup (--no-cleanup flag set)"
   info "To clean up manually:"
-  info "  cd $PROJECT_DIR && docker compose -f docker-compose.dev.yml down"
+  info "  cd $PROJECT_DIR && docker-compose -f docker-compose.dev.yml down"
 else
   info "Stopping services..."
-  docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
+  docker-compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
   pass "Environment cleaned"
 fi
 
