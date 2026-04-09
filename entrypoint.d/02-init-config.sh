@@ -17,7 +17,7 @@ init_file() {
 mkdir -p "$OPCODE_CONFIG_DIR"
 
 # Build plugin array from OPENCODE_PLUGINS env var (comma-separated)
-PLUGINS="${OPENCODE_PLUGINS:-oh-my-opencode,lancedb-opencode-pro}"
+PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent,lancedb-opencode-pro}"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
 OPCODE_CONFIG=$(jq -n --argjson plugins "$PLUGIN_JSON" '{plugin: $plugins}')
 

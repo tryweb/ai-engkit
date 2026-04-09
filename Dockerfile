@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 # ── 所有版本號集中管理 ────────────────────────────────
-ARG UPGRADE_PACKAGES=false
+ARG UPGRADE_PACKAGES=true
 ARG DOCKER_VERSION=25.0.4
 ARG COMPOSE_VERSION=2.24.5
 ARG OPENCODE_VERSION=1.3.7
@@ -40,6 +40,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     procps \
     lsof \
+    # node-gyp / 原生模組編譯所需
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
     && if [ "$UPGRADE_PACKAGES" = "true" ]; then \
         apt-get upgrade -y --no-install-recommends && \
         apt-get autoremove -y; \
@@ -89,8 +93,7 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g opencode-ai@${OPENCODE_VERSION} && \
     bun install -g @openchamber/web@${OPENCHAMBER_VERSION} && \
     bun install -g @fission-ai/openspec && \
-    # bun 作為 node shim：讓呼叫 `node` 的腳本也能運作
-    # 注意：若有工具嚴格檢查 node 版本字串可能有問題
+    bun install -g @code-yeongyu/comment-checker && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
 
 # ── opencode 設定檔（取代無效的 OPENCODE_CONFIG env var）
