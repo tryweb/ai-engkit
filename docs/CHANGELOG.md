@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.5.8] - 2026-04-10
+
+### 修復
+- 安裝 Docker Compose 作為 plugin（取代獨立的 docker-compose 二進制檔案）
+- 更新 test-memory-e2e.sh 使用 hook-based 測試方法
+- 更新 release-memory-test.sh 使用 `docker compose` 命令
+
+### 新增
+- OpenCode 版本更新至 1.3.12
+
 ## [0.5.6] - 2026-04-08
 
 ### 新增
