@@ -257,11 +257,101 @@ sequenceDiagram
 | 預設密碼 | 可接受 | 必須修改 |
 | 日誌級別 | DEBUG | WARN/ERROR |
 
+## 版本管理與 CVE 追蹤
+
+### 關鍵元件版本
+
+Dockerfile 中的版本號應定期更新以修補安全漏洞。以下是目前的版本與建議：
+
+| 元件 | Dockerfile 行號 | 目前版本 | 最新穩定版 | 狀態 |
+|------|-----------------|---------|-----------|------|
+| Docker CLI | L5, L54-57 | 29.4.0 | 29.4.0 | 🟢 已是最新 |
+| Docker Compose Plugin | L6, L61-64 | 5.1.2 | 5.1.2 | 🟢 已是最新 |
+| Ubuntu Base | L1 | 24.04 | 24.04 | 🟢 穩定 |
+| OpenCode | L7 | 1.3.12 | see opencode.ai | 需評估 |
+| OpenChamber | L8 | 1.9.4 | see openchamber.dev | 需評估 |
+| Bun | L90 | latest | latest | 🟢 自動更新 |
+
+### 已知 CVE 清單
+
+以下列出關鍵元件的已知 CVE（僅列 Critical/High）：
+
+#### Docker Compose Plugin (v5.1.2) — ✅ 已升級
+
+**狀態**: 2026-04-10 升級至 v5.1.2，原 v2.24.5 的 ~68 個 alerts 已消除。
+
+> **注意**: 新版本仍可能有新 CVE，請定期檢查 GitHub Security Advisories。
+
+#### Docker CLI (v29.4.0) — ✅ 已升級
+
+**狀態**: 2026-04-10 升級至 v29.4.0，原 v25.0.4 的 ~20 個 alerts 已消除。
+
+> **注意**: 新版本仍可能有新 CVE，請定期檢查 GitHub Security Advisories。
+
+#### Ubuntu apt 套件
+
+apt 套件層的 CVE 需依賴 Ubuntu upstream 修補，`UPGRADE_PACKAGES=true` 已是正確策略。
+
+主要受影響套件：
+- `build-essential` / `binutils`: ~40 個 alerts (High)
+- `python3-pip`: 4 個 alerts (High)
+- `vim` / `vim-runtime`: 3 個 alerts (High)
+- `openssh-client`: 1 個 alert (High)
+
+> **建議**: 評估移除非必要套件（vim, python3-pip），考慮 multi-stage build 隔離編譯工具
+
+### 版本更新流程
+
+```mermaid
+flowchart TD
+    A[收到 CVE 通知] --> B{嚴重性}
+    B -->|Critical| C[立即處理]
+    B -->|High| D[排入 sprint]
+    B -->|Medium/Low| E[定期檢視]
+    
+    C --> F[更新 Dockerfile ARG]
+    D --> F
+    F --> G[本地測試]
+    G --> H{測試通過?}
+    H -->|是| I[提交 PR]
+    H -->|否| J[問題排查]
+    J --> F
+    I --> K[CI/CD 驗證]
+    K --> L[合併至 main]
+    
+    style C fill:#ff9999
+    style D fill:#ffcc99
+    style E fill:#ccff99
+```
+
+### 更新檢查命令
+
+```bash
+# 檢查 Docker CLI 最新版本
+curl -s https://api.github.com/repos/moby/moby/releases/latest | jq -r '.tag_name'
+
+# 檢查 Docker Compose 最新版本
+curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r '.tag_name'
+
+# 檢查 Ubuntu 套件更新
+apt-get update && apt-get list --upgradable
+
+# 執行漏洞掃描
+grype codeforge:latest
+```
+
+### 待處理事項
+
+詳細的技術債務和安全改進事項請參閱 [backlog.md](./backlog.md)。
+
+---
+
 ## 相關資源
 
 - [Docker 安全最佳實踐](https://docs.docker.com/engine/security/)
 - [OWASP 容器安全](https://owasp.org/www-project-container-security/)
 - [Ubuntu 安全指南](https://ubuntu.com/security)
+- [GitHub Security Advisories](https://github.com/advisories)
 
 ---
 
