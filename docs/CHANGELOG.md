@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-04-10
+
+### 安全修復
+- Docker CLI 升級：v25.0.4 → v29.4.0（消除 ~20 個 CVE alerts）
+- Docker Compose 升級：v2.24.5 → v5.1.2（消除 ~68 個 CVE alerts，含 6 個 Critical）
+- 新增 docs/backlog.md 記錄安全技術債務
+- 新增 docs/SECURITY.md 版本追蹤章節
+
 ## [0.5.8] - 2026-04-10
 
 ### 修復
