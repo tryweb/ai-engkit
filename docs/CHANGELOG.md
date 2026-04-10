@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-04-10
+
+### 新增
+- 新增 glab-config volume 讓 glab (GitLab CLI) 認證資料可以持久化
+- 新增 06-init-glab-cli.sh 初始化腳本，自動建立 ~/.config/glab-cli 目錄
+- 更新 00-fix-perms.sh 加入 glab-cli, gh, ssh, git 的權限修復
+
 ## [0.5.10] - 2026-04-10
 
 ### 新增
