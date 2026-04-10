@@ -47,6 +47,7 @@ services:
       - git-config-dev:/home/devuser/.config/git
       - ssh-keys-dev:/home/devuser/.ssh
       - gh-config-dev:/home/devuser/.config/gh
+      - glab-config-dev:/home/devuser/.config/glab-cli
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OLLAMA_BASE_URL=http://ollama-dev:11434
@@ -75,3 +76,4 @@ volumes:
   git-config-dev:
   ssh-keys-dev:
   gh-config-dev:
+  glab-config-dev:

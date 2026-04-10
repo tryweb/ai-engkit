@@ -19,5 +19,9 @@ fix_perms "$HOME"/.local/share/opencode
 fix_perms "$HOME"/.cache/opencode
 fix_perms "$HOME"/.cache/oh-my-opencode
 fix_perms "$HOME"/.config/openchamber
+fix_perms "$HOME"/.config/glab-cli
+fix_perms "$HOME"/.config/gh
+fix_perms "$HOME"/.ssh
+fix_perms "$HOME"/.config/git
 fix_perms "$HOME"/workspace
 echo
