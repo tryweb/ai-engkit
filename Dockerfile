@@ -4,7 +4,7 @@ FROM ubuntu:24.04
 ARG UPGRADE_PACKAGES=true
 ARG DOCKER_VERSION=25.0.4
 ARG COMPOSE_VERSION=2.24.5
-ARG OPENCODE_VERSION=1.3.7
+ARG OPENCODE_VERSION=1.3.12
 ARG OPENCHAMBER_VERSION=1.9.4
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -50,15 +50,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fi \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Docker CLI + Compose（DooD 模式）─────────────────
+# ── Docker CLI + Docker Compose Plugin（DooD 模式）──────
 RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
     | tar xz -C /tmp && \
     mv /tmp/docker/docker /usr/local/bin/ && \
     rm -rf /tmp/docker
 
-RUN curl -fsSL "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
-    -o /usr/local/bin/docker-compose && \
-    chmod +x /usr/local/bin/docker-compose
+# 安裝 Docker Compose V2 Plugin（從 GitHub 下載，安裝到 Docker CLI plugins 目錄）
+# 之後可使用 `docker compose` 命令（plugin 模式，而非獨立的 docker-compose）
+RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
+    curl -fsSL "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
+    -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # ── 使用者建立 ─────────────────────────────────────────
 # - shell 改為 /bin/bash（開發環境必要）
