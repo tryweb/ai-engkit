@@ -40,16 +40,16 @@ echo " Project: $PROJECT_DIR"
 echo "============================================"
 
 # --------------------------------------------------
-# 1. 檢查 docker-compose.dev.yml 是否存在
+# 1. 檢查 docker compose.dev.yml 是否存在
 # --------------------------------------------------
 echo ""
 echo "--- Prerequisites ---"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
-  fail "docker-compose.dev.yml not found at $COMPOSE_FILE"
+  fail "docker compose.dev.yml not found at $COMPOSE_FILE"
   exit 1
 fi
-pass "docker-compose.dev.yml exists"
+pass "docker compose.dev.yml exists"
 
 # --------------------------------------------------
 # 2. 停止現有環境（如有的話）
@@ -57,10 +57,10 @@ pass "docker-compose.dev.yml exists"
 echo ""
 echo "--- Cleanup Existing Environment ---"
 
-EXISTING=$(docker-compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || echo "")
+EXISTING=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || echo "")
 if [ -n "$EXISTING" ]; then
   info "Stopping existing containers..."
-  docker-compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
+  docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
 fi
 pass "Environment clean"
 
@@ -71,10 +71,10 @@ echo ""
 echo "--- Starting Environment ---"
 
 info "Building image (if needed)..."
-docker-compose -f "$COMPOSE_FILE" build 2>/dev/null
+docker compose -f "$COMPOSE_FILE" build 2>/dev/null
 
 info "Starting services..."
-docker-compose -f "$COMPOSE_FILE" up -d
+docker compose -f "$COMPOSE_FILE" up -d
 
 # --------------------------------------------------
 # 4. 等待 Ollama 健康檢查通過
@@ -164,7 +164,7 @@ if [ $EXIT_CODE -eq 0 ]; then
       RETRY_COUNT=$((RETRY_COUNT + 1))
       info "Test attempt $RETRY_COUNT/$MAX_RETRIES..."
       
-      if "$SCRIPT_DIR/test-memory-e2e.sh" "$CONTAINER" "$OLLAMA_HOST" 4096; then
+      if "$SCRIPT_DIR/test-memory-e2e.sh" "$CONTAINER" "$OLLAMA_HOST"; then
         TEST_PASSED=true
         pass "Memory plugin E2E test passed (attempt $RETRY_COUNT)"
         break
@@ -199,10 +199,10 @@ echo "--- Cleanup ---"
 if [ "$NO_CLEANUP" = "true" ]; then
   info "Skipping cleanup (--no-cleanup flag set)"
   info "To clean up manually:"
-  info "  cd $PROJECT_DIR && docker-compose -f docker-compose.dev.yml down"
+  info "  cd $PROJECT_DIR && docker compose -f docker-compose.dev.yml down"
 else
   info "Stopping services..."
-  docker-compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
+  docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null
   pass "Environment cleaned"
 fi
 
@@ -226,8 +226,8 @@ else
   echo "  3. lancedb-opencode-pro plugin 未正確載入"
   echo ""
   echo "建議："
-  echo "  1. 檢查 OpenCode 版本（建議 1.3.7）"
-  echo "  2. 確認 docker-compose.dev.yml 中的 OPENCODE_PLUGINS 設定"
+  echo "  1. 檢查 OpenCode 版本（建議 1.3.12 或更新）"
+  echo "  2. 確認 docker compose.dev.yml 中的 OPENCODE_PLUGINS 設定"
   echo "  3. 執行 --no-cleanup 查看詳細錯誤訊息"
 fi
 

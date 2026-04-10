@@ -3,7 +3,6 @@ set -uo pipefail
 
 CONTAINER="${1:-codeforge-dev}"
 OLLAMA_HOST="${2:-ollama-dev}"
-SERVER_PORT="${3:-4096}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -15,9 +14,12 @@ fail() { echo -e "  ${RED}FAIL${NC} $1"; }
 info() { echo -e "  ${YELLOW}INFO${NC} $1"; }
 
 EXIT_CODE=0
+TEST_MEMORY_ID=""
+TEST_TIMESTAMP=$(date +%s)
+TEST_TEXT="E2E_HOOK_TEST_${TEST_TIMESTAMP} - This is a test memory stored via plugin hooks for E2E verification"
 
 echo "============================================"
-echo " Memory Plugin E2E Test (Full Flow)"
+echo " Memory Plugin E2E Test"
 echo " Container: $CONTAINER"
 echo " Ollama: $OLLAMA_HOST"
 echo " Date: $(date '+%Y-%m-%d %H:%M:%S')"
@@ -25,14 +27,11 @@ echo "============================================"
 
 echo ""
 echo "--- Container Status ---"
-STATUS=$(docker inspect "$CONTAINER" --format '{{.State.Status}}' 2>/dev/null || echo "not_found")
-if [ "$STATUS" = "running" ]; then
-  pass "Container is running"
+STATUS=$(docker exec "$CONTAINER" sh -c 'echo $HOME' 2>/dev/null || echo "")
+if [ -n "$STATUS" ]; then
+  pass "Container is accessible (HOME=$STATUS)"
 else
-  fail "Container is not running (status: $STATUS)"
-  echo ""
-  echo "請確認容器已啟動："
-  echo "  docker compose -f docker-compose.dev.yml up -d"
+  fail "Container is not accessible"
   exit 1
 fi
 
@@ -71,8 +70,8 @@ OLLAMA_BASE_URL=$(docker exec "$CONTAINER" sh -c 'echo $OLLAMA_BASE_URL' 2>/dev/
 info "OLLAMA_BASE_URL=$OLLAMA_BASE_URL"
 
 OLLAMA_TEST=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r 'length' 2>/dev/null" || echo "error")
-if [ "$OLLAMA_TEST" != "error" ] && [ -n "$OLLAMA_TEST" ]; then
+  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r '.models[].name' 2>/dev/null | wc -l" || echo "0")
+if [ "$OLLAMA_TEST" -gt 0 ]; then
   pass "Ollama is accessible ($OLLAMA_TEST models available)"
 else
   fail "Ollama is not accessible"
@@ -89,172 +88,172 @@ else
 fi
 
 echo ""
-echo "--- LanceDB Storage ---"
-DB_PATH=$(docker exec "$CONTAINER" sh -c 'echo $HOME/.opencode/memory/lancedb' 2>/dev/null || echo "")
-if [ -n "$DB_PATH" ]; then
-  info "DB path: $DB_PATH"
-  DB_WRITABLE=$(docker exec "$CONTAINER" sh -c \
-    "mkdir -p $DB_PATH && test -w $DB_PATH && echo 'writable'" 2>/dev/null || echo "error")
-  if [ "$DB_WRITABLE" = "writable" ]; then
-    pass "LanceDB data directory is writable"
-  else
-    fail "LanceDB data directory is not writable"
-    EXIT_CODE=1
-  fi
-fi
-
-echo ""
-echo "--- Embedding Model Test ---"
+echo "--- Embedding Test ---"
 EMBED_TEST=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf http://${OLLAMA_HOST}:11434/api/embeddings -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}' | jq -r '.embedding[0] // empty' | head -c 20" 2>/dev/null || echo "error")
+  "curl -sf http://${OLLAMA_HOST}:11434/api/embeddings -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}' 2>/dev/null | jq -r '.embedding[0] // empty'" 2>/dev/null || echo "")
 
-if [ -n "$EMBED_TEST" ] && [ "$EMBED_TEST" != "error" ] && [ ${#EMBED_TEST} -gt 5 ]; then
-  pass "Embedding model functional (vector dimension: ${#EMBED_TEST})"
+if [ -n "$EMBED_TEST" ] && [ ${#EMBED_TEST} -gt 5 ]; then
+  pass "Embedding model functional"
 else
   fail "Embedding model not working"
   EXIT_CODE=1
 fi
 
 echo ""
-echo "--- Start opencode serve ---"
-# Kill any existing server on the port
-docker exec "$CONTAINER" sh -c "pkill -f 'opencode serve.*${SERVER_PORT}' 2>/dev/null || true"
-sleep 1
+echo "--- Plugin Hook Load Test ---"
+PLUGIN_LOAD=$(docker exec "$CONTAINER" bash -c 'bun -e "
+import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+const hooks = await plugin({
+  client: {
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
+  },
+  project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
+  directory: \"/workspace\",
+  worktree: \"/workspace\",
+  serverUrl: new URL(\"http://localhost:4096\"),
+  \$: () => { throw new Error(\"shell not needed\"); },
+});
+console.log(JSON.stringify({ loaded: true, tools: Object.keys(hooks.tool || {}) }));
+" 2>&1')
 
-# Start opencode serve with proper environment variables
-docker exec "$CONTAINER" sh -c "
-  OLLAMA_BASE_URL=http://${OLLAMA_HOST}:11434 \
-  LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER=ollama \
-  LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL=http://${OLLAMA_HOST}:11434 \
-  OPENCODE_SERVER_PASSWORD=devonly \
-  nohup opencode serve --port ${SERVER_PORT} > /tmp/oc-${SERVER_PORT}.log 2>&1 &
-"
-sleep 10
-
-# Check server health
-SERVER_HEALTH=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf --user 'opencode:devonly' http://127.0.0.1:${SERVER_PORT}/global/health 2>/dev/null | jq -r '.healthy' 2>/dev/null" || echo "error")
-
-if [ "$SERVER_HEALTH" = "true" ]; then
-  pass "opencode serve is running on port $SERVER_PORT"
+if echo "$PLUGIN_LOAD" | grep -q '"loaded":true'; then
+  pass "Plugin hooks loaded successfully"
+  TOOL_COUNT=$(echo "$PLUGIN_LOAD" | grep -o '"memory_remember"' | wc -l)
+  if [ "$TOOL_COUNT" -gt 0 ]; then
+    pass "memory_remember tool available"
+  else
+    fail "memory_remember tool not found"
+    EXIT_CODE=1
+  fi
 else
-  fail "opencode serve failed to start"
-  docker exec "$CONTAINER" sh -c "cat /tmp/oc-${SERVER_PORT}.log 2>/dev/null | head -10"
+  fail "Plugin hooks failed to load"
   EXIT_CODE=1
 fi
 
 echo ""
-echo "--- Memory Write Test (E2E) ---"
+echo "--- Test: memory_remember via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
-  # Create a new session
-  SESSION_ID=$(docker exec "$CONTAINER" sh -c \
-    "curl -sf --user 'opencode:devonly' -X POST http://127.0.0.1:${SERVER_PORT}/session 2>/dev/null | jq -r '.id' 2>/dev/null" || echo "error")
-
-  if [ "$SESSION_ID" != "error" ] && [ -n "$SESSION_ID" ]; then
-    pass "Created session: $SESSION_ID"
-    
-    # Write a memory using memory_remember
-    info "Writing test memory..."
-    
-    WRITE_RESULT=$(docker exec "$CONTAINER" sh -c \
-      "timeout 180 curl -sf --user 'opencode:devonly' -X POST 'http://127.0.0.1:${SERVER_PORT}/session/${SESSION_ID}/message' \
-        -H 'Content-Type: application/json' \
-        -d '{\"parts\":[{\"type\":\"text\",\"text\":\"Store a memory: E2E_TEST_2026_APR with category testing\"}]}' 2>/dev/null | jq -r '.info.finish' 2>/dev/null" || echo "error")
-    
-    if [ "$WRITE_RESULT" = "stop" ] || [ "$WRITE_RESULT" = "error" ]; then
-      # Check if memory was actually stored by querying LanceDB directly
-      MEMORY_COUNT=$(docker exec "$CONTAINER" sh -c "
-        node -e \"
-        const { connect } = require('/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/@lancedb/lancedb');
-        (async () => {
-          try {
-            const db = await connect('/home/devuser/.opencode/memory/lancedb');
-            const table = await db.openTable('memories');
-            const results = await table.query().limit(10).toArray();
-            console.log(results.length);
-          } catch(e) {
-            console.log('0');
-          }
-        })();
-        \" 2>/dev/null
-      " || echo "0")
-      
-      if [ "$MEMORY_COUNT" -gt 0 ]; then
-        pass "Memory write successful (stored $MEMORY_COUNT memories)"
-      else
-        fail "Memory write may have failed (0 memories found)"
-        EXIT_CODE=1
-      fi
-    else
-      fail "Memory write failed (result: $WRITE_RESULT)"
-      EXIT_CODE=1
-    fi
+  MEMORY_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
+import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+const hooks = await plugin({
+  client: {
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
+  },
+  project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
+  directory: \"/workspace\",
+  worktree: \"/workspace\",
+  serverUrl: new URL(\"http://localhost:4096\"),
+  \$: () => { throw new Error(\"shell not needed\"); },
+});
+const ctx = { sessionID: \"test\", messageID: \"msg\", agent: \"general\", directory: \"/workspace\", worktree: \"/workspace\", abort: new AbortController().signal, metadata() {}, async ask() {} };
+const result = await hooks.tool.memory_remember.execute({ text: process.argv[1], category: \"testing\" }, ctx);
+console.log(result);
+" -- "'"$TEST_TEXT"'"' 2>&1)
+  
+  if echo "$MEMORY_RESULT" | grep -q "Stored memory"; then
+    TEST_MEMORY_ID=$(echo "$MEMORY_RESULT" | grep -oE '[a-f0-9-]{36}' | head -1)
+    pass "memory_remember executed successfully"
+    info "Memory ID: $TEST_MEMORY_ID"
+  elif echo "$MEMORY_RESULT" | grep -q "too short"; then
+    fail "memory_remember failed: content too short (need >= 80 chars)"
+    EXIT_CODE=1
   else
-    fail "Failed to create session"
+    fail "memory_remember failed: $MEMORY_RESULT"
     EXIT_CODE=1
   fi
 fi
 
 echo ""
-echo "--- Memory Search Test (E2E) ---"
+echo "--- Test: memory_search via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
-  # Create a new session for search
-  SEARCH_SESSION=$(docker exec "$CONTAINER" sh -c \
-    "curl -sf --user 'opencode:devonly' -X POST http://127.0.0.1:${SERVER_PORT}/session 2>/dev/null | jq -r '.id' 2>/dev/null" || echo "error")
+  SEARCH_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
+import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+const hooks = await plugin({
+  client: {
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
+  },
+  project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
+  directory: \"/workspace\",
+  worktree: \"/workspace\",
+  serverUrl: new URL(\"http://localhost:4096\"),
+  \$: () => { throw new Error(\"shell not needed\"); },
+});
+const ctx = { sessionID: \"test\", messageID: \"msg\", agent: \"general\", directory: \"/workspace\", worktree: \"/workspace\", abort: new AbortController().signal, metadata() {}, async ask() {} };
+const result = await hooks.tool.memory_search.execute({ query: \"E2E_HOOK_TEST\", limit: 5 }, ctx);
+console.log(result.includes(\"E2E_HOOK_TEST\") ? \"FOUND\" : \"NOT_FOUND\");
+" 2>&1')
   
-  if [ "$SEARCH_SESSION" != "error" ] && [ -n "$SEARCH_SESSION" ]; then
-    info "Searching for E2E_TEST..."
-    
-    SEARCH_RESULT=$(docker exec "$CONTAINER" sh -c \
-      "timeout 180 curl -sf --user 'opencode:devonly' -X POST 'http://127.0.0.1:${SERVER_PORT}/session/${SEARCH_SESSION}/message' \
-        -H 'Content-Type: application/json' \
-        -d '{\"parts\":[{\"type\":\"text\",\"text\":\"Search memory for E2E\"}]}' 2>/dev/null" || echo "error")
-    
-    # Check if search returned results
-    if echo "$SEARCH_RESULT" | jq -r '.parts[] | select(.type == \"text\") | .text' 2>/dev/null | grep -q "E2E_TEST"; then
-      pass "Memory search returned results"
-      info "Search successfully retrieved stored memory"
-    else
-      # Try direct query
-      DIRECT_COUNT=$(docker exec "$CONTAINER" sh -c "
-        node -e \"
-        const { connect } = require('/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/@lancedb/lancedb');
-        (async () => {
-          try {
-            const db = await connect('/home/devuser/.opencode/memory/lancedb');
-            const table = await db.openTable('memories');
-            const results = await table.query().limit(10).toArray();
-            console.log(JSON.stringify(results.map(r => r.text?.substring(0, 50))));
-          } catch(e) {
-            console.log('[]');
-          }
-        })();
-        \" 2>/dev/null
-      " || echo "[]")
-      
-      if echo "$DIRECT_COUNT" | grep -q "E2E"; then
-        pass "Memory data exists in LanceDB (search may need more time)"
-      else
-        fail "Memory search failed"
-        EXIT_CODE=1
-      fi
-    fi
+  if echo "$SEARCH_RESULT" | grep -q "FOUND"; then
+    pass "memory_search found the stored memory"
+  elif echo "$SEARCH_RESULT" | grep -q "NOT_FOUND"; then
+    fail "memory_search did not find the stored memory"
+    EXIT_CODE=1
   else
-    fail "Failed to create search session"
+    fail "memory_search failed: $SEARCH_RESULT"
     EXIT_CODE=1
   fi
 fi
 
 echo ""
-echo "--- Verify LanceDB Data ---"
+echo "--- Test: memory_stats via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
-  DB_FILES=$(docker exec "$CONTAINER" sh -c \
-    "ls -la /home/devuser/.opencode/memory/lancedb/ 2>/dev/null | grep -cE '\.lance' || echo 0" 2>/dev/null | tr -d '\n' || echo "0")
+  STATS_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
+import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+const hooks = await plugin({
+  client: {
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
+  },
+  project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
+  directory: \"/workspace\",
+  worktree: \"/workspace\",
+  serverUrl: new URL(\"http://localhost:4096\"),
+  \$: () => { throw new Error(\"shell not needed\"); },
+});
+const ctx = { sessionID: \"test\", messageID: \"msg\", agent: \"general\", directory: \"/workspace\", worktree: \"/workspace\", abort: new AbortController().signal, metadata() {}, async ask() {} };
+const result = await hooks.tool.memory_stats.execute({}, ctx);
+console.log(result);
+" 2>&1')
   
-  if [ "$DB_FILES" -ge 2 ]; then
-    pass "LanceDB tables created (memories.lance, effectiveness_events.lance)"
+  if echo "$STATS_RESULT" | grep -q "lancedb-opencode-pro"; then
+    pass "memory_stats returned valid response"
+    if echo "$STATS_RESULT" | grep -q '"status":"healthy"'; then
+      info "Embedder health: healthy"
+    fi
   else
-    info "Found $DB_FILES database files"
+    fail "memory_stats failed: $STATS_RESULT"
+    EXIT_CODE=1
+  fi
+fi
+
+echo ""
+echo "--- Cleanup Test Memory ---"
+if [ -n "$TEST_MEMORY_ID" ]; then
+  CLEANUP_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
+import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+const hooks = await plugin({
+  client: {
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
+  },
+  project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
+  directory: \"/workspace\",
+  worktree: \"/workspace\",
+  serverUrl: new URL(\"http://localhost:4096\"),
+  \$: () => { throw new Error(\"shell not needed\"); },
+});
+const ctx = { sessionID: \"test\", messageID: \"msg\", agent: \"general\", directory: \"/workspace\", worktree: \"/workspace\", abort: new AbortController().signal, metadata() {}, async ask() {} };
+const result = await hooks.tool.memory_forget.execute({ id: process.argv[1], force: true }, ctx);
+console.log(result);
+" -- "$TEST_MEMORY_ID"' 2>&1)
+  
+  if echo "$CLEANUP_RESULT" | grep -q "Permanently deleted"; then
+    pass "Test memory cleaned up"
+  else
+    info "Cleanup: $CLEANUP_RESULT"
   fi
 fi
 
@@ -270,15 +269,14 @@ if [ $EXIT_CODE -eq 0 ]; then
   echo "  - opencode CLI available"
   echo "  - Plugin configured correctly"
   echo "  - Ollama embedding model functional"
-  echo "  - LanceDB storage writable"
-  echo "  - opencode serve started"
-  echo "  - Memory write test passed"
-  echo "  - Memory search test passed"
+  echo "  - Plugin hooks loaded successfully"
+  echo "  - memory_remember tool executed"
+  echo "  - memory_search found stored memory"
+  echo "  - memory_stats returned valid response"
+  echo ""
+  echo "Testing method: Hook-based (via plugin hooks API)"
 else
   echo -e "${RED}Memory E2E test FAILED${NC}"
 fi
-
-# Cleanup: kill the test server
-docker exec "$CONTAINER" sh -c "pkill -f 'opencode serve.*${SERVER_PORT}' 2>/dev/null || true"
 
 exit $EXIT_CODE
