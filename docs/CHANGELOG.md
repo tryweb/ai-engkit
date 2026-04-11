@@ -4,17 +4,18 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
-## [Unreleased]
-
-### 新增
-- 支援在 build 時指定 plugin 版本（適用於 `docker-compose.dev.yml`）
-  - `OH_MY_OPENAGENT_VERSION` - oh-my-openagent 版本（預設：`latest`）
-  - `LANCEDB_OPENCODE_PRO_VERSION` - lancedb-opencode-pro 版本（預設：`latest`）
-- Dockerfile 新增 plugin 預先下載機制，確保 image 內已取得當時最新版本
+## [0.5.12] - 2026-04-11
 
 ### 修復
-- 修正 OpenCode 配置不支援自訂 `memory` 鍵的問題
-- 回歸依賴環境變數（`LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL`）進行 plugin 配置
+- 移除 `entrypoint.sh` 中的 `sg docker` 包裝，解決環境變數繼承問題
+  - 此問題導致 `memory_stats` 等 tool 回報 "ollama embedding service appears to be offline"
+- 新增 `entrypoint.d/02-init-config.sh` 中的 stale plugin cache 清理機制
+- `docker-compose.dev.yml` hardcode plugins 避免 host shell 污染環境變數
+- 修正 `.env.example` 中的 plugin 名稱 (`oh-my-opencode` → `oh-my-openagent`)
+- 修復 `test/test-memory-e2e.sh` 測試腳本
+
+### 新增
+- 新增 memory plugin 設定說明到 README.md
 
 ## [0.5.11] - 2026-04-10
 
