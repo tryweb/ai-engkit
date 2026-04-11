@@ -87,9 +87,13 @@ jobs:
 
       - name: Start services
         run: |
-          # Replace build section with pre-built image and change container name
-          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: codeforge:test' docker-compose.dev.yml
-          sed -i 's/container_name: codeforge-dev/container_name: ci-test/' docker-compose.dev.yml
+          cat > docker-compose.override.yml << 'EOFYML'
+services:
+  ai-dev:
+    image: codeforge:test
+    container_name: ci-test
+EOFYML
+          docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d
           docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services..."
           sleep 30
