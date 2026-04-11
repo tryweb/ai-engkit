@@ -102,7 +102,7 @@ fi
 echo ""
 echo "--- Plugin Hook Load Test ---"
 PLUGIN_LOAD=$(docker exec "$CONTAINER" bash -c 'bun -e "
-import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
     config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
@@ -135,7 +135,7 @@ echo ""
 echo "--- Test: memory_remember via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
   MEMORY_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
-import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
     config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
@@ -169,7 +169,7 @@ echo ""
 echo "--- Test: memory_search via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
   SEARCH_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
-import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
     config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
@@ -201,7 +201,7 @@ echo ""
 echo "--- Test: memory_stats via Hook ---"
 if [ $EXIT_CODE -eq 0 ]; then
   STATS_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
-import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
     config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
@@ -233,7 +233,7 @@ echo ""
 echo "--- Cleanup Test Memory ---"
 if [ -n "$TEST_MEMORY_ID" ]; then
   CLEANUP_RESULT=$(docker exec "$CONTAINER" bash -c 'bun -e "
-import plugin from \"/home/devuser/.cache/opencode/node_modules/lancedb-opencode-pro/dist/index.js\";
+import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
     config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },

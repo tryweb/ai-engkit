@@ -6,6 +6,8 @@ ARG DOCKER_VERSION=29.4.0
 ARG COMPOSE_VERSION=5.1.2
 ARG OPENCODE_VERSION=1.4.3
 ARG OPENCHAMBER_VERSION=1.9.4
+ARG OH_MY_OPENAGENT_VERSION=latest
+ARG LANCEDB_OPENCODE_PRO_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
 ARG DOCKER_GID
@@ -98,6 +100,10 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @fission-ai/openspec && \
     bun install -g @code-yeongyu/comment-checker && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
+
+RUN mkdir -p /home/${USERNAME}/.config/opencode && \
+    echo "{\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"lancedb-opencode-pro@${LANCEDB_OPENCODE_PRO_VERSION}\"]}" > /home/${USERNAME}/.config/opencode/opencode.json && \
+    timeout 30 opencode >/dev/null 2>&1 || true
 
 # ── opencode 設定檔（取代無效的 OPENCODE_CONFIG env var）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \

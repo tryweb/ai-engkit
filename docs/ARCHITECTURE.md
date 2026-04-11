@@ -417,19 +417,19 @@ flowchart LR
 | 屬性 | 說明 |
 |------|------|
 | 功能 | AI 程式碼助手（後端引擎） |
-| 版本 | 1.3.13 |
+| 版本 | 1.4.3 |
 | 設定檔 | `~/.config/opencode/opencode.json` |
 | 資料庫 | `~/.local/share/opencode/opencode.db` |
 | API 埠號 | 4095 |
 | 通訊協定 | HTTP + SSE (Server-Sent Events) |
-| SDK | `@opencode-ai/sdk/v2` |
+| SDK | `@opencode-ai/sdk` |
 
 ### OpenChamber
 
 | 屬性 | 說明 |
 |------|------|
 | 功能 | OpenCode 的 Web/Desktop UI（前端的 GUI） |
-| 版本 | 1.9.3 |
+| 版本 | 1.9.4 |
 | 與 OpenCode 關係 | 獨立專案，透過 API 連線至 OpenCode |
 | 服務埠號 | 3000 (映射至主機 8000) |
 | 通訊方式 | WebSocket (terminal) + SSE (chat) |
@@ -491,10 +491,23 @@ graph LR
 
 ### 插件系統
 
-| 插件 | 功能 | 說明 |
-|------|------|------|
-| `oh-my-opencode` | 核心框架 | OpenCode 基礎功能擴展 |
-| `lancedb-opencode-pro` | 向量搜尋 | 基於 LanceDB 的程式碼索引 |
+| 插件 | 功能 | 說明 | 版本管理 |
+|------|------|------|----------|
+| `oh-my-openagent` | 核心框架 | OpenCode 基礎功能擴展 | 支援 build 時指定版本 |
+| `lancedb-opencode-pro` | 向量搜尋 | 基於 LanceDB 的程式碼索引 | 支援 build 時指定版本 |
+
+### Plugin 版本管理（開發用）
+
+在建構 image 時可指定插件版本：
+
+```bash
+# 使用最新版本（預設）
+docker compose -f docker-compose.dev.yml build
+
+# 指定特定版本
+OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
+  docker compose -f docker-compose.dev.yml build
+```
 
 ## 配置選項
 

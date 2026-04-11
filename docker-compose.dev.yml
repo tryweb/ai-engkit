@@ -33,6 +33,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION:-latest}
+        - LANCEDB_OPENCODE_PRO_VERSION=${LANCEDB_OPENCODE_PRO_VERSION:-latest}
     container_name: codeforge-dev
     ports:
       - "${CHAMBER_DEV_PORT:-8001}:3000"
@@ -55,7 +58,7 @@ services:
       - LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL=${LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL:-nomic-embed-text}
       - LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL=http://ollama-dev:11434
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-devonly}
-      - OPENCODE_PLUGINS=${OPENCODE_PLUGINS:-oh-my-openagent,lancedb-opencode-pro}
+      - OPENCODE_PLUGINS=oh-my-openagent,lancedb-opencode-pro
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
       - OPENCHAMBER_HOST=0.0.0.0
     depends_on:

@@ -47,9 +47,26 @@ Copy `.env.example` to `.env` and customize:
 | `OLLAMA_PORT` | `11434` | Host port for Ollama API |
 | `OPENCODE_SERVER_PASSWORD` | `devonly` | OpenCode API password |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
-| `OPENCODE_PLUGINS` | `oh-my-opencode,lancedb-opencode-pro` | Comma-separated plugin list |
+| `OPENCODE_PLUGINS` | `oh-my-openagent,lancedb-opencode-pro` | Comma-separated plugin list |
 | `WORKSPACE_PATH` | *(named volume)* | Host path for workspace bind mount |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL |
+
+### Plugin Version Management (Development)
+
+When building from source (via `docker-compose.dev.yml`), you can specify plugin versions:
+
+```bash
+# Use latest versions (default)
+docker compose -f docker-compose.dev.yml build
+
+# Specify specific versions
+OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
+  docker compose -f docker-compose.dev.yml build
+```
+
+Available arguments:
+- `OH_MY_OPENAGENT_VERSION` - oh-my-openagent plugin version (default: `latest`)
+- `LANCEDB_OPENCODE_PRO_VERSION` - lancedb-opencode-pro plugin version (default: `latest`)
 
 ### Workspace
 
