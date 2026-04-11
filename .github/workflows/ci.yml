@@ -94,7 +94,6 @@ services:
     container_name: ci-test
 EOFYML
           docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d
-          docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services..."
           sleep 30
 
