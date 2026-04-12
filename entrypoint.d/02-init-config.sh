@@ -15,18 +15,22 @@ init_file() {
 
 # --- OpenCode config ---
 mkdir -p "$OPCODE_CONFIG_DIR"
+OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
+
+DEFAULT_CONFIG_SOURCE="/etc/opencode/opencode.json.default"
+if [ -f "$DEFAULT_CONFIG_SOURCE" ] && [ ! -f "$OPCODE_CONFIG_FILE" ]; then
+  echo "Copying default config from: $DEFAULT_CONFIG_SOURCE"
+  cp "$DEFAULT_CONFIG_SOURCE" "$OPCODE_CONFIG_FILE"
+fi
 
 # Build plugin array from OPENCODE_PLUGINS env var (comma-separated)
 PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent,lancedb-opencode-pro}"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
 
-OPCODE_CONFIG=$(jq -n \
-  --argjson plugins "$PLUGIN_JSON" \
-  '{plugin: $plugins}')
-
-OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
-
 if [ ! -f "$OPCODE_CONFIG_FILE" ]; then
+  OPCODE_CONFIG=$(jq -n \
+    --argjson plugins "$PLUGIN_JSON" \
+    '{plugin: $plugins}')
   echo "Creating default: $OPCODE_CONFIG_FILE"
   echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 fi
@@ -57,37 +61,20 @@ jq -n \
   > "$LANCEDB_SIDECAR"
 echo "Updated: $LANCEDB_SIDECAR"
 
-# --- OpenChamber settings ---
-mkdir -p "$OPENCHAMBER_DATA_DIR"
-
-init_file "$OPENCHAMBER_DATA_DIR/settings.json" '{
-  "lightThemeId": "flexoki-light",
-  "darkThemeId": "flexoki-dark",
-  "approvedDirectories": [],
-  "securityScopedBookmarks": [],
-  "notifyOnSubtasks": true,
-  "notifyOnCompletion": true,
-  "notifyOnError": true,
-  "notifyOnQuestion": true,
-  "notificationTemplates": {
-    "completion": {
-      "title": "{agent_name} is ready",
-      "message": "{model_name} completed the task"
-    },
-    "error": {
-      "title": "Tool error",
-      "message": "{last_message}"
-    },
-    "question": {
-      "title": "Input needed",
-      "message": "{last_message}"
-    },
-    "subtask": {
-      "title": "{agent_name} is ready",
-      "message": "{model_name} completed the task"
-    }
-  },
-  "zenModel": "minimax-m2.5-free"
-}'
+OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
+LANCEDB_PLUGIN_DIR="$OPENCODE_CACHE_PKG/lancedb-opencode-pro@latest"
+if [ -d "$LANCEDB_PLUGIN_DIR" ]; then
+  echo "Testing LanceDB plugin initialization..."
+  cd "$LANCEDB_PLUGIN_DIR"
+  TEST_OUTPUT=$(bun -e "try { const lancedb = require('@lancedb/lancedb'); console.log('LanceDB: OK'); } catch(e) { console.error('LanceDB: ERROR', e.message); process.exit(1); }" 2>&1)
+  echo "$TEST_OUTPUT"
+  if echo "$TEST_OUTPUT" | grep -q "OK"; then
+    echo "LanceDB plugin validated successfully"
+    echo "Pre-loading native bindings for OpenCode..."
+    bun -e "require('@lancedb/lancedb-linux-x64-gnu')" 2>/dev/null || true
+  else
+    echo "Warning: LanceDB validation failed, but continuing..."
+  fi
+fi
 
 echo "Default configs initialized"

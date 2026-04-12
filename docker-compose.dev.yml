@@ -61,6 +61,7 @@ services:
       - OPENCODE_PLUGINS=oh-my-openagent,lancedb-opencode-pro
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
       - OPENCHAMBER_HOST=0.0.0.0
+
     depends_on:
       ollama-dev:
         condition: service_healthy

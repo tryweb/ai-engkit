@@ -10,6 +10,7 @@ ARG OH_MY_OPENAGENT_VERSION=latest
 ARG LANCEDB_OPENCODE_PRO_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
+# DOCKER_GID 僅作為 build-arg 接收，實際群組賦值由 entrypoint.d/docker-gid.sh 在 runtime 處理
 ARG DOCKER_GID
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -96,26 +97,31 @@ ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
 RUN rm -rf ~/.bun/install/cache && \
     bun install -g opencode-ai@${OPENCODE_VERSION} && \
-    bun install -g @openchamber/web@${OPENCHAMBER_VERSION} && \
-    bun install -g @fission-ai/openspec && \
-    bun install -g @code-yeongyu/comment-checker && \
+    bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
+    bun install -g @fission-ai/openspec --trust && \
+    bun install -g @code-yeongyu/comment-checker --trust && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
 
-RUN mkdir -p /home/${USERNAME}/.config/opencode && \
-    echo "{\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"lancedb-opencode-pro@${LANCEDB_OPENCODE_PRO_VERSION}\"]}" > /home/${USERNAME}/.config/opencode/opencode.json && \
-    timeout 30 opencode >/dev/null 2>&1 || true
+USER root
 
-# ── opencode 設定檔（取代無效的 OPENCODE_CONFIG env var）
-RUN mkdir -p /home/${USERNAME}/.config/opencode && \
-    echo '{"autoupdate":false}' > /home/${USERNAME}/.config/opencode/config.json
+# 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）
+RUN mkdir -p /etc/opencode && \
+    echo "{\"autoupdate\":false,\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"lancedb-opencode-pro@${LANCEDB_OPENCODE_PRO_VERSION}\"]}" > /etc/opencode/opencode.json.default
 
-# ── 目錄預建（確保 volume mount 前所有人都正確）────────
+# 複製設定檔並觸發插件預下載
+RUN mkdir -p /home/${USERNAME}/.config/opencode && \
+    cp /etc/opencode/opencode.json.default /home/${USERNAME}/.config/opencode/opencode.json
+RUN timeout 30 opencode >/dev/null 2>&1 || true
+
+# 目錄預建（確保 volume mount 前所有人都正確）
 RUN mkdir -p \
     /home/${USERNAME}/workspace \
     /home/${USERNAME}/.local/share/opencode \
     /home/${USERNAME}/.local/bin \
+    /home/${USERNAME}/.local/state \
     /home/${USERNAME}/.ssh && \
-    chmod 700 /home/${USERNAME}/.ssh
+    chmod 700 /home/${USERNAME}/.ssh && \
+    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.local
 
 # ── entrypoint 腳本注入（需 root 寫入）──────────────────
 USER root
@@ -139,7 +145,7 @@ VOLUME [ \
     "/home/${USERNAME}/.config/openchamber", \
     "/home/${USERNAME}/.ssh", \
     "/home/${USERNAME}/.config/git", \
-    "/root/.ollama" \
+    "/home/${USERNAME}/.ollama" \
 ]
 
 EXPOSE 3000 4095
