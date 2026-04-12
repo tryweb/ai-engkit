@@ -4,6 +4,14 @@
 
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [Unreleased]
+
+## [0.5.13] - 2026-04-12
+
+### 修復
+- 移除 `NAPI_RS_FORCE_WASI` 環境變數以修復 LanceDB 初始化問題 (lancedb/lancedb#3267)
+- 修復 CI workflow 中的 docker compose 問題
+
 ## [0.5.12] - 2026-04-11
 
 ### 修復
