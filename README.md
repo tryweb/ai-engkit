@@ -4,7 +4,7 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![OpenCode](https://img.shields.io/badge/OpenCode-1.4.3-blue?style=for-the-badge&logoColor=white)
-![OpenChamber](https://img.shields.io/badge/OpenChamber-1.9.4-blue?style=for-the-badge&logoColor=white)
+![OpenChamber](https://img.shields.io/badge/OpenChamber-1.9.5-blue?style=for-the-badge&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-latest-blue?style=for-the-badge&logoColor=white)
 
 ## Features
