@@ -3,7 +3,7 @@
 A self-hosted AI development environment powered by [OpenCode](https://opencode.ai) and [OpenChamber](https://openchamber.dev/), running on Ubuntu 24.04 with Ollama integration.
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
-![OpenCode](https://img.shields.io/badge/OpenCode-1.4.3-blue?style=for-the-badge&logoColor=white)
+![OpenCode](https://img.shields.io/badge/OpenCode-1.4.7-blue?style=for-the-badge&logoColor=white)
 ![OpenChamber](https://img.shields.io/badge/OpenChamber-1.9.5-blue?style=for-the-badge&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-latest-blue?style=for-the-badge&logoColor=white)
 
