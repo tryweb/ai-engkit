@@ -61,5 +61,9 @@ init_file "$GIT_CONFIG_DIR/config"
 create_symlink "$GIT_CONFIG_DIR/.gitconfig" "$DEVUSER_HOME/.gitconfig"
 create_symlink "$GIT_CONFIG_DIR/.git-credentials" "$DEVUSER_HOME/.git-credentials"
 
+# 設定 git credential helper（需指定 HOME，否則 sudo 會寫到 /root）
+sudo -u devuser HOME=/home/devuser git config --global credential.helper store
+echo "Configured: credential.helper store"
+
 echo "=== Git/SSH volumes initialized ==="
 echo

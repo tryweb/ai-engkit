@@ -4,8 +4,9 @@ FROM ubuntu:24.04
 ARG UPGRADE_PACKAGES=true
 ARG DOCKER_VERSION=29.4.0
 ARG COMPOSE_VERSION=5.1.2
-ARG OPENCODE_VERSION=1.14.20
-ARG OPENCHAMBER_VERSION=1.9.7
+ARG BUILDX_VERSION=0.32.1
+ARG OPENCODE_VERSION=1.14.21
+ARG OPENCHAMBER_VERSION=1.9.8
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG LANCEDB_OPENCODE_PRO_VERSION=latest
 ARG USERNAME=devuser
@@ -65,6 +66,11 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
     curl -fsSL "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
     -o /usr/local/lib/docker/cli-plugins/docker-compose && \
     chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
+    curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" \
+    -o /usr/local/lib/docker/cli-plugins/docker-buildx && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 
 # ── 使用者建立 ─────────────────────────────────────────
 # - shell 改為 /bin/bash（開發環境必要）
