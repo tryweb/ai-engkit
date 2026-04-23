@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-23
+
+### 新增
+- Add docker buildx v0.32.1 installation for multi-platform builds
+- Add git credential.helper store configuration on startup
+
+### 修復
+- Fix git credential.helper to use sudo -u devuser HOME=... (avoid writing to /root)
+
 ## [0.5.16] - 2026-04-22
 
 ### 變更
