@@ -19,4 +19,7 @@ echo "Running:"
 echo "$@"
 echo
 
-exec "$@"
+# Re-exec via sudo to refresh supplementary groups
+# (entrypoint.d scripts may have modified /etc/group, e.g. docker GID fix;
+#  env PATH=… bypasses sudo secure_path which would strip bun/brew from PATH)
+exec sudo -E -u devuser -- env PATH="$PATH" "$@"

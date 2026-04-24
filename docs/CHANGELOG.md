@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-04-24
+
+### 修復
+- 修正 entrypoint.sh 中 `exec sudo -E -u devuser -- env PATH="$PATH" "$@"` 重新執行，讓 `openchamber serve` 繼承 entrypoint.d 腳本修改後的 `/etc/group` 附屬群組（docker GID）
+- 此問題導致 OpenChamber WebUI 終端機執行 `docker ps` 出現 `permission denied`
+
 ## [0.6.0] - 2026-04-23
 
 ### 新增
