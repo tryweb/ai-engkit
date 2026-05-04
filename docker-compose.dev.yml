@@ -54,7 +54,7 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama-dev:11434
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-devonly}
-      - OPENCODE_PLUGINS=oh-my-openagent
+      - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
       - OPENCHAMBER_HOST=0.0.0.0
 
