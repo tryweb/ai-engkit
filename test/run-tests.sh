@@ -284,7 +284,11 @@ echo "opencode.json content:"
 docker exec "$CONTAINER" sh -c 'cat /home/devuser/.config/opencode/opencode.json' 2>/dev/null || echo "FILE_NOT_FOUND"
 echo "---"
 
-if docker exec "$CONTAINER" jq -r '.plugin | join(" ")' ~/.config/opencode/opencode.json 2>/dev/null | grep -q "superpowers"; then
+echo "Plugin join test:"
+docker exec "$CONTAINER" sh -c 'jq -r "\"(" + (.plugin | join(" ")) + ")\"" ~/.config/opencode/opencode.json' 2>/dev/null || echo "FAILED"
+echo "---"
+
+if docker exec "$CONTAINER" sh -c 'jq -r ".plugin | join(\" \")" ~/.config/opencode/opencode.json 2>/dev/null | grep -q "superpowers"'; then
   pass "superpowers plugin configured in opencode.json"
 else
   fail "superpowers plugin not found in opencode.json"
