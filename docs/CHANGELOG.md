@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-04
+
+### 修復
+- 修正 CI integration tests 中 superpowers plugin 檢測失敗問題（使用 explicit shell 包裝 jq 命令）
+- 修正 docker-compose.dev.yml 中 OPENCODE_PLUGINS 環境變數配置
+- 修正 entrypoint.d/02-init-config.sh 一致性問題
+
 ## [0.7.0] - 2026-05-04
 
 ### 新增
