@@ -280,6 +280,10 @@ fi
 echo ""
 echo "--- Superpowers (Agentic Skills Framework) ---"
 
+echo "opencode.json content:"
+docker exec "$CONTAINER" cat ~/.config/opencode/opencode.json 2>/dev/null || echo "FILE_NOT_FOUND"
+echo "---"
+
 if docker exec "$CONTAINER" jq -r '.plugin | join(" ")' ~/.config/opencode/opencode.json 2>/dev/null | grep -q "superpowers"; then
   pass "superpowers plugin configured in opencode.json"
 else
