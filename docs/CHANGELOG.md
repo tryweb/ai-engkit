@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-04
+
+### 新增
+- 安裝 graphify（知識圖譜工具）透過 uv tool install graphifyy
+- 新增 superpowers plugin（Agentic skills 框架）
+- 新增 graphify 和 superpowers 驗證測試至 run-tests.sh
+
+### 變更
+- 移除 lancedb-opencode-pro plugin（導致 release test 失敗）
+
 ## [0.6.2] - 2026-04-25
 
 ### 變更
