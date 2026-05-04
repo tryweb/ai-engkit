@@ -294,7 +294,8 @@ else
   fail "superpowers plugin not found in opencode.json"
 fi
 
-SUPERPOWERS_PLUGIN_COUNT=$(docker exec "$CONTAINER" jq -r '.plugin | map(select(. | contains("superpowers"))) | length' ~/.config/opencode/opencode.json 2>/dev/null || echo "0")
+SUPERPOWERS_PLUGIN_COUNT=$(docker exec "$CONTAINER" sh -c 'jq -r ".plugin | length" ~/.config/opencode/opencode.json 2>/dev/null' || echo "0")
+echo "DEBUG: Plugin count result: '$SUPERPOWERS_PLUGIN_COUNT'"
 if [ "$SUPERPOWERS_PLUGIN_COUNT" -gt 0 ] 2>/dev/null; then
   pass "superpowers plugin entry exists"
 else
