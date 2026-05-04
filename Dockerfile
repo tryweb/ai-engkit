@@ -8,7 +8,6 @@ ARG BUILDX_VERSION=0.33.0
 ARG OPENCODE_VERSION=1.14.33
 ARG OPENCHAMBER_VERSION=1.9.10
 ARG OH_MY_OPENAGENT_VERSION=latest
-ARG LANCEDB_OPENCODE_PRO_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
 # DOCKER_GID 僅作為 build-arg 接收，實際群組賦值由 entrypoint.d/docker-gid.sh 在 runtime 處理
@@ -99,6 +98,11 @@ RUN brew install gh glab
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
+# ── graphify 知識圖譜工具 ─────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH=/home/${USERNAME}/.local/bin:${PATH}
+RUN uv tool install graphifyy
+
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
 RUN rm -rf ~/.bun/install/cache && \
@@ -112,11 +116,12 @@ USER root
 
 # 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）
 RUN mkdir -p /etc/opencode && \
-    echo "{\"autoupdate\":false,\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"lancedb-opencode-pro@${LANCEDB_OPENCODE_PRO_VERSION}\"]}" > /etc/opencode/opencode.json.default
+    echo "{\"autoupdate\":false,\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"superpowers@git+https://github.com/obra/superpowers.git\"]}" > /etc/opencode/opencode.json.default
 
 # 複製設定檔並觸發插件預下載
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
-    cp /etc/opencode/opencode.json.default /home/${USERNAME}/.config/opencode/opencode.json
+    cp /etc/opencode/opencode.json.default /home/${USERNAME}/.config/opencode/opencode.json && \
+    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/opencode
 RUN timeout 30 opencode >/dev/null 2>&1 || true
 
 # 目錄預建（確保 volume mount 前所有人都正確）
@@ -136,6 +141,9 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh
 
 USER ${USERNAME}
+
+# graphify 安裝（需 devuser 身份執行 opencode platform 掛鉤）
+RUN cd /home/${USERNAME} && graphify install --platform opencode
 
 ENV HOME=/home/${USERNAME}
 ENV PATH=/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

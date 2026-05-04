@@ -249,6 +249,51 @@ for tool in $TOOLS; do
 done
 
 # --------------------------------------------------
+# 8.1 Graphify (Knowledge Graph Tool)
+# --------------------------------------------------
+echo ""
+echo "--- Graphify (Knowledge Graph) ---"
+
+GRAPHIFY_CMD=$(docker exec "$CONTAINER" sh -c 'command -v graphify' 2>/dev/null || echo "not_found")
+if [ "$GRAPHIFY_CMD" != "not_found" ]; then
+  pass "graphify command available at $GRAPHIFY_CMD"
+else
+  fail "graphify command not found"
+fi
+
+GRAPHIFY_HELP=$(docker exec "$CONTAINER" graphify --help 2>/dev/null || echo "error")
+if echo "$GRAPHIFY_HELP" | grep -q "Commands:"; then
+  pass "graphify --help works"
+else
+  fail "graphify --help failed"
+fi
+
+if docker exec "$CONTAINER" test -f /home/devuser/.config/opencode/skills/graphify/SKILL.md 2>/dev/null; then
+  pass "graphify SKILL.md exists"
+else
+  fail "graphify SKILL.md not found"
+fi
+
+# --------------------------------------------------
+# 8.2 Superpowers (Agentic Skills Framework)
+# --------------------------------------------------
+echo ""
+echo "--- Superpowers (Agentic Skills Framework) ---"
+
+if docker exec "$CONTAINER" jq -r '.plugin | join(" ")' ~/.config/opencode/opencode.json 2>/dev/null | grep -q "superpowers"; then
+  pass "superpowers plugin configured in opencode.json"
+else
+  fail "superpowers plugin not found in opencode.json"
+fi
+
+SUPERPOWERS_PLUGIN_COUNT=$(docker exec "$CONTAINER" jq -r '.plugin | map(select(. | contains("superpowers"))) | length' ~/.config/opencode/opencode.json 2>/dev/null || echo "0")
+if [ "$SUPERPOWERS_PLUGIN_COUNT" -gt 0 ] 2>/dev/null; then
+  pass "superpowers plugin entry exists"
+else
+  fail "superpowers plugin entry missing"
+fi
+
+# --------------------------------------------------
 # 9. Node symlink (bun compatibility)
 # --------------------------------------------------
 echo ""

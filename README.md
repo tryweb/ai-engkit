@@ -14,6 +14,8 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 - **Ollama Integration** — Local LLM inference with embedding support
 - **OpenSpec** — Spec-driven development tooling
 - **GitHub CLI** — Built-in `gh` (GitHub) and `glab` (GitLab) for repository management
+- **Graphify** — Knowledge graph tool for mapping codebases (`graphifyy` package, command: `graphify`)
+- **Superpowers** — Agentic skills framework for software development methodology
 - **Full Dev Toolchain** — git, jq, tree, tmux, python3, ssh, rsync, and more
 - **Persistent Configuration** — All settings and data survive container restarts
 - **Zero-Config Setup** — Automatic initialization of default configs on first run
@@ -47,7 +49,7 @@ Copy `.env.example` to `.env` and customize:
 | `OLLAMA_PORT` | `11434` | Host port for Ollama API |
 | `OPENCODE_SERVER_PASSWORD` | `devonly` | OpenCode API password |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
-| `OPENCODE_PLUGINS` | `oh-my-openagent,lancedb-opencode-pro` | Comma-separated plugin list |
+| `OPENCODE_PLUGINS` | `oh-my-openagent` | Comma-separated plugin list |
 | `WORKSPACE_PATH` | *(named volume)* | Host path for workspace bind mount |
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL |
 
@@ -60,13 +62,12 @@ When building from source (via `docker-compose.dev.yml`), you can specify plugin
 docker compose -f docker-compose.dev.yml build
 
 # Specify specific versions
-OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
+OH_MY_OPENAGENT_VERSION=3.15.0 \
   docker compose -f docker-compose.dev.yml build
 ```
 
 Available arguments:
 - `OH_MY_OPENAGENT_VERSION` - oh-my-openagent plugin version (default: `latest`)
-- `LANCEDB_OPENCODE_PRO_VERSION` - lancedb-opencode-pro plugin version (default: `latest`)
 
 ### Workspace
 
@@ -96,29 +97,13 @@ This allows you to edit files with your local IDE while the container runs.
 ./test/run-tests.sh
 ```
 
-### Memory Plugin E2E Test
-
-Tests the full memory write/search flow with LanceDB and Ollama embedding:
-
-```bash
-./test/test-memory-e2e.sh codeforge-dev ollama-dev 4096
-```
-
-This verifies:
-- opencode CLI availability
-- Plugin configuration (lancedb-opencode-pro)
-- Ollama embedding model (nomic-embed-text)
-- LanceDB storage initialization
-- Memory write via API (session/message)
-- Memory search functionality
-
 ### Full Build + Test Cycle
 
 ```bash
 ./test/test-full.sh
 ```
 
-This builds the image from scratch, starts all services, runs 39 verification tests, and cleans up.
+This builds the image from scratch, starts all services, runs verification tests, and cleans up.
 
 ## Release Process
 
@@ -155,9 +140,7 @@ GitHub Actions will automatically:
 │   └── 02-init-config.sh     # Auto-generate default configs
 └── test/
     ├── run-tests.sh           # Integration test suite
-    ├── test-full.sh           # Full build-test pipeline
-    ├── test-memory-e2e.sh     # Memory plugin E2E test
-    └── release-memory-test.sh # Release gate test
+    └── test-full.sh           # Full build-test pipeline
 ```
 
 ## License
