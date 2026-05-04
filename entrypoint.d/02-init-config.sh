@@ -17,23 +17,14 @@ init_file() {
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 
-DEFAULT_CONFIG_SOURCE="/etc/opencode/opencode.json.default"
-if [ -f "$DEFAULT_CONFIG_SOURCE" ] && [ ! -f "$OPCODE_CONFIG_FILE" ]; then
-  echo "Copying default config from: $DEFAULT_CONFIG_SOURCE"
-  cp "$DEFAULT_CONFIG_SOURCE" "$OPCODE_CONFIG_FILE"
-fi
-
-# Build plugin array from OPENCODE_PLUGINS env var (comma-separated)
-PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent,lancedb-opencode-pro}"
+# Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency
+PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent}"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
-
-if [ ! -f "$OPCODE_CONFIG_FILE" ]; then
-  OPCODE_CONFIG=$(jq -n \
-    --argjson plugins "$PLUGIN_JSON" \
-    '{plugin: $plugins}')
-  echo "Creating default: $OPCODE_CONFIG_FILE"
-  echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
-fi
+OPCODE_CONFIG=$(jq -n \
+  --argjson plugins "$PLUGIN_JSON" \
+  '{plugin: $plugins}')
+echo "Updating opencode.json with plugins: $PLUGINS"
+echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
 if [ -f "$OPENCODE_CACHE_PKG/package.json" ]; then
