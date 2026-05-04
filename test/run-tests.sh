@@ -280,14 +280,6 @@ fi
 echo ""
 echo "--- Superpowers (Agentic Skills Framework) ---"
 
-echo "opencode.json content:"
-docker exec "$CONTAINER" sh -c 'cat /home/devuser/.config/opencode/opencode.json' 2>/dev/null || echo "FILE_NOT_FOUND"
-echo "---"
-
-echo "Plugin join test:"
-docker exec "$CONTAINER" sh -c 'jq -r "\"(" + (.plugin | join(" ")) + ")\"" ~/.config/opencode/opencode.json' 2>/dev/null || echo "FAILED"
-echo "---"
-
 if docker exec "$CONTAINER" sh -c 'jq -r ".plugin | join(\" \")" ~/.config/opencode/opencode.json 2>/dev/null | grep -q "superpowers"'; then
   pass "superpowers plugin configured in opencode.json"
 else
@@ -295,7 +287,6 @@ else
 fi
 
 SUPERPOWERS_PLUGIN_COUNT=$(docker exec "$CONTAINER" sh -c 'jq -r ".plugin | length" ~/.config/opencode/opencode.json 2>/dev/null' || echo "0")
-echo "DEBUG: Plugin count result: '$SUPERPOWERS_PLUGIN_COUNT'"
 if [ "$SUPERPOWERS_PLUGIN_COUNT" -gt 0 ] 2>/dev/null; then
   pass "superpowers plugin entry exists"
 else
