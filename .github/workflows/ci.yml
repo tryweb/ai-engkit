@@ -87,7 +87,7 @@ jobs:
 
       - name: Start services
         run: |
-          printf 'services:\n  ai-dev:\n    image: codeforge:test\n    container_name: ci-test\n' > docker-compose.override.yml
+          printf 'services:\n  ai-dev:\n    image: codeforge:test\n    container_name: ci-test\n    environment:\n      - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git\n' > docker-compose.override.yml
           docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d
           echo "Waiting for services..."
           sleep 30
