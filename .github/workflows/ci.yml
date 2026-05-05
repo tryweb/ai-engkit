@@ -102,9 +102,6 @@ jobs:
                 - ssh-keys-dev:/home/devuser/.ssh
                 - git-config-dev:/home/devuser/.config/git
                 - /var/run/docker.sock:/var/run/docker.sock
-              tmpfs:
-                - /home/devuser/.cache/opencode
-                - /home/devuser/.cache/oh-my-opencode
           EOF
           docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d
           echo "Waiting for services..."
