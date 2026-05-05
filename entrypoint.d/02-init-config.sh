@@ -106,14 +106,74 @@ fi
 SKILLS_ROOT="$OPCODE_CONFIG_DIR/skills"
 BAKED_SUPERPOWERS="/opt/opencode/baked-plugins/superpowers"
 
+link_superpowers_skills() {
+  local cache_dir="$1"
+  local skills_root="$2"
+
+  if [ ! -d "$cache_dir" ]; then
+    return 1
+  fi
+
+  local skills_dir=""
+  skills_dir=$(find "$cache_dir" -path "*/node_modules/superpowers/skills" -type d 2>/dev/null | head -1 || true)
+  if [ -z "$skills_dir" ] || [ ! -d "$skills_dir" ]; then
+    return 1
+  fi
+
+  mkdir -p "$skills_root"
+  local linked=0
+  local skill_dir
+  while IFS= read -r skill_dir; do
+    local skill_name="${skill_dir##*/}"
+    local target="$skills_root/$skill_name"
+
+    if [ -L "$target" ]; then
+      if [ "$(readlink "$target")" = "$skill_dir" ] && [ -f "$target/SKILL.md" ]; then
+        linked=$((linked + 1))
+        continue
+      fi
+      rm -f "$target"
+    elif [ -e "$target" ]; then
+      echo "Skipping Superpowers skill '$skill_name'; $target already exists"
+      continue
+    fi
+
+    ln -s "$skill_dir" "$target"
+    echo "Superpowers skill symlinked: $target -> $skill_dir"
+    linked=$((linked + 1))
+  done < <(find "$skills_dir" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
+
+  [ "$linked" -gt 0 ]
+}
+
 if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
     if [ -d "$BAKED_SUPERPOWERS/skills" ]; then
-      echo "Superpowers skills not in cache; copying from baked image..."
-      mkdir -p "$OPENCODE_CACHE_PKG"
-      cp -r "$BAKED_SUPERPOWERS" "$OPENCODE_CACHE_PKG/node_modules/"
-      if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
-        echo "Warning: Superpowers skills symlink failed after cache copy"
+      echo "Superpowers skills not in cache; linking from baked image..."
+      mkdir -p "$SKILLS_ROOT"
+      linked=0
+      while IFS= read -r skill_dir; do
+        skill_name="${skill_dir##*/}"
+        target="$SKILLS_ROOT/$skill_name"
+
+        if [ -L "$target" ]; then
+          if [ "$(readlink "$target")" = "$skill_dir" ] && [ -f "$target/SKILL.md" ]; then
+            linked=$((linked + 1))
+            continue
+          fi
+          rm -f "$target"
+        elif [ -e "$target" ]; then
+          echo "Skipping Superpowers skill '$skill_name'; $target already exists"
+          continue
+        fi
+
+        ln -s "$skill_dir" "$target"
+        echo "Superpowers skill symlinked (baked): $target -> $skill_dir"
+        linked=$((linked + 1))
+      done < <(find "$BAKED_SUPERPOWERS/skills" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
+
+      if [ "$linked" -eq 0 ]; then
+        echo "Warning: No Superpowers skills found in baked image"
       fi
     else
       echo "Superpowers skills not found in cache yet; warming OpenCode plugin cache..."

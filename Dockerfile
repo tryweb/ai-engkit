@@ -124,8 +124,7 @@ RUN mkdir -p /home/${USERNAME}/.config/opencode && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/opencode
 RUN timeout 30 opencode >/dev/null 2>&1 || true
 
-# 預裝 superpowers 到 image 中，確保 CI 和首次啟動即可用
-# 安裝到非 VOLUME 路徑，entrypoint 會從這裡複製到 cache（若 cache 為空 volume）
+# 預裝 superpowers 到 image 中，供 entrypoint 直接 symlink（避免 VOLUME 覆蓋 plugin cache）
 RUN mkdir -p /opt/opencode/baked-plugins && \
     cd /tmp && \
     git clone --depth 1 https://github.com/obra/superpowers.git superpowers-bake && \
