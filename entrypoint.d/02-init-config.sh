@@ -107,7 +107,7 @@ SKILLS_ROOT="$OPCODE_CONFIG_DIR/skills"
 if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
     echo "Superpowers skills not found in cache yet; warming OpenCode plugin cache..."
-    timeout 60 opencode >/dev/null 2>&1 || true
+    timeout 180 opencode >/dev/null 2>&1 || true
     if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
       echo "Warning: Superpowers skills directory not found after OpenCode cache warmup"
     fi
