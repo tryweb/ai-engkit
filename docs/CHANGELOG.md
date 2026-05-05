@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-05
+
+### 新增
+- Superpowers plugin (Agentic skills 框架) 加入預設 plugins
+  - 14 個 skills: brainstorming, systematic-debugging, test-driven-development, etc.
+- `docker-compose.yml` 預設值加入 superpowers，不設定 `.env` 即可使用
+- `entrypoint.d/02-init-config.sh` 自動建立 superpowers skills symlink
+  - 解決 OpenCode #20940 bug：plugin config() hook 修改 skills.paths 對 skill discovery 不可見
+  - 所有既有專案都能自動發現 superpowers skills
+
+### 變更
+- `.env.example` 預設 plugins 改為 `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git`
+- 移除 `lancedb-opencode-pro` 相關 release 測試（插件已不再使用）
+
 ## [0.7.1] - 2026-05-04
 
 ### 修復
