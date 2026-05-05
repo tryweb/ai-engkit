@@ -13,6 +13,70 @@ init_file() {
   fi
 }
 
+plugin_dependency_name() {
+  local plugin="$1"
+  if [[ "$plugin" == @* ]]; then
+    local scoped="${plugin#@}"
+    local scope="${scoped%%/*}"
+    local package="${scoped#*/}"
+    package="${package%%@*}"
+    printf '@%s/%s\n' "$scope" "$package"
+  else
+    printf '%s\n' "${plugin%%@*}"
+  fi
+}
+
+expected_plugin_names() {
+  local plugins="$1"
+  local plugin
+  echo "$plugins" | tr ',' '\n' | while IFS= read -r plugin; do
+    plugin="${plugin//[[:space:]]/}"
+    if [ -n "$plugin" ]; then
+      plugin_dependency_name "$plugin"
+    fi
+  done | sort | tr '\n' ','
+}
+
+link_superpowers_skills() {
+  local cache_dir="$1"
+  local skills_root="$2"
+
+  if [ ! -d "$cache_dir" ]; then
+    return 1
+  fi
+
+  local skills_dir=""
+  skills_dir=$(find "$cache_dir" -path "*/node_modules/superpowers/skills" -type d 2>/dev/null | head -1 || true)
+  if [ -z "$skills_dir" ] || [ ! -d "$skills_dir" ]; then
+    return 1
+  fi
+
+  mkdir -p "$skills_root"
+  local linked=0
+  local skill_dir
+  while IFS= read -r skill_dir; do
+    local skill_name="${skill_dir##*/}"
+    local target="$skills_root/$skill_name"
+
+    if [ -L "$target" ]; then
+      if [ "$(readlink "$target")" = "$skill_dir" ] && [ -f "$target/SKILL.md" ]; then
+        linked=$((linked + 1))
+        continue
+      fi
+      rm -f "$target"
+    elif [ -e "$target" ]; then
+      echo "Skipping Superpowers skill '$skill_name'; $target already exists"
+      continue
+    fi
+
+    ln -s "$skill_dir" "$target"
+    echo "Superpowers skill symlinked: $target -> $skill_dir"
+    linked=$((linked + 1))
+  done < <(find "$skills_dir" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
+
+  [ "$linked" -gt 0 ]
+}
+
 # --- OpenCode config ---
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
@@ -29,11 +93,24 @@ echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
 if [ -f "$OPENCODE_CACHE_PKG/package.json" ]; then
   CACHED_PKGS=$(jq -r '.dependencies | keys | join(",")' "$OPENCODE_CACHE_PKG/package.json" 2>/dev/null || echo "")
-  EXPECTED_PKGS=$(echo "$PLUGINS" | tr ',' '\n' | sort | tr '\n' ',')
-  CACHED_SORTED=$(echo "$CACHED_PKGS" | tr ',' '\n' | sort | tr '\n' ',')
+  EXPECTED_PKGS=$(expected_plugin_names "$PLUGINS")
+  CACHED_SORTED=$(expected_plugin_names "$CACHED_PKGS")
   if [ "$CACHED_SORTED" != "$EXPECTED_PKGS" ]; then
     echo "Stale plugin cache detected ($CACHED_PKGS), removing..."
     rm -rf "$OPENCODE_CACHE_PKG/node_modules" "$OPENCODE_CACHE_PKG/package.json" "$OPENCODE_CACHE_PKG/bun.lock"
+  fi
+fi
+
+# Workaround for opencode#20940: plugin config() hook mutations are invisible to skill discovery.
+# Symlinks ensure superpowers skills are found via global scan path in all projects.
+SKILLS_ROOT="$OPCODE_CONFIG_DIR/skills"
+if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
+  if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
+    echo "Superpowers skills not found in cache yet; warming OpenCode plugin cache..."
+    timeout 60 opencode >/dev/null 2>&1 || true
+    if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
+      echo "Warning: Superpowers skills directory not found after OpenCode cache warmup"
+    fi
   fi
 fi
 

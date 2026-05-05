@@ -293,6 +293,12 @@ else
   fail "superpowers plugin entry missing"
 fi
 
+if docker exec "$CONTAINER" sh -c 'test -f /home/devuser/.config/opencode/skills/using-superpowers/SKILL.md && test -f /home/devuser/.config/opencode/skills/systematic-debugging/SKILL.md' 2>/dev/null; then
+  pass "superpowers skills discoverable in global skills path"
+else
+  fail "superpowers skills not found in global skills path"
+fi
+
 # --------------------------------------------------
 # 9. Node symlink (bun compatibility)
 # --------------------------------------------------
