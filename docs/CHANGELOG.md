@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-06
+
+### 修復
+- fix(ci): symlink skills directly from baked image instead of copying to cache
+- fix(ci): remove tmpfs mounts that conflict with named volumes
+- fix(ci): bake superpowers into image to survive volume mounts
+- fix(ci): preserve plugin cache and increase warm-up timeouts
+
 ## [0.8.0] - 2026-05-05
 
 ### 新增
