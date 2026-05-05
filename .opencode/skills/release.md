@@ -19,32 +19,7 @@ When the user asks to release, follow these steps in order:
 
 If any test fails, stop and report the failures. Do not proceed with release.
 
-### 1.1. Run Memory Plugin Release Test
-
-This test validates that `lancedb-opencode-pro` plugin works correctly with the current OpenCode version. **This is a critical gate** - if it fails after 3 retries, the release is blocked.
-
-```bash
-./test/release-memory-test.sh
-```
-
-This test:
-- Starts the full `docker-compose.dev.yml` stack (Ollama + ai-dev)
-- Waits for Ollama health check (includes `nomic-embed-text` model)
-- Waits for openchamber to be ready
-- Executes E2E memory write and search tests
-- Has **3 retry attempts** - if any retry passes, the test is considered successful
-
-**Common failure: OpenCode v1.3.8+** causes "Memory store unavailable" due to NAPI addon bug (Issue #20623). If this occurs:
-- Downgrade OpenCode to v1.3.7 in Dockerfile
-- Or wait for OpenCode team to fix Issue #20623
-
-If the test fails after all 3 retries, stop and report. Do not proceed with release.
-
-### 1.5. Extract and Update Version Information
-
-**NOTE**: This step is deprecated. Version extraction now happens in step 3.1 (before CHANGELOG update) to ensure accurate versions are captured after all tests pass.
-
-### 1.6. Check for Uncommitted Changes
+### 1.1. Check for Uncommitted Changes
 
 After checking documentation, verify the working tree status:
 
@@ -118,7 +93,6 @@ After determining the version, extract the current package versions from the run
 docker exec codeforge-dev sh -c '
 echo "opencode: $(opencode --version)"
 echo "openchamber: $(cat /home/devuser/.bun/install/global/node_modules/@openchamber/web/package.json | jq -r .version)"
-echo "lancedb-opencode-pro: $(cat /home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/package.json | jq -r .version)"
 '
 ```
 
