@@ -104,12 +104,23 @@ fi
 # Workaround for opencode#20940: plugin config() hook mutations are invisible to skill discovery.
 # Symlinks ensure superpowers skills are found via global scan path in all projects.
 SKILLS_ROOT="$OPCODE_CONFIG_DIR/skills"
+BAKED_SUPERPOWERS="/opt/opencode/baked-plugins/superpowers"
+
 if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
-    echo "Superpowers skills not found in cache yet; warming OpenCode plugin cache..."
-    timeout 180 opencode >/dev/null 2>&1 || true
-    if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
-      echo "Warning: Superpowers skills directory not found after OpenCode cache warmup"
+    if [ -d "$BAKED_SUPERPOWERS/skills" ]; then
+      echo "Superpowers skills not in cache; copying from baked image..."
+      mkdir -p "$OPENCODE_CACHE_PKG"
+      cp -r "$BAKED_SUPERPOWERS" "$OPENCODE_CACHE_PKG/node_modules/"
+      if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
+        echo "Warning: Superpowers skills symlink failed after cache copy"
+      fi
+    else
+      echo "Superpowers skills not found in cache yet; warming OpenCode plugin cache..."
+      timeout 180 opencode >/dev/null 2>&1 || true
+      if ! link_superpowers_skills "$OPENCODE_CACHE_PKG" "$SKILLS_ROOT"; then
+        echo "Warning: Superpowers skills directory not found after OpenCode cache warmup"
+      fi
     fi
   fi
 fi
