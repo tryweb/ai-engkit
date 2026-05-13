@@ -118,11 +118,10 @@ USER root
 RUN mkdir -p /etc/opencode && \
     echo "{\"autoupdate\":false,\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"superpowers@git+https://github.com/obra/superpowers.git\"]}" > /etc/opencode/opencode.json.default
 
-# 複製設定檔並觸發插件預下載
+# 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
     cp /etc/opencode/opencode.json.default /home/${USERNAME}/.config/opencode/opencode.json && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/opencode
-RUN timeout 30 opencode >/dev/null 2>&1 || true
 
 # 預裝 superpowers 到 image 中，供 entrypoint 直接 symlink（避免 VOLUME 覆蓋 plugin cache）
 RUN mkdir -p /opt/opencode/baked-plugins && \
