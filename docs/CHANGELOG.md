@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-05-13
+
+### 修復
+- fix(ci): remove blocking opencode warm-up step and increase job timeouts
+
 ## [0.8.2] - 2026-05-13
 
 ### 變更
