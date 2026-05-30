@@ -98,10 +98,8 @@ RUN brew install gh glab
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
-# ── graphify 知識圖譜工具 ─────────────────────────────
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH=/home/${USERNAME}/.local/bin:${PATH}
-RUN uv tool install graphifyy
+# ── CodeGraph 知識圖譜工具 ────────────────────────────
+RUN bun install -g @colbymchenry/codegraph
 
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
@@ -149,8 +147,8 @@ RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh
 
 USER ${USERNAME}
 
-# graphify 安裝（需 devuser 身份執行 opencode platform 掛鉤）
-RUN cd /home/${USERNAME} && graphify install --platform opencode
+# CodeGraph MCP server 整合（自動配置 opencode）
+RUN cd /home/${USERNAME} && codegraph install --target=opencode --yes
 
 ENV HOME=/home/${USERNAME}
 ENV PATH=/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

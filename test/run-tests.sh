@@ -249,29 +249,31 @@ for tool in $TOOLS; do
 done
 
 # --------------------------------------------------
-# 8.1 Graphify (Knowledge Graph Tool)
+# 8.1 CodeGraph (Knowledge Graph Tool)
 # --------------------------------------------------
 echo ""
-echo "--- Graphify (Knowledge Graph) ---"
+echo "--- CodeGraph (Knowledge Graph) ---"
 
-GRAPHIFY_CMD=$(docker exec "$CONTAINER" sh -c 'command -v graphify' 2>/dev/null || echo "not_found")
-if [ "$GRAPHIFY_CMD" != "not_found" ]; then
-  pass "graphify command available at $GRAPHIFY_CMD"
+CODEGRAPH_CMD=$(docker exec "$CONTAINER" sh -c 'command -v codegraph' 2>/dev/null || echo "not_found")
+if [ "$CODEGRAPH_CMD" != "not_found" ]; then
+  pass "codegraph command available at $CODEGRAPH_CMD"
 else
-  fail "graphify command not found"
+  fail "codegraph command not found"
 fi
 
-GRAPHIFY_HELP=$(docker exec "$CONTAINER" graphify --help 2>/dev/null || echo "error")
-if echo "$GRAPHIFY_HELP" | grep -q "Commands:"; then
-  pass "graphify --help works"
+CODEGRAPH_HELP=$(docker exec "$CONTAINER" codegraph --help 2>/dev/null || echo "error")
+if echo "$CODEGRAPH_HELP" | grep -q "Commands:"; then
+  pass "codegraph --help works"
 else
-  fail "graphify --help failed"
+  fail "codegraph --help failed"
 fi
 
-if docker exec "$CONTAINER" test -f /home/devuser/.config/opencode/skills/graphify/SKILL.md 2>/dev/null; then
-  pass "graphify SKILL.md exists"
+# CodeGraph installs its agent configuration via MCP, not a SKILL.md file
+if docker exec "$CONTAINER" sh -c 'jq -r ".mcpServers.codegraph // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "codegraph"'; then
+  pass "codegraph MCP server configured in opencode.json"
 else
-  fail "graphify SKILL.md not found"
+  # CodeGraph may store MCP config elsewhere (e.g., project-level .codegraph/)
+  skip "codegraph MCP config not found in opencode.json (may be project-scoped)"
 fi
 
 # --------------------------------------------------

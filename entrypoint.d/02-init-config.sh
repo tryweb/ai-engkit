@@ -86,7 +86,17 @@ PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent}"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
 OPCODE_CONFIG=$(jq -n \
   --argjson plugins "$PLUGIN_JSON" \
-  '{plugin: $plugins}')
+  '{
+    "$schema": "https://opencode.ai/config.json",
+    plugin: $plugins,
+    mcp: {
+      codegraph: {
+        type: "local",
+        command: ["codegraph", "serve", "--mcp"],
+        enabled: true
+      }
+    }
+  }')
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 

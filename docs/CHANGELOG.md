@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### 變更
+- 將 graphify（graphifyy）知識圖譜工具替換為 @colbymchenry/codegraph
+  - Dockerfile: uv tool install graphifyy → bun install -g @colbymchenry/codegraph
+  - README.md 與測試腳本同步更新
+
 ## [0.8.3] - 2026-05-13
 
 ### 修復

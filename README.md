@@ -14,7 +14,7 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 - **Ollama Integration** — Local LLM inference with embedding support
 - **OpenSpec** — Spec-driven development tooling
 - **GitHub CLI** — Built-in `gh` (GitHub) and `glab` (GitLab) for repository management
-- **Graphify** — Knowledge graph tool for mapping codebases (`graphifyy` package, command: `graphify`)
+- **CodeGraph** — Knowledge graph tool for mapping codebases (`@colbymchenry/codegraph` package, command: `codegraph`)
 - **Superpowers** — Agentic skills framework for software development methodology
 - **Full Dev Toolchain** — git, jq, tree, tmux, python3, ssh, rsync, and more
 - **Persistent Configuration** — All settings and data survive container restarts
