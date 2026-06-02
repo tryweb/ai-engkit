@@ -94,6 +94,11 @@ OPCODE_CONFIG=$(jq -n \
         type: "local",
         command: ["codegraph", "serve", "--mcp"],
         enabled: true
+      },
+      playwright: {
+        type: "local",
+        command: ["bunx", "-y", "@playwright/mcp@latest"],
+        enabled: true
       }
     }
   }')
