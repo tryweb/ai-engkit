@@ -18,32 +18,34 @@
 ```mermaid
 graph TB
     subgraph "主機 (Host)"
-        SSH["~/.ssh/"]
-        GIT["~/.gitconfig<br/>~/.git-credentials"]
-        GH["~/.config/gh/"]
         DOCKER["/var/run/docker.sock"]
+        HOST_CREDS["~/.gitconfig / ~/.git-credentials<br/>~/.ssh/ / ~/.config/gh/"]
     end
 
     subgraph "容器 (Container) - devuser"
-        C_SSH["~/.ssh/ (唯讀)"]
-        C_GIT["~/.gitconfig (唯讀)<br/>~/.git-credentials (唯讀)"]
-        C_GH["~/.config/gh/ (唯讀)"]
         C_DOCKER["/var/run/docker.sock<br/>(可存取)"]
+        C_SSH["~/.ssh/<br/>(named volume ssh-keys)"]
+        C_GIT["~/.gitconfig / ~/.git-credentials<br/>(named volume git-config)"]
+        C_GH["~/.config/gh/<br/>(named volume gh-config)"]
         C_WS["workspace/"]
         C_DATA["opencode-data/"]
         C_CONFIG["opencode-config/"]
     end
 
-    SSH -->|"唯讀掛載"| C_SSH
-    GIT -->|"唯讀掛載"| C_GIT
-    GH -->|"唯讀掛載"| C_GH
-    DOCKER -->|"共用"| C_DOCKER
+    DOCKER -->|"掛載"| C_DOCKER
+    HOST_CREDS -.->|"不掛載（隔離）"| C_SSH
+    HOST_CREDS -.->|"不掛載（隔離）"| C_GIT
+    HOST_CREDS -.->|"不掛載（隔離）"| C_GH
 
-    style SSH fill:#ffcccc
-    style C_SSH fill:#ffcccc
-    style DOCKER fill:#ff9999
-    style C_DOCKER fill:#ff9999
+    style DOCKER fill:#ffcccc
+    style C_DOCKER fill:#ffcccc
+    style HOST_CREDS fill:#ccffcc
+    style C_SSH fill:#e8f5e9
+    style C_GIT fill:#e8f5e9
+    style C_GH fill:#e8f5e9
 ```
+
+> **設計重點**：容器內的 SSH 金鑰、git 認證、GitHub CLI 認證皆使用**獨立的 named volume**（`ssh-keys`、`git-config`、`gh-config`），由 `entrypoint.d/04-init-git-ssh.sh` 等腳本在首次啟動時建立空白檔案。**主機的認證資料完全不會被掛載進容器**，形成雙向隔離：容器被入侵時無法存取主機金鑰；主機的認證資料也不會暴露給容器內的程序。唯一跨邊界共享的是 Docker socket（必要的管理需求）。
 
 ### 安全威脅模型
 
@@ -79,24 +81,27 @@ graph LR
 | 風險項目 | 嚴重性 | 可能性 | 風險等級 | 緩解措施 |
 |---------|--------|--------|---------|---------|
 | Docker socket 存取 | 高 | 中 | 🔴 高 | 僅在信任環境使用 |
-| SSH 金鑰存取 | 高 | 低 | 🟡 中 | 掛載為唯讀 |
-| Git credential 洩漏 | 中 | 低 | 🟡 中 | 唯讀掛載 + 環境隔離 |
+| SSH 金鑰存取 | 高 | 低 | 🟡 中 | 容器使用獨立 named volume `ssh-keys`（不掛載主機金鑰） |
+| Git credential 洩漏 | 中 | 低 | 🟡 中 | 容器使用獨立 named volume（不與主機共用），降低雙向洩漏風險 |
 | 容器逃逸 | 高 | 低 | 🟡 中 | 使用官方映像 + 定期更新 |
 | 供應鏈攻擊 | 高 | 低 | 🟡 中 | 鎖定版本 + 漏洞掃描 |
 | 預設密碼未更改 | 中 | 高 | 🟡 中 | 啟動時提醒修改 |
 
 ## 資料存取範圍
 
-### 已掛載至容器的主機路徑
+### 跨邊界共享資源（host bind mount）
 
 | 路徑 | 掛載模式 | 說明 | 風險等級 |
 |------|----------|------|---------|
-| `~/.ssh/` | 唯讀 | SSH 金鑰及設定 | 🔴 高 |
-| `~/.ssh/known_hosts` | 讀寫 | 已知主機列表 | 🟢 低 |
-| `~/.gitconfig` | 唯讀 | Git 全域設定 | 🟢 低 |
-| `~/.git-credentials` | 唯讀 | Git 認證資訊 | 🔴 高 |
-| `~/.config/gh/` | 唯讀 | GitHub CLI 設定 | 🟡 中 |
-| `/var/run/docker.sock` | 讀寫 | Docker API | 🔴 高 |
+| `/var/run/docker.sock` | 讀寫 | Docker API（唯一從主機掛載的資源） | 🔴 高 |
+
+### 容器內獨立認證 volume（不從主機掛載）
+
+| Volume 名稱 | 容器路徑 | 對應的 symlink | 說明 | 風險等級（容器被入侵時） |
+|------|----------|------|---------|---------|
+| `ssh-keys` | `~/.ssh/` | — | SSH 金鑰 | 🔴 高 |
+| `git-config` | `~/.config/git/` | `~/.gitconfig`、`~/.git-credentials` | Git 認證資料 | 🔴 高 |
+| `gh-config` | `~/.config/gh/` | — | GitHub CLI 認證 | 🟡 中 |
 
 ### 容器內部資料卷
 
