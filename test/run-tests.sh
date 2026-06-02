@@ -276,6 +276,19 @@ else
   skip "codegraph MCP config not found in opencode.json (may be project-scoped)"
 fi
 
+# Playwright MCP — should be baked into the image for E2E browser-driven verification
+if docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "playwright"'; then
+  pass "playwright MCP server configured in opencode.json"
+else
+  fail "playwright MCP server not configured in opencode.json"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright.command | join(\" \")" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "bunx"'; then
+  pass "playwright MCP uses bunx (Bun-runtime compatible)"
+else
+  fail "playwright MCP command should use bunx for Bun-runtime compatibility"
+fi
+
 # --------------------------------------------------
 # 8.2 Superpowers (Agentic Skills Framework)
 # --------------------------------------------------
