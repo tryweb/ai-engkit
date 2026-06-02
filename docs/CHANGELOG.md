@@ -6,7 +6,16 @@
 
 ## [Unreleased]
 
+### 新增
+- feat(tooling): 將 Playwright MCP 烘焙到 image,讓 AI 代理能原生驅動瀏覽器
+  - Dockerfile: `/etc/opencode/opencode.json.default` 模板加入 playwright MCP 設定(以 `jq` 經 BuildKit heredoc 寫入)
+  - entrypoint.d/02-init-config.sh: 每次重生成的 `~/.config/opencode/opencode.json` 也帶上 playwright MCP(避免被覆蓋)
+  - test/run-tests.sh: 新增 2 個斷言驗證 playwright MCP 設定存在且使用 `bunx`(因 image 用 Bun 取代 Node.js)
+  - 取代過去「AI 自己寫 Playwright 腳本 + bash 跑」的工作流,直接呼叫 `browser_navigate` / `browser_click` / `browser_snapshot` 等原生 MCP 工具
+  - 開箱即用,新開發者不需手動 `bunx -y @playwright/mcp@latest` 安裝
+
 ### 變更
+- 升級 @openchamber/web 1.10.4 → 1.11.7
 - 將 graphify（graphifyy）知識圖譜工具替換為 @colbymchenry/codegraph
   - Dockerfile: uv tool install graphifyy → bun install -g @colbymchenry/codegraph
   - README.md 與測試腳本同步更新
