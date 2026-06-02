@@ -112,9 +112,25 @@ RUN rm -rf ~/.bun/install/cache && \
 
 USER root
 
-# 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）
-RUN mkdir -p /etc/opencode && \
-    echo "{\"autoupdate\":false,\"plugin\":[\"oh-my-openagent@${OH_MY_OPENAGENT_VERSION}\",\"superpowers@git+https://github.com/obra/superpowers.git\"]}" > /etc/opencode/opencode.json.default
+# 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）。
+# 完整 MCP 設定由 entrypoint.d/02-init-config.sh 在每次啟動時重新生成。
+RUN <<'EOF'
+mkdir -p /etc/opencode
+jq -n \
+  --arg agent_plugin "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" \
+  --arg superpowers_plugin "superpowers@git+https://github.com/obra/superpowers.git" \
+  '{
+    autoupdate: false,
+    plugin: [$agent_plugin, $superpowers_plugin],
+    mcp: {
+      playwright: {
+        type: "local",
+        command: ["bunx", "-y", "@playwright/mcp@latest"],
+        enabled: true
+      }
+    }
+  }' > /etc/opencode/opencode.json.default
+EOF
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
