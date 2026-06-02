@@ -142,8 +142,11 @@ check_gh_cli() {
     if command -v gh &> /dev/null; then
         echo "  ✅ GitHub CLI (gh) 已安裝: $(gh --version | head -1)"
         if ! gh auth status &> /dev/null; then
-            echo "  ⚠️  gh 尚未登入，容器內的 git 操作可能無法使用 GitHub"
-            echo "     請執行: gh auth login"
+            echo "  ⚠️  gh 尚未登入（本機 gh CLI）"
+            echo "     本機登入: gh auth login"
+            echo "     註：容器內的認證是獨立的（用 credential.helper = store），"
+            echo "         首次 git push/pull 會提示輸入帳密並自動儲存。"
+            echo "         如需在容器內使用 gh CLI，請在容器內另行執行 gh auth login。"
         fi
         return
     fi
@@ -180,8 +183,10 @@ check_glab_cli() {
     if command -v glab &> /dev/null; then
         echo "  ✅ GitLab CLI (glab) 已安裝: $(glab --version | head -1)"
         if ! glab auth status &> /dev/null; then
-            echo "  ⚠️  glab 尚未登入，容器內的 git 操作可能無法使用 GitLab"
-            echo "     請執行: glab auth login"
+            echo "  ⚠️  glab 尚未登入（本機 glab CLI）"
+            echo "     本機登入: glab auth login"
+            echo "     註：容器內的認證是獨立的，"
+            echo "         進入容器後需另行設定（gh/glab auth login 或 git push 觸發帳密輸入）。"
         fi
         return
     fi
