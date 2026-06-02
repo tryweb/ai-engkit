@@ -261,6 +261,33 @@ docker exec ai-dev ls -la /home/devuser/.config/gh/
 docker exec ai-dev sudo chown -R devuser:devuser /home/devuser/.config/gh/
 ```
 
+### glab 作為 git credential helper 的版本化路徑問題
+
+> 相關 issue: [#4](https://github.com/tryweb/Codeforge/issues/4)
+> 註：此問題發生在使用者的**主機**環境，並非容器內。容器內的 git 使用 `credential.helper store`（見 `entrypoint.d/04-init-git-ssh.sh`），不受此影響。
+
+**症狀**：當使用者手動把 glab 設為 git 的 credential helper 後，一旦 `brew upgrade glab`，push/pull 等需要認證的操作就會失敗：
+
+```
+/home/linuxbrew/.linuxbrew/Cellar/glab/1.92.0/bin/glab auth git-credential get: not found
+fatal: could not read Username for 'https://gitlab.example.com': No such device or address
+```
+
+**原因**：`git config` 會把當下的 Homebrew Cellar 版本化路徑寫入設定（例如 `…/Cellar/glab/1.92.0/bin/glab`）。`brew upgrade glab` 後舊版本目錄會被刪除、設定不會自動更新，造成路徑失效。
+
+**解決方法**：把 git config 改用 Homebrew 的 stable symlink 路徑：
+
+```bash
+# 將版本化路徑改為 stable symlink（針對每個受影響的 host 各執行一次）
+git config --global --replace-all \
+  credential.https://gitlab-238.ichiayi.com.helper \
+  '!/home/linuxbrew/.linuxbrew/bin/glab auth git-credential'
+```
+
+`/home/linuxbrew/.linuxbrew/bin/glab` 是 symlink，會跟著 `brew upgrade` 自動指向新版本，不會因升級而失效。
+
+**預防**：任何透過 Homebrew 安裝的 CLI 工具（`gh`、`glab` 等）若要作為 git credential helper，都應使用 `bin/` symlink 路徑，避免升級後路徑失效。
+
 ### Docker Socket 存取
 
 ```bash
