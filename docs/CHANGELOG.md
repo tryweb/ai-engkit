@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-02
+
 ### 新增
 - feat(tooling): 將 Playwright MCP 烘焙到 image,讓 AI 代理能原生驅動瀏覽器
   - Dockerfile: `/etc/opencode/opencode.json.default` 模板加入 playwright MCP 設定(以 `jq` 經 BuildKit heredoc 寫入)
@@ -16,9 +18,18 @@
 
 ### 變更
 - 升級 @openchamber/web 1.10.4 → 1.11.7
+- 升級 opencode 1.14.48 → 1.15.13（[release notes](https://github.com/anomalyco/opencode/releases/tag/v1.15.13)：Anthropic Opus 4.7+ adaptive reasoning 修正、session metadata API、config 目錄向上載入、TUI 對齊修正）
 - 將 graphify（graphifyy）知識圖譜工具替換為 @colbymchenry/codegraph
   - Dockerfile: uv tool install graphifyy → bun install -g @colbymchenry/codegraph
   - README.md 與測試腳本同步更新
+
+### 修復
+- fix(install): clarify host vs container authentication isolation
+
+### 文檔
+- docs(readme): add Git Authentication section for first-time users
+- docs(security): correct credential volume mount description
+- docs(troubleshooting): document glab credential helper versioned-path issue (#4)
 
 ## [0.8.3] - 2026-05-13
 
