@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-06-05
+
+### 變更
+- 升級 opencode 1.15.13 → 1.16.0
+
 ## [0.9.2] - 2026-06-05
 
 ### 變更
@@ -305,3 +310,5 @@
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
 [0.9.2]: https://github.com/tryweb/Codeforge/compare/v0.9.1...v0.9.2
+
+[0.9.3]: https://github.com/tryweb/Codeforge/compare/v0.9.2...v0.9.3
