@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-05
+
+### 變更
+- 升級 @openchamber/web 1.11.7 → 1.12.1
+
 ## [0.9.1] - 2026-06-02
 
 ### 新增
@@ -298,3 +303,5 @@
 ---
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
+
+[0.9.2]: https://github.com/tryweb/Codeforge/compare/v0.9.1...v0.9.2
