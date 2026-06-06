@@ -113,6 +113,12 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @code-yeongyu/comment-checker --trust && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
 
+# ── Playwright browsers (for MCP server & testing) ──────────
+# System deps: uses playwright install-deps which auto-detects Ubuntu 24.04 t64 package names
+# Browsers: install Chromium via Playwright CLI (shared version lineage with @playwright/mcp)
+RUN bunx -y playwright install-deps chromium && \
+    bunx -y playwright install chromium
+
 USER root
 
 # 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）。
