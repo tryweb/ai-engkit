@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-06
+
+### 新增
+- feat: add lean-ctx MCP server for context engineering
+  - Install lean-ctx v3.7.5 via universal installer in Dockerfile
+  - Add lean-ctx MCP server block in entrypoint.d/02-init-config.sh
+  - Provides 69 MCP tools (ctx_read, ctx_shell, ctx_search, ctx_tree, etc.)
+
+### 變更
+- 升級 opencode 1.16.0 → 1.16.2
+- 升級 openchamber 1.12.1 → 1.12.3
+
 ## [0.9.3] - 2026-06-05
 
 ### 變更
@@ -312,3 +324,5 @@
 [0.9.2]: https://github.com/tryweb/Codeforge/compare/v0.9.1...v0.9.2
 
 [0.9.3]: https://github.com/tryweb/Codeforge/compare/v0.9.2...v0.9.3
+
+[0.10.0]: https://github.com/tryweb/Codeforge/compare/v0.9.3...v0.10.0
