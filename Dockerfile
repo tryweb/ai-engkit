@@ -5,8 +5,8 @@ ARG UPGRADE_PACKAGES=true
 ARG DOCKER_VERSION=29.4.1
 ARG COMPOSE_VERSION=5.1.2
 ARG BUILDX_VERSION=0.33.0
-ARG OPENCODE_VERSION=1.16.0
-ARG OPENCHAMBER_VERSION=1.12.1
+ARG OPENCODE_VERSION=1.16.2
+ARG OPENCHAMBER_VERSION=1.12.3
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -100,6 +100,9 @@ ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
 # ── CodeGraph 知識圖譜工具 ────────────────────────────
 RUN bun install -g @colbymchenry/codegraph
+
+# ── LeanCTX — AI 代理的認知上下文層 ──────────────────
+RUN curl -fsSL https://leanctx.com/install.sh | sh
 
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）

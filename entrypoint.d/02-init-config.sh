@@ -99,6 +99,11 @@ OPCODE_CONFIG=$(jq -n \
         type: "local",
         command: ["bunx", "-y", "@playwright/mcp@latest"],
         enabled: true
+      },
+      "lean-ctx": {
+        type: "local",
+        command: ["lean-ctx"],
+        enabled: true
       }
     }
   }')
