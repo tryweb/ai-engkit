@@ -6,7 +6,6 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 on:
   push:
@@ -169,7 +168,7 @@ jobs:
 
       - name: Tag and push
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
           docker tag codeforge:ci "${IMAGE}:${{ github.ref_name }}"
           docker tag codeforge:ci "${IMAGE}:sha-${{ github.sha }}"
           docker tag codeforge:ci "${IMAGE}:latest"
@@ -211,7 +210,7 @@ jobs:
             echo '## Docker Image'
             echo ''
             echo '```bash'
-            echo 'docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}'
+            echo "docker pull ghcr.io/${GITHUB_REPOSITORY,,}:${{ github.ref_name }}"
             echo '```'
             echo ''
             echo '## Quick Start'
