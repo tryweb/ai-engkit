@@ -340,6 +340,13 @@ else
   fail "playwright CLI not available (expected version: ${PLAYWRIGHT_VERSION})"
 fi
 
+PLAYWRIGHT_MCP_VERSION=$(docker exec "$CONTAINER" sh -c 'echo "${PLAYWRIGHT_MCP_VERSION}"' 2>/dev/null || echo "unknown")
+if docker exec "$CONTAINER" sh -c 'bunx -y "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" --help' >/dev/null 2>&1; then
+  pass "@playwright/mcp ${PLAYWRIGHT_MCP_VERSION} CLI works"
+else
+  fail "@playwright/mcp CLI not available (expected version: ${PLAYWRIGHT_MCP_VERSION})"
+fi
+
 CHROMIUM_BIN=$(docker exec "$CONTAINER" sh -c 'ls /ms-playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | head -1')
 if [ -n "$CHROMIUM_BIN" ]; then
   pass "chromium binary exists at ${CHROMIUM_BIN}"
@@ -357,10 +364,10 @@ else
 fi
 
 CONFIG_PW_VERSION=$(docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright.command | join(\" \")" ~/.config/opencode/opencode.json 2>/dev/null | grep -oP "@playwright/mcp@\K[^\"]*"')
-if [ "$CONFIG_PW_VERSION" = "$PLAYWRIGHT_VERSION" ]; then
-  pass "opencode.json @playwright/mcp version matches build arg (${CONFIG_PW_VERSION})"
+if [ "$CONFIG_PW_VERSION" = "$PLAYWRIGHT_MCP_VERSION" ]; then
+  pass "opencode.json @playwright/mcp version matches MCP build arg (${CONFIG_PW_VERSION})"
 else
-  fail "opencode.json @playwright/mcp version (${CONFIG_PW_VERSION}) != PLAYWRIGHT_VERSION (${PLAYWRIGHT_VERSION})"
+  fail "opencode.json @playwright/mcp version (${CONFIG_PW_VERSION}) != PLAYWRIGHT_MCP_VERSION (${PLAYWRIGHT_MCP_VERSION})"
 fi
 
 # --------------------------------------------------

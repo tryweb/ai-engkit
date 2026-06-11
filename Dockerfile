@@ -8,6 +8,7 @@ ARG BUILDX_VERSION=0.34.1
 ARG OPENCODE_VERSION=1.17.3
 ARG OPENCHAMBER_VERSION=1.12.4
 ARG PLAYWRIGHT_VERSION=1.60.0
+ARG PLAYWRIGHT_MCP_VERSION=0.0.76
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -114,11 +115,13 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @code-yeongyu/comment-checker --trust && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
 
-# ── Playwright browsers (for MCP server & testing) ──────────
-# Pin Playwright version to match @playwright/mcp compatibility.
+# ── Playwright browsers + MCP server (for browser automation & testing) ─────
+# Playwright browsers and @playwright/mcp are versioned independently upstream.
+# Pin both explicitly for reproducible builds.
 # install --with-deps handles both system deps + browser download in one step.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
+ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
     bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
 
@@ -131,13 +134,14 @@ mkdir -p /etc/opencode
 jq -n \
   --arg agent_plugin "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" \
   --arg superpowers_plugin "superpowers@git+https://github.com/obra/superpowers.git" \
+  --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
   '{
     autoupdate: false,
     plugin: [$agent_plugin, $superpowers_plugin],
     mcp: {
       playwright: {
         type: "local",
-        command: ["bunx", "-y", "@playwright/mcp@1.60.0"],
+        command: ["bunx", "-y", "@playwright/mcp@\($playwright_mcp_version)"],
         enabled: true
       }
     }
