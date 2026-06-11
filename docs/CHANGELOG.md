@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-06-11
+
+### 修復
+- fix: separate @playwright/mcp version from Playwright core version
+
+  獨立管理 Playwright core（1.60.0）與 @playwright/mcp（0.0.76）版本，修正先前強制兩者版本必須一致的錯誤假設。
+
+### 變更
+- ci: build image once and share via artifact across jobs
+
 ## [0.11.3] - 2026-06-11
 - chore: pin Playwright version to 1.60.0 and add runtime smoke tests
 
