@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-06-11
+- 升級 docker 29.4.1 → 29.5.3, compose 5.1.2 → 5.1.4, buildx 0.33.0 → 0.34.1
+- 新增 vuln-scan skill 用於漏洞掃描和版本稽核
+
 ## [0.11.1] - 2026-06-11
 
 ### 變更
@@ -343,3 +347,5 @@
 [0.11.0]: https://github.com/tryweb/Codeforge/compare/v0.10.0...v0.11.0
 
 [0.11.1]: https://github.com/tryweb/Codeforge/compare/v0.11.0...v0.11.1
+
+[0.11.2]: https://github.com/tryweb/Codeforge/compare/v0.11.1...v0.11.2
