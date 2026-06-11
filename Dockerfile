@@ -7,6 +7,7 @@ ARG COMPOSE_VERSION=5.1.4
 ARG BUILDX_VERSION=0.34.1
 ARG OPENCODE_VERSION=1.17.3
 ARG OPENCHAMBER_VERSION=1.12.4
+ARG PLAYWRIGHT_VERSION=1.60.0
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -114,10 +115,12 @@ RUN rm -rf ~/.bun/install/cache && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
 
 # ── Playwright browsers (for MCP server & testing) ──────────
-# System deps: uses playwright install-deps which auto-detects Ubuntu 24.04 t64 package names
-# Browsers: install Chromium via Playwright CLI (shared version lineage with @playwright/mcp)
-RUN bunx -y playwright install-deps chromium && \
-    bunx -y playwright install chromium
+# Pin Playwright version to match @playwright/mcp compatibility.
+# install --with-deps handles both system deps + browser download in one step.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
+RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
+    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
 
 USER root
 
@@ -134,7 +137,7 @@ jq -n \
     mcp: {
       playwright: {
         type: "local",
-        command: ["bunx", "-y", "@playwright/mcp@latest"],
+        command: ["bunx", "-y", "@playwright/mcp@1.60.0"],
         enabled: true
       }
     }

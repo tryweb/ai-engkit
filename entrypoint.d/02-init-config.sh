@@ -86,6 +86,7 @@ PLUGINS="${OPENCODE_PLUGINS:-oh-my-openagent}"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
 OPCODE_CONFIG=$(jq -n \
   --argjson plugins "$PLUGIN_JSON" \
+  --arg playwright_version "${PLAYWRIGHT_VERSION}" \
   '{
     "$schema": "https://opencode.ai/config.json",
     plugin: $plugins,
@@ -97,7 +98,7 @@ OPCODE_CONFIG=$(jq -n \
       },
       playwright: {
         type: "local",
-        command: ["bunx", "-y", "@playwright/mcp@latest"],
+        command: ["bunx", "-y", "@playwright/mcp@\($playwright_version)"],
         enabled: true
       },
       "lean-ctx": {
