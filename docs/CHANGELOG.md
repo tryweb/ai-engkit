@@ -6,6 +6,9 @@
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-06-11
+- chore: pin Playwright version to 1.60.0 and add runtime smoke tests
+
 ## [0.11.2] - 2026-06-11
 - 升級 docker 29.4.1 → 29.5.3, compose 5.1.2 → 5.1.4, buildx 0.33.0 → 0.34.1
 - 新增 vuln-scan skill 用於漏洞掃描和版本稽核
