@@ -1,0 +1,11 @@
+Post-Dismissal Chrome Alert Verification
+========================================
+Timestamp: 2026-06-12
+
+Command: gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open") | select(.rule.id | endswith("-chrome"))] | length'
+Result: 0
+
+Command: gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open") | select(.most_recent_instance.location.path // "" | test("ms-playwright|chrome"; "i"))] | length'
+Result: 0
+
+Verdict: PASS - Zero Chrome alerts remaining open

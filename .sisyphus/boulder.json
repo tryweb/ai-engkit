@@ -1,0 +1,50 @@
+{
+  "active_plan": "/home/devuser/workspace/Codeforge/.sisyphus/plans/dependency-update-optimization.md",
+  "started_at": "2026-06-12T23:42:19.741Z",
+  "session_ids": [
+    "ses_141c8f299ffevk9Vl9XAqkqTRb"
+  ],
+  "session_origins": {
+    "ses_141c8f299ffevk9Vl9XAqkqTRb": "direct"
+  },
+  "plan_name": "dependency-update-optimization",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Research & verify version source details",
+      "session_id": "ses_141c7f7feffecG7li1XsBvq8tR",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-06-12T23:46:28.966Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "Write the complete dependency-update.yml",
+      "session_id": "ses_141bf5ec2ffeGECGtLWDVZaZKn",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-06-13T00:00:03.944Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "Self-review & structural verification",
+      "session_id": "ses_141b7d5b0ffeKM19MSFrbt4af3",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-06-13T00:04:49.770Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_141a72158ffeOE5LIizqi4W3us",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-06-13T00:22:26.184Z"
+    }
+  }
+}

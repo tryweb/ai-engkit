@@ -5,10 +5,8 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  issues: write
-  security-events: write
+concurrency:
+  group: dependency-update-${{ github.ref }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -16,171 +14,884 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  check-updates:
-    name: Check Ubuntu Package Updates
+  # ---------------------------------------------------------------------------
+  # Job 1: Check all version sources
+  # ---------------------------------------------------------------------------
+  check-versions:
+    name: Check Dependency Versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     outputs:
-      updates-available: ${{ steps.check.outputs.updates-available }}
-      update-summary: ${{ steps.check.outputs.update-summary }}
-
+      updates-needed: ${{ steps.check.outputs.updates-needed }}
+      dockerfile-changes-needed: ${{ steps.check.outputs.dockerfile-changes-needed }}
+      latest-changes-detected: ${{ steps.check.outputs.latest-changes-detected }}
+      pinned-updates: ${{ steps.check.outputs.pinned-updates }}
+      latest-updates: ${{ steps.check.outputs.latest-updates }}
+      apt-updates: ${{ steps.check.outputs.apt-updates }}
+      check-failed: ${{ steps.check.outputs.check-failed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Build current image
-        uses: docker/build-push-action@v6
+        uses: actions/checkout@v4
         with:
-          context: .
-          load: true
-          tags: codeforge:current
+          fetch-depth: 0
 
-      - name: Check for package updates
-        id: check
+      - name: Download previous version snapshot
+        id: prev-snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          UPDATES=$(docker run --rm codeforge:current bash -c '
-            apt-get update -qq 2>/dev/null
-            apt-get upgrade -s 2>/dev/null | grep "^Inst " || true
-          ')
-
-          COUNT=$(echo "$UPDATES" | grep -c "^Inst " || true)
-          echo "updates-available=$([ "$COUNT" -gt 0 ] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
-
-          if [ "$COUNT" -gt 0 ]; then
-            SUMMARY=$(echo "$UPDATES" | head -20 | awk '{print $2}')
-            echo "update-summary<<EOF" >> $GITHUB_OUTPUT
-            echo "**$COUNT packages** have updates available:" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo '```' >> $GITHUB_OUTPUT
-            echo "$SUMMARY" >> $GITHUB_OUTPUT
-            if [ "$COUNT" -gt 20 ]; then
-              echo "... and $((COUNT - 20)) more" >> $GITHUB_OUTPUT
-            fi
-            echo '```' >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "::warning::$COUNT package updates available"
+          set -euo pipefail
+          LAST_RUN=$(gh run list --workflow dependency-update.yml --branch main --status success --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
+          if [[ -n "$LAST_RUN" ]]; then
+            gh run download "$LAST_RUN" -n version-snapshot --dir . 2>/dev/null || true
+          fi
+          if [[ -f "version-snapshot.json" ]]; then
+            echo "snapshot-found=true" >> "$GITHUB_OUTPUT"
           else
-            echo "update-summary=All packages are up to date" >> $GITHUB_OUTPUT
-            echo "::notice::All packages are up to date"
+            echo "snapshot-found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No previous version snapshot found (first run or no prior successful runs)"
           fi
 
-      - name: Scan current image
-        uses: anchore/scan-action@v7
-        with:
-          image: "codeforge:current"
-          output-format: sarif
-          output-file: grype-current.sarif
-          severity-cutoff: high
-          fail-build: false
+      - name: Check all dependency versions
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
 
-      - name: Upload current scan results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: grype-current.sarif
-          category: dependency-check-current
+          # --- Helper functions ---
+          json_quote() {
+            python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+          }
 
-  test-updated-image:
-    name: Test Updated Image
-    needs: check-updates
-    if: needs.check-updates.outputs.updates-available == 'true'
+          warn() { printf '::warning::%s\n' "$*" >&2; }
+
+          get_github_tag() {
+            local repo="$1" raw=""
+            if command -v gh >/dev/null 2>&1; then
+              raw="$(gh release view --repo "$repo" --json tagName --jq .tagName 2>/dev/null || true)"
+            fi
+            raw="$(printf '%s' "$raw" | tr -d '\r' | awk 'NF{print; exit}')"
+            if [[ -z "$raw" ]]; then printf 'unknown\n'; return 0; fi
+            # Strip v prefix and moby/moby special docker-v prefix
+            raw="${raw#docker-v}"
+            raw="${raw#docker-}"
+            raw="${raw#v}"
+            if [[ "$raw" =~ ^[0-9]+([.][0-9]+)*([-.][0-9A-Za-z]+)*$ ]]; then
+              printf '%s\n' "$raw"
+            else
+              printf 'unknown\n'
+            fi
+          }
+
+          get_github_tag_raw() {
+            local repo="$1" raw=""
+            if command -v gh >/dev/null 2>&1; then
+              raw="$(gh release view --repo "$repo" --json tagName --jq .tagName 2>/dev/null || true)"
+            fi
+            raw="$(printf '%s' "$raw" | tr -d '\r' | awk 'NF{print; exit}')"
+            if [[ -z "$raw" ]]; then printf 'unknown\n'; return 0; fi
+            if [[ "$raw" =~ ^v?[0-9]+([.][0-9]+)*([-.][0-9A-Za-z]+)*$ ]]; then
+              printf '%s\n' "$raw"
+            else
+              printf 'unknown\n'
+            fi
+          }
+
+          get_npm_version() {
+            local pkg="$1" version=""
+            version="$(timeout 10 npm view "$pkg" version 2>/dev/null || true)"
+            version="$(printf '%s' "$version" | tr -d '\r' | awk 'NF{print; exit}')"
+            if [[ -z "$version" ]]; then printf 'unknown\n'; return 0; fi
+            if [[ "$version" =~ ^[0-9A-Za-z]+([.-][0-9A-Za-z]+)*$ ]]; then
+              printf '%s\n' "$version"
+            else
+              printf 'unknown\n'
+            fi
+          }
+
+          version_gt() {
+            local current="$1" latest="$2"
+            [[ -n "$current" && -n "$latest" && "$current" != "unknown" && "$latest" != "unknown" ]] || return 1
+            local max
+            max="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n1)"
+            [[ "$max" == "$latest" && "$current" != "$latest" ]]
+          }
+
+          strip_v() { printf '%s\n' "${1#v}"; }
+
+          previous_latest_value() {
+            local key="$1"
+            if [[ ! -f "version-snapshot.json" ]]; then printf '\n'; return 0; fi
+            python3 - "version-snapshot.json" "$key" <<'PY'
+          import json, sys
+          path, key = sys.argv[1], sys.argv[2]
+          try:
+              with open(path, 'r', encoding='utf-8') as fh:
+                  data = json.load(fh)
+          except Exception:
+              print('')
+              raise SystemExit(0)
+          val = data.get('latest', {}).get(key, '')
+          if not isinstance(val, str):
+              val = ''
+          print(val)
+          PY
+          }
+
+          build_pinned_json() {
+            python3 -c 'import json,sys
+          items=[]
+          for line in sys.stdin:
+              line=line.rstrip("\n")
+              if not line: continue
+              name,cur,latest,src,status=line.split("\t")
+              items.append({"name":name,"current":cur,"latest":latest,"source":src,"status":status})
+          print(json.dumps(items,separators=(",",":")))'
+          }
+
+          build_latest_json() {
+            python3 -c 'import json,sys
+          items=[]
+          for line in sys.stdin:
+              line=line.rstrip("\n")
+              if not line: continue
+              name,cur,prev,src,status=line.split("\t")
+              item={"name":name,"current":cur,"source":src,"status":status}
+              if prev: item["previous"]=prev
+              items.append(item)
+          print(json.dumps(items,separators=(",",":")))'
+          }
+
+          # --- Parse Dockerfile pinned ARGs ---
+          declare -a PINNED_NAMES=()
+          declare -a PINNED_VERSIONS=()
+          while IFS='=' read -r name ver; do
+            case "$name" in
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION)
+                PINNED_NAMES+=("$name")
+                PINNED_VERSIONS+=("$ver")
+                ;;
+            esac
+          done < <(grep -oP '^ARG \K\w+=[0-9][0-9.]*' Dockerfile | sed 's/=/ /' | awk '{print $1"="$2}')
+
+          if [[ "${#PINNED_NAMES[@]}" -ne 7 ]]; then
+            echo "::error::Expected 7 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+            exit 1
+          fi
+
+          # --- Check pinned versions against upstream ---
+          dockerfile_changes_needed=false
+          latest_changes_detected=false
+          check_failures=0
+          pinned_updates_lines=()
+          latest_updates_lines=()
+
+          for i in "${!PINNED_NAMES[@]}"; do
+            name="${PINNED_NAMES[$i]}"
+            current="${PINNED_VERSIONS[$i]}"
+            latest="unknown"
+            source=""
+
+            case "$name" in
+              DOCKER_VERSION)   source='moby/moby';       latest="$(get_github_tag "$source")" ;;
+              COMPOSE_VERSION)  source='docker/compose';   latest="$(get_github_tag "$source")" ;;
+              BUILDX_VERSION)   source='docker/buildx';    latest="$(get_github_tag "$source")" ;;
+              OPENCODE_VERSION) source='opencode-ai';      latest="$(get_npm_version "$source")" ;;
+              OPENCHAMBER_VERSION) source='@openchamber/web'; latest="$(get_npm_version "$source")" ;;
+              PLAYWRIGHT_VERSION)  source='playwright';    latest="$(get_npm_version "$source")" ;;
+              PLAYWRIGHT_MCP_VERSION) source='@playwright/mcp'; latest="$(get_npm_version "$source")" ;;
+            esac
+
+            if [[ "$latest" == "unknown" ]]; then
+              warn "Could not resolve latest version for $name from $source"
+              check_failures=$((check_failures + 1))
+              continue
+            fi
+
+            if version_gt "$current" "$latest"; then
+              dockerfile_changes_needed=true
+              pinned_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$latest" "$source" "changed")")
+              echo "::notice::$name: $current -> $latest (from $source)"
+            else
+              echo "::notice::$name: $current is current (latest: $latest)"
+            fi
+          done
+
+          # --- Check latest-tracked packages ---
+          for name in OH_MY_OPENAGENT_VERSION CODEGRAPH_VERSION LEANCTX_VERSION; do
+            current="unknown"
+            previous=""
+            source=""
+
+            case "$name" in
+              OH_MY_OPENAGENT_VERSION)
+                source='npm'; current="$(get_npm_version 'oh-my-openagent')"
+                previous="$(previous_latest_value "$name")" ;;
+              CODEGRAPH_VERSION)
+                source='npm'; current="$(get_npm_version '@colbymchenry/codegraph')"
+                previous="$(previous_latest_value "$name")" ;;
+              LEANCTX_VERSION)
+                source='github'; current="$(get_github_tag_raw 'yvgude/lean-ctx')"
+                previous="$(previous_latest_value "$name")" ;;
+            esac
+
+            # First run (no previous snapshot) → treat as changed
+            if [[ ! -f "version-snapshot.json" ]]; then
+              latest_changes_detected=true
+              latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "missing" "$source" "changed")")
+              continue
+            fi
+
+            if [[ "$current" == "unknown" ]]; then
+              warn "Could not resolve latest version for $name"
+              check_failures=$((check_failures + 1))
+              continue
+            fi
+
+            # Compare with previous snapshot
+            if [[ "$name" == "LEANCTX_VERSION" ]]; then
+              if [[ "$(strip_v "$current")" != "$(strip_v "$previous")" ]]; then
+                latest_changes_detected=true
+                latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$previous" "$source" "changed")")
+              fi
+            else
+              if [[ "$current" != "$previous" ]]; then
+                latest_changes_detected=true
+                latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$previous" "$source" "changed")")
+              fi
+            fi
+          done
+
+          # --- Check apt updates ---
+          apt_summary="All packages are up to date"
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq >/dev/null 2>&1 || true
+            updates="$(apt-get upgrade -s 2>/dev/null | grep '^Inst ' || true)"
+            count="$(printf '%s\n' "$updates" | grep -c '^Inst ' || true)"
+            if [[ "${count:-0}" -gt 0 ]]; then
+              names="$(printf '%s\n' "$updates" | awk '{print $2}' | head -20 | awk 'NF{printf "%s%s", sep, $0; sep=", "}')"
+              apt_summary="$count packages have updates: $names"
+            fi
+          fi
+
+          # --- Determine overall status ---
+          updates_needed=false
+          apt_updates_needed=false
+          if [[ "$apt_summary" != "All packages are up to date" ]]; then apt_updates_needed=true; fi
+          if [[ "$dockerfile_changes_needed" == true || "$latest_changes_detected" == true || "$apt_updates_needed" == true ]]; then
+            updates_needed=true
+          fi
+
+          # If ALL version checks failed, flag it
+          total_checks=$(( ${#PINNED_NAMES[@]} + 3 ))
+          if [[ "$check_failures" -ge "$total_checks" ]]; then
+            echo "check-failed=true" >> "$GITHUB_OUTPUT"
+            echo "::error::All version checks failed"
+          fi
+
+          # --- Build JSON outputs ---
+          pinned_updates_json="$(printf '%s\n' "${pinned_updates_lines[@]:-}" | build_pinned_json)"
+          latest_updates_json="$(printf '%s\n' "${latest_updates_lines[@]:-}" | build_latest_json)"
+
+          # --- Write version snapshot ---
+          cat > version-snapshot.json <<SNAPSHOT
+          {
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "pinned": {
+              "DOCKER_VERSION": $(json_quote "${PINNED_VERSIONS[0]}"),
+              "COMPOSE_VERSION": $(json_quote "${PINNED_VERSIONS[1]}"),
+              "BUILDX_VERSION": $(json_quote "${PINNED_VERSIONS[2]}"),
+              "OPENCODE_VERSION": $(json_quote "${PINNED_VERSIONS[3]}"),
+              "OPENCHAMBER_VERSION": $(json_quote "${PINNED_VERSIONS[4]}"),
+              "PLAYWRIGHT_VERSION": $(json_quote "${PINNED_VERSIONS[5]}"),
+              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[6]}")
+            },
+            "latest": {
+              "OH_MY_OPENAGENT_VERSION": $(json_quote "$(get_npm_version 'oh-my-openagent')"),
+              "CODEGRAPH_VERSION": $(json_quote "$(get_npm_version '@colbymchenry/codegraph')"),
+              "LEANCTX_VERSION": $(json_quote "$(get_github_tag_raw 'yvgude/lean-ctx')")
+            },
+            "apt_snapshot": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          }
+          SNAPSHOT
+
+          # --- Set outputs ---
+          echo "updates-needed=$updates_needed" >> "$GITHUB_OUTPUT"
+          echo "dockerfile-changes-needed=$dockerfile_changes_needed" >> "$GITHUB_OUTPUT"
+          echo "latest-changes-detected=$latest_changes_detected" >> "$GITHUB_OUTPUT"
+          echo "pinned-updates=$pinned_updates_json" >> "$GITHUB_OUTPUT"
+          echo "latest-updates=$latest_updates_json" >> "$GITHUB_OUTPUT"
+          echo "apt-updates=$apt_summary" >> "$GITHUB_OUTPUT"
+
+          echo "::notice::updates-needed=$updates_needed dockerfile-changes=$dockerfile_changes_needed latest-changes=$latest_changes_detected"
+
+      - name: Upload version snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-snapshot
+          path: version-snapshot.json
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Build and test updated image
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    name: Build and Test Updated Image
+    needs: check-versions
+    if: needs.check-versions.outputs.updates-needed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Build image with updated packages
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare build args
+        id: build-args
+        run: |
+          set -euo pipefail
+          BUILD_ARGS="UPGRADE_PACKAGES=true"
+
+          # If pinned versions changed, pass updated ARGs
+          PINNED='${{ needs.check-versions.outputs.pinned-updates }}'
+          if [[ "$PINNED" != "[]" && -n "$PINNED" ]]; then
+            while IFS= read -r item; do
+              name="$(echo "$item" | jq -r '.name')"
+              latest="$(echo "$item" | jq -r '.latest')"
+              if [[ -n "$name" && -n "$latest" && "$latest" != "null" ]]; then
+                BUILD_ARGS="${BUILD_ARGS}"$'\n'"${name}=${latest}"
+              fi
+            done < <(echo "$PINNED" | jq -c '.[]')
+          fi
+
+          {
+            echo 'args<<EOF'
+            echo "$BUILD_ARGS"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build updated image
         uses: docker/build-push-action@v6
         with:
           context: .
           load: true
           tags: codeforge:updated
-          build-args: |
-            UPGRADE_PACKAGES=true
-
-      - name: Run Grype scan on updated image
-        uses: anchore/scan-action@v7
-        with:
-          image: "codeforge:updated"
-          output-format: sarif
-          output-file: grype-updated.sarif
-          severity-cutoff: high
-          fail-build: false
-
-      - name: Upload updated scan results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: grype-updated.sarif
-          category: dependency-check-updated
+          build-args: ${{ steps.build-args.outputs.args }}
 
       - name: Start services
         run: |
-          sed -i '/build:/,/dockerfile: Dockerfile/c\    image: codeforge:updated' docker-compose.dev.yml
-          sed -i 's/container_name: ai-dev/container_name: ci-test/' docker-compose.dev.yml
-          docker compose -f docker-compose.dev.yml up -d
-          echo "Waiting for services..."
-          sleep 30
+          set -euo pipefail
+          cat > docker-compose.override.yml << 'EOF'
+          services:
+            ai-dev:
+              image: codeforge:updated
+              container_name: ci-test
+              environment:
+                - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
+              volumes:
+                - workspace-dev:/home/devuser/workspace
+                - opencode-data-dev:/home/devuser/.local/share/opencode
+                - opencode-config-dev:/home/devuser/.config/opencode
+                - openchamber-data-dev:/home/devuser/.config/openchamber
+                - ssh-keys-dev:/home/devuser/.ssh
+                - git-config-dev:/home/devuser/.config/git
+                - /var/run/docker.sock:/var/run/docker.sock
+          EOF
+          docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d
+          echo "Waiting for services to start..."
+          sleep 60
 
       - name: Run integration tests
+        id: tests
         run: |
+          set -uo pipefail
           chmod +x test/run-tests.sh
-          ./test/run-tests.sh ci-test
+          ./test/run-tests.sh ci-test 2>&1 | tee test-output.txt
+          echo "test-result=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-output.txt
+          retention-days: 7
 
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.dev.yml down -v --remove-orphans || true
 
-  create-update-issue:
-    name: Create Update Issue
-    needs: [check-updates, test-updated-image]
-    if: |
-      always() &&
-      needs.check-updates.outputs.updates-available == 'true' &&
-      (needs.test-updated-image.result == 'success' || needs.test-updated-image.result == 'skipped')
+  # ---------------------------------------------------------------------------
+  # Job 3: Handle updates — PR, auto-release, or issue
+  # ---------------------------------------------------------------------------
+  handle-updates:
+    name: Handle Dependency Updates
+    needs: [check-versions, build-and-test]
+    if: always() && (needs.check-versions.outputs.updates-needed == 'true' || needs.check-versions.outputs.check-failed == 'true')
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+      pull-requests: write
     steps:
-      - name: Check for existing issue
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download test results
+        id: download-tests
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: test-results
+
+      - name: Set branch date
+        id: branch-date
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Determine action path
+        id: decision
+        run: |
+          set -euo pipefail
+          TEST_RESULT="${{ needs.build-and-test.result }}"
+          DOCKERFILE_CHANGES="${{ needs.check-versions.outputs.dockerfile-changes-needed }}"
+          CHECK_FAILED="${{ needs.check-versions.outputs.check-failed }}"
+
+          echo "test-result=$TEST_RESULT" >> "$GITHUB_OUTPUT"
+          echo "dockerfile-changes=$DOCKERFILE_CHANGES" >> "$GITHUB_OUTPUT"
+
+          # Decision tree:
+          # 1. All checks failed → warning issue
+          # 2. Dockerfile changes + tests passed → PR
+          # 3. Dockerfile changes + tests failed → issue
+          # 4. Tests failed (no dockerfile changes) → issue
+          # 5. Only latest/apt changed + tests passed → auto-release
+          if [[ "$CHECK_FAILED" == "true" ]]; then
+            echo "action=warning-issue" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: Create warning issue (all version checks failed)"
+          elif [[ "$DOCKERFILE_CHANGES" == "true" && "$TEST_RESULT" == "success" ]]; then
+            echo "action=create-pr" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: Create PR with Dockerfile version changes"
+          elif [[ "$DOCKERFILE_CHANGES" == "true" && "$TEST_RESULT" != "success" ]]; then
+            echo "action=create-issue" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: Create issue (Dockerfile changes needed but tests failed)"
+          elif [[ "$TEST_RESULT" != "success" ]]; then
+            echo "action=create-issue" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: Create issue (tests failed)"
+          else
+            echo "action=auto-release" >> "$GITHUB_OUTPUT"
+            echo "::notice::Action: Auto-release (latest/apt changes only, tests passed)"
+          fi
+
+      # ===== PR Path: Dockerfile pinned version changes =====
+      - name: Update Dockerfile version ARGs
+        if: steps.decision.outputs.action == 'create-pr'
+        id: update-dockerfile
+        run: |
+          set -euo pipefail
+          PINNED='${{ needs.check-versions.outputs.pinned-updates }}'
+          SUMMARY=""
+
+          while IFS= read -r item; do
+            name="$(echo "$item" | jq -r '.name')"
+            current="$(echo "$item" | jq -r '.current')"
+            latest="$(echo "$item" | jq -r '.latest')"
+            source="$(echo "$item" | jq -r '.source')"
+
+            if [[ -n "$name" && -n "$latest" && "$latest" != "null" ]]; then
+              sed -i "s/^ARG ${name}=.*/ARG ${name}=${latest}/" Dockerfile
+              SUMMARY="${SUMMARY}- **${name}**: \`${current}\` → \`${latest}\` (source: ${source})\n"
+              echo "::notice::Updated $name: $current -> $latest"
+            fi
+          done < <(echo "$PINNED" | jq -c '.[]')
+
+          {
+            echo 'summary<<EOF'
+            echo -e "$SUMMARY"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Pull Request
+        if: steps.decision.outputs.action == 'create-pr'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-dockerfile-versions-${{ steps.branch-date.outputs.date }}
+          commit-message: "chore: update Dockerfile pinned versions"
+          title: "chore: update Dockerfile pinned versions"
+          body: |
+            ## Dependency Version Updates
+
+            This PR updates pinned versions in the Dockerfile:
+
+            ${{ steps.update-dockerfile.outputs.summary }}
+
+            ### Test Results
+            Integration tests passed on the updated image.
+
+            ### Latest Package Changes
+            ${{ needs.check-versions.outputs.latest-updates }}
+
+            ### APT Updates
+            ${{ needs.check-versions.outputs.apt-updates }}
+
+            ---
+            *Generated automatically by the Dependency Update workflow*
+          labels: |
+            dependencies
+            automated
+
+      # ===== Auto-Release Path: latest/apt changes only =====
+      - name: Determine next version
+        if: steps.decision.outputs.action == 'auto-release'
+        id: version
+        run: |
+          set -euo pipefail
+          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          if [[ -z "$LATEST_TAG" ]]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          echo "latest-tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+          NEXT_PATCH=$(echo "$LATEST_TAG" | sed 's/v//' | awk -F. '{$NF = $NF + 1;} 1' OFS='.')
+          NEXT_VERSION="v${NEXT_PATCH}"
+          echo "next-version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "::notice::Version bump: $LATEST_TAG -> $NEXT_VERSION"
+
+      - name: Extract current package versions
+        if: steps.decision.outputs.action == 'auto-release'
+        id: pkg-versions
+        run: |
+          set -euo pipefail
+          OPENCODE_VER=$(grep -oP '^ARG OPENCODE_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
+          CHAMBER_VER=$(grep -oP '^ARG OPENCHAMBER_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
+
+          # Check if pinned updates include newer versions
+          PINNED='${{ needs.check-versions.outputs.pinned-updates }}'
+          NEW_OC=$(echo "$PINNED" | jq -r '.[] | select(.name=="OPENCODE_VERSION") | .latest // empty' 2>/dev/null || true)
+          NEW_CH=$(echo "$PINNED" | jq -r '.[] | select(.name=="OPENCHAMBER_VERSION") | .latest // empty' 2>/dev/null || true)
+
+          if [[ -n "$NEW_OC" ]]; then OPENCODE_VER="$NEW_OC"; fi
+          if [[ -n "$NEW_CH" ]]; then CHAMBER_VER="$NEW_CH"; fi
+
+          echo "opencode-version=$OPENCODE_VER" >> "$GITHUB_OUTPUT"
+          echo "chamber-version=$CHAMBER_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Update README badges
+        if: steps.decision.outputs.action == 'auto-release'
+        run: |
+          set -euo pipefail
+          OPENCODE_VER="${{ steps.pkg-versions.outputs.opencode-version }}"
+          CHAMBER_VER="${{ steps.pkg-versions.outputs.chamber-version }}"
+
+          if [[ "$OPENCODE_VER" != "unknown" ]]; then
+            sed -i "s/OpenCode-[^-]*-blue/OpenCode-${OPENCODE_VER}-blue/" README.md
+          fi
+          if [[ "$CHAMBER_VER" != "unknown" ]]; then
+            sed -i "s/OpenChamber-[^-]*-blue/OpenChamber-${CHAMBER_VER}-blue/" README.md
+          fi
+
+      - name: Update CHANGELOG
+        if: steps.decision.outputs.action == 'auto-release'
+        run: |
+          set -euo pipefail
+          NEXT_VERSION="${{ steps.version.outputs.next-version }}"
+          TODAY="$(date -u +%Y-%m-%d)"
+          CHANGELOG="docs/CHANGELOG.md"
+
+          if [[ ! -f "$CHANGELOG" ]]; then
+            echo "::warning::CHANGELOG not found, skipping update"
+            exit 0
+          fi
+
+          # Build change summary
+          LATEST_UPDATES='${{ needs.check-versions.outputs.latest-updates }}'
+          APT_UPDATES='${{ needs.check-versions.outputs.apt-updates }}'
+
+          CHANGES=""
+          if [[ "$LATEST_UPDATES" != "[]" && -n "$LATEST_UPDATES" ]]; then
+            while IFS= read -r item; do
+              name="$(echo "$item" | jq -r '.name')"
+              current="$(echo "$item" | jq -r '.current')"
+              CHANGES="${CHANGES}\n- update ${name} to ${current}"
+            done < <(echo "$LATEST_UPDATES" | jq -c '.[]' 2>/dev/null || true)
+          fi
+          if [[ "$APT_UPDATES" != "All packages are up to date" ]]; then
+            CHANGES="${CHANGES}\n- update apt packages"
+          fi
+
+          if [[ -z "$CHANGES" ]]; then
+            CHANGES="\n- dependency updates (apt packages)"
+          fi
+
+          # Insert new version section after [Unreleased]
+          python3 - "$CHANGELOG" "$NEXT_VERSION" "$TODAY" "$CHANGES" <<'PYEOF'
+          import sys, re
+
+          changelog_path = sys.argv[1]
+          version = sys.argv[2]
+          date = sys.argv[3]
+          changes = sys.argv[4].replace('\\n', '\n')
+
+          with open(changelog_path, 'r') as f:
+              content = f.read()
+
+          unreleased_pattern = r'(## \[Unreleased\].*?\n)'
+          new_section = f'\n## [{version.lstrip("v")}] - {date}\n{changes.strip()}\n'
+
+          if re.search(unreleased_pattern, content):
+              content = re.sub(
+                  unreleased_pattern,
+                  r'\1' + new_section + '\n',
+                  content,
+                  count=1
+              )
+          else:
+              content = f'## [Unreleased]\n\n{new_section}\n{content}'
+
+          with open(changelog_path, 'w') as f:
+              f.write(content)
+          PYEOF
+
+      - name: Commit release changes
+        if: steps.decision.outputs.action == 'auto-release'
+        id: commit
+        run: |
+          set -euo pipefail
+          NEXT_VERSION="${{ steps.version.outputs.next-version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "no-changes=true" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore: update dependencies for ${NEXT_VERSION} release"
+            echo "no-changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to GHCR
+        if: steps.decision.outputs.action == 'auto-release'
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image to GHCR
+        if: steps.decision.outputs.action == 'auto-release'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.next-version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Tag and push release
+        if: steps.decision.outputs.action == 'auto-release'
+        id: git-push
+        run: |
+          set -uo pipefail
+          NEXT_VERSION="${{ steps.version.outputs.next-version }}"
+          git tag -a "$NEXT_VERSION" -m "Release $NEXT_VERSION — dependency updates"
+
+          BRANCH_PUSH=0
+          TAG_PUSH=0
+          git push origin main && BRANCH_PUSH=1 || true
+          if [[ "$BRANCH_PUSH" -eq 1 ]]; then
+            git push origin "$NEXT_VERSION" && TAG_PUSH=1 || true
+          fi
+
+          if [[ "$BRANCH_PUSH" -eq 1 && "$TAG_PUSH" -eq 1 ]]; then
+            echo "push-success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push-success=false" >> "$GITHUB_OUTPUT"
+            echo "branch-pushed=$BRANCH_PUSH" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.decision.outputs.action == 'auto-release' && steps.git-push.outputs.push-success == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.next-version }}
+          name: ${{ steps.version.outputs.next-version }}
+          body: |
+            ## Dependency Updates
+
+            Automated patch release for dependency updates.
+
+            ### Latest Package Changes
+            ${{ needs.check-versions.outputs.latest-updates }}
+
+            ### APT Updates
+            ${{ needs.check-versions.outputs.apt-updates }}
+
+            ## Docker Image
+
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.next-version }}
+            ```
+
+            ## Quick Start
+
+            ```bash
+            cp .env.example .env
+            docker compose up -d
+            ```
+
+            ---
+            *Generated by Dependency Update workflow*
+          generate_release_notes: false
+
+      - name: Fallback to PR if push failed
+        if: steps.decision.outputs.action == 'auto-release' && steps.git-push.outputs.push-success == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/dependency-release-${{ steps.branch-date.outputs.date }}
+          commit-message: "chore: dependency update release ${{ steps.version.outputs.next-version }}"
+          title: "chore: dependency update release ${{ steps.version.outputs.next-version }}"
+          body: |
+            ## Dependency Update Release
+
+            Auto-release could not push directly (branch protection). Please merge to trigger release.
+
+            ### Version: ${{ steps.version.outputs.next-version }}
+
+            ### Changes
+            - README badge updates
+            - CHANGELOG update
+            - Latest package version changes: ${{ needs.check-versions.outputs.latest-updates }}
+            - APT updates: ${{ needs.check-versions.outputs.apt-updates }}
+
+            ---
+            *Generated automatically by the Dependency Update workflow*
+          labels: |
+            dependencies
+            automated
+
+      # ===== Issue Path: failures =====
+      - name: Create issue for failures
+        if: steps.decision.outputs.action == 'create-issue'
         uses: actions/github-script@v7
         with:
           script: |
+            const testResult = '${{ needs.build-and-test.result }}';
+            const dockerfileChanges = '${{ needs.check-versions.outputs.dockerfile-changes-needed }}';
+            const pinnedUpdates = `${{ needs.check-versions.outputs.pinned-updates }}`;
+            const latestUpdates = `${{ needs.check-versions.outputs.latest-updates }}`;
+            const aptUpdates = `${{ needs.check-versions.outputs.apt-updates }}`;
+
+            let testOutput = 'No test output available';
+            try {
+              const fs = require('fs');
+              if (fs.existsSync('test-output.txt')) {
+                testOutput = fs.readFileSync('test-output.txt', 'utf8').slice(-3000);
+              }
+            } catch (e) {
+              testOutput = `Could not read test output: ${e.message}`;
+            }
+
+            const reason = dockerfileChanges === 'true'
+              ? 'Dockerfile version update tests failed'
+              : 'Dependency update tests failed';
+
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'dependencies'
+              labels: 'dependencies,automated'
             });
 
-            const existingIssue = issues.data.find(issue =>
-              issue.title.includes('Ubuntu package updates available')
-            );
-
-            if (!existingIssue) {
-              const summary = `${{ needs.check-updates.outputs.update-summary }}`;
-              const testResult = `${{ needs.test-updated-image.result }}`;
-
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: 'Ubuntu package updates available',
-                body: `
-            ## Package Updates Available
-
-            ${summary}
-
-            ## Compatibility Test
-
-            ${testResult === 'success' ? 'Updated image passes all integration tests' : 'Updated image test was not run or failed'}
-
-            ## Actions
-
-            - [ ] Rebuild Docker image to pull latest packages
-            - [ ] Verify Grype scan shows reduced vulnerabilities
-            - [ ] Push updated image if all checks pass
-                `,
-                labels: ['dependencies', 'automated']
-              });
+            const existing = issues.data.find(i => i.title.includes('Dependency update check'));
+            if (existing) {
+              core.notice(`Existing issue #${existing.number} found, skipping creation`);
+              return;
             }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Dependency update check - ${reason}`,
+              body: [
+                '## Dependency Update Check Failed\n',
+                `**Reason:** ${reason}`,
+                `**Test result:** ${testResult}`,
+                `**Dockerfile changes needed:** ${dockerfileChanges}\n`,
+                '### Pinned Version Updates',
+                '```json',
+                pinnedUpdates,
+                '```\n',
+                '### Latest Package Updates',
+                '```json',
+                latestUpdates,
+                '```\n',
+                `### APT Updates\n${aptUpdates}\n`,
+                '### Test Output (last 3000 chars)',
+                '```',
+                testOutput,
+                '```\n',
+                '---',
+                '*Generated by Dependency Update workflow*'
+              ].join('\n'),
+              labels: ['dependencies', 'automated']
+            });
+
+      - name: Create warning issue for check failures
+        if: steps.decision.outputs.action == 'warning-issue'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pinnedUpdates = `${{ needs.check-versions.outputs.pinned-updates }}`;
+            const latestUpdates = `${{ needs.check-versions.outputs.latest-updates }}`;
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependencies,automated'
+            });
+
+            const existing = issues.data.find(i => i.title.includes('version check failures'));
+            if (existing) {
+              core.notice(`Existing warning issue #${existing.number} found, skipping creation`);
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Dependency update check - version check failures',
+              body: [
+                '## All Version Checks Failed\n',
+                'All upstream version sources returned errors. This may indicate:',
+                '- GitHub API rate limiting',
+                '- npm registry issues',
+                '- Network connectivity problems\n',
+                '### Raw Results',
+                '**Pinned:**',
+                '```json',
+                pinnedUpdates,
+                '```\n',
+                '**Latest:**',
+                '```json',
+                latestUpdates,
+                '```\n',
+                '### Action Required',
+                'Please manually verify version sources and re-run the workflow.\n',
+                '---',
+                '*Generated by Dependency Update workflow*'
+              ].join('\n'),
+              labels: ['dependencies', 'automated']
+            });
