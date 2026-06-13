@@ -1,0 +1,87 @@
+============================================
+ OpenChamber Test Suite
+ Container: ci-test
+ Port: 8000
+============================================
+
+--- Container Status ---
+  [0;32mPASS[0m Container exists and running
+  [0;32mPASS[0m No restarts (RestartCount=0)
+
+--- User & Environment ---
+  [0;32mPASS[0m Running as devuser
+  [0;32mPASS[0m HOME is /home/devuser
+
+--- Versions ---
+  [0;32mPASS[0m opencode version (1.17.4)
+  [0;32mPASS[0m openchamber version (1.12.4)
+  [0;32mPASS[0m openspec installed (1.4.1)
+  [0;32mPASS[0m gh CLI installed
+
+--- Config Files ---
+  [0;32mPASS[0m opencode.json exists
+  [0;32mPASS[0m settings.json exists
+  [0;32mPASS[0m opencode.json has 2 plugin(s)
+
+--- Data Persistence ---
+  [0;32mPASS[0m opencode.db exists
+  [0;32mPASS[0m openchamber logs dir
+  [0;32mPASS[0m openchamber run dir
+  [0;32mPASS[0m models.json cache
+
+--- Web UI & Auth ---
+  [1;33mSKIP[0m Web UI responds 200 (internal only, network unavailable)
+  [1;33mSKIP[0m Web UI returns HTML (internal only, network unavailable)
+  [0;32mPASS[0m OPENCHAMBER_UI_PASSWORD env var is set
+  [0;32mPASS[0m UI password applied (no unsecured warning)
+
+--- Health API ---
+  [1;33mSKIP[0m Health API (internal only, network unavailable)
+  [1;33mSKIP[0m OpenCode running (internal only, network unavailable)
+  [1;33mSKIP[0m OpenCode ready (internal only, network unavailable)
+
+--- Dev Tools ---
+  [0;32mPASS[0m git available
+  [0;32mPASS[0m diff available
+  [0;32mPASS[0m jq available
+  [0;32mPASS[0m tree available
+  [0;32mPASS[0m less available
+  [0;32mPASS[0m tmux available
+  [0;32mPASS[0m python3 available
+  [0;32mPASS[0m gh available
+  [0;32mPASS[0m zip available
+  [0;32mPASS[0m unzip available
+  [0;32mPASS[0m wget available
+  [0;32mPASS[0m curl available
+  [0;32mPASS[0m ssh available
+  [0;32mPASS[0m rsync available
+  [0;32mPASS[0m htop available
+  [0;32mPASS[0m nano available
+  [0;32mPASS[0m bun available
+  [0;32mPASS[0m node available
+
+--- CodeGraph (Knowledge Graph) ---
+  [0;32mPASS[0m codegraph command available at /home/devuser/.bun/bin/codegraph
+  [0;32mPASS[0m codegraph --help works
+  [1;33mSKIP[0m codegraph MCP config not found in opencode.json (may be project-scoped)
+  [0;32mPASS[0m playwright MCP server configured in opencode.json
+  [0;32mPASS[0m playwright MCP uses bunx (Bun-runtime compatible)
+
+--- Superpowers (Agentic Skills Framework) ---
+  [0;32mPASS[0m superpowers plugin configured in opencode.json
+  [0;32mPASS[0m superpowers plugin entry exists
+  [0;32mPASS[0m superpowers skills discoverable in global skills path
+
+--- Node/Bun Compatibility ---
+  [0;32mPASS[0m node command available at /home/devuser/.bun/bin/node
+
+--- Playwright / Chromium ---
+  [0;32mPASS[0m playwright 1.60.0 CLI works
+  [0;32mPASS[0m @playwright/mcp 0.0.76 CLI works
+  [0;32mPASS[0m chromium binary exists at /ms-playwright/chromium-1223/chrome-linux64/chrome
+  [0;32mPASS[0m chromium launches headless successfully
+  [0;32mPASS[0m opencode.json @playwright/mcp version matches MCP build arg (0.0.76)
+
+============================================
+ Results: \033[0;32m48 passed\033[0m, \033[0;31m0 failed\033[0m, \033[1;33m6 skipped\033[0m
+============================================
