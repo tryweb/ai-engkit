@@ -679,6 +679,11 @@ jobs:
             echo "no-changes=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Format image name for GHCR
+        if: steps.decision.outputs.action == 'auto-release'
+        id: ghcr-image
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Login to GHCR
         if: steps.decision.outputs.action == 'auto-release'
         continue-on-error: true
@@ -695,8 +700,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.next-version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ steps.ghcr-image.outputs.name }}:${{ steps.version.outputs.next-version }}
+            ${{ env.REGISTRY }}/${{ steps.ghcr-image.outputs.name }}:latest
 
       - name: Tag and push release
         if: steps.decision.outputs.action == 'auto-release'
@@ -740,7 +745,7 @@ jobs:
             ## Docker Image
 
             ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.next-version }}
+            docker pull ${{ env.REGISTRY }}/${{ steps.ghcr-image.outputs.name }}:${{ steps.version.outputs.next-version }}
             ```
 
             ## Quick Start
