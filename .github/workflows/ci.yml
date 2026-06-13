@@ -240,3 +240,46 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: ${{ steps.body.outputs.body }}
+
+  auto-tag:
+    name: Auto Tag Dependency Updates
+    needs: [test, scan]
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      (contains(github.event.head_commit.message, 'chore: update Dockerfile pinned versions') ||
+       contains(github.event.head_commit.message, 'chore: dependency update release'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate PATCH version
+        id: version
+        run: |
+          set -euo pipefail
+          LATEST_TAG=$(git tag --sort=-version:refname | \
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
+            grep -vE '(rc|beta|alpha|dev|test|pre)' | \
+            head -1 || echo "v0.0.0")
+          echo "latest-tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          NEXT_PATCH=$(echo "$LATEST_TAG" | sed 's/v//' | awk -F. '{$NF = $NF + 1;} 1' OFS='.')
+          echo "next-version=v${NEXT_PATCH}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Version bump: $LATEST_TAG -> v${NEXT_PATCH}"
+
+      - name: Create and push tag
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          NEXT_VERSION="${{ steps.version.outputs.next-version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT_VERSION" -m "Release $NEXT_VERSION — dependency updates"
+          git push origin "$NEXT_VERSION"
+          echo "::notice::Created and pushed tag: $NEXT_VERSION"
