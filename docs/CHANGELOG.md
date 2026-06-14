@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.11.8] - 2026-06-14
+- update apt packages
+
+
 ## [0.11.6] - 2026-06-13
 - update LEANCTX_VERSION to v3.8.4
 - update apt packages
