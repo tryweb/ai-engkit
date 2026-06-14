@@ -2,7 +2,7 @@ name: Dependency Update Check
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 20 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -141,6 +141,25 @@ jobs:
           PY
           }
 
+          previous_apt_package_version() {
+            local key="$1"
+            if [[ ! -f "version-snapshot.json" ]]; then printf '\n'; return 0; fi
+            python3 - "version-snapshot.json" "$key" <<'PY'
+          import json, sys
+          path, key = sys.argv[1], sys.argv[2]
+          try:
+              with open(path, 'r', encoding='utf-8') as fh:
+                  data = json.load(fh)
+          except Exception:
+              print('')
+              raise SystemExit(0)
+          val = data.get('apt_upgradable', {}).get('packages', {}).get(key, '')
+          if not isinstance(val, str):
+              val = ''
+          print(val)
+          PY
+          }
+
           build_pinned_json() {
             python3 -c 'import json,sys
           items=[]
@@ -265,16 +284,45 @@ jobs:
             fi
           done
 
-          # --- Check apt updates ---
+          # --- Check apt updates inside ubuntu:24.04 base image ---
+          # This runs against the actual base image (not the GitHub runner) so only
+          # packages relevant to the CodeForge image are reported. Results are tracked
+          # in version-snapshot across runs so the same stale updates aren't re-reported.
           apt_summary="All packages are up to date"
-          if command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq >/dev/null 2>&1 || true
-            updates="$(apt-get upgrade -s 2>/dev/null | grep '^Inst ' || true)"
+          declare -A APT_PACKAGES
+          apt_upgradable_json="{}"
+          if command -v docker >/dev/null 2>&1; then
+            docker pull ubuntu:24.04 --quiet >/dev/null 2>&1 || true
+            updates="$(docker run --rm ubuntu:24.04 bash -c 'apt-get update -qq 2>/dev/null && apt-get upgrade --just-print 2>/dev/null' | grep '^Inst ' || true)"
             count="$(printf '%s\n' "$updates" | grep -c '^Inst ' || true)"
             if [[ "${count:-0}" -gt 0 ]]; then
-              names="$(printf '%s\n' "$updates" | awk '{print $2}' | head -20 | awk 'NF{printf "%s%s", sep, $0; sep=", "}')"
-              apt_summary="$count packages have updates: $names"
+              # Build deduplicated list: only report packages whose available version
+              # has changed since the previous snapshot
+              new_lines=()
+              while IFS= read -r line; do
+                pkg="$(printf '%s\n' "$line" | awk '{print $2}')"
+                ver="$(printf '%s\n' "$line" | awk '{print $3}' | tr -d '[]')"
+                [[ -z "$pkg" || -z "$ver" ]] && continue
+                APT_PACKAGES["$pkg"]="$ver"
+                prev_ver="$(previous_apt_package_version "$pkg")"
+                if [[ "$ver" != "$prev_ver" ]]; then
+                  new_lines+=("$pkg ($ver)")
+                fi
+              done < <(printf '%s\n' "$updates")
+              new_count="${#new_lines[@]}"
+              if [[ "$new_count" -gt 0 ]]; then
+                IFS=', '; names="${new_lines[*]}"; unset IFS
+                apt_summary="$new_count packages have updates: $names"
+              fi
             fi
+            # Build JSON map of current upgradable packages for snapshot
+            apt_upgradable_json="{"
+            first=true
+            for pkg in "${!APT_PACKAGES[@]}"; do
+              if [[ "$first" == true ]]; then first=false; else apt_upgradable_json+=","; fi
+              apt_upgradable_json+="$(json_quote "$pkg"):$(json_quote "${APT_PACKAGES[$pkg]}")"
+            done
+            apt_upgradable_json+="}"
           fi
 
           # --- Determine overall status ---
@@ -314,7 +362,10 @@ jobs:
               "CODEGRAPH_VERSION": $(json_quote "$(get_npm_version '@colbymchenry/codegraph')"),
               "LEANCTX_VERSION": $(json_quote "$(get_github_tag_raw 'yvgude/lean-ctx')")
             },
-            "apt_snapshot": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            "apt_upgradable": {
+              "snapshot_time": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "packages": $apt_upgradable_json
+            }
           }
           SNAPSHOT
 
