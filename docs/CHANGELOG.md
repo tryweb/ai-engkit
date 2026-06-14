@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.11.9] - 2026-06-14
+- update apt packages
+
+
 ## [0.11.8] - 2026-06-14
 - update apt packages
 
