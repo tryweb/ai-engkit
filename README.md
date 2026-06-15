@@ -1,17 +1,15 @@
 # CodeForge
 
-A self-hosted AI development environment powered by [OpenCode](https://opencode.ai) and [OpenChamber](https://openchamber.dev/), running on Ubuntu 24.04 with Ollama integration.
+A self-hosted AI development environment powered by [OpenCode](https://opencode.ai) and [OpenChamber](https://openchamber.dev/), running on Ubuntu 24.04.
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![OpenCode](https://img.shields.io/badge/OpenCode-1.17.6-blue?style=for-the-badge&logoColor=white)
 ![OpenChamber](https://img.shields.io/badge/OpenChamber-1.12.4-blue?style=for-the-badge&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-latest-blue?style=for-the-badge&logoColor=white)
-
+ 
 ## Features
 
 - **OpenCode AI** — Terminal-based AI coding assistant
 - **OpenChamber Web UI** — Browser-based interface for managing AI sessions ([openchamber.dev](https://openchamber.dev/))
-- **Ollama Integration** — Local LLM inference with embedding support
 - **OpenSpec** — Spec-driven development tooling
 - **GitHub CLI** — Built-in `gh` (GitHub) and `glab` (GitLab) for repository management
 - **CodeGraph** — Knowledge graph tool for mapping codebases (`@colbymchenry/codegraph` package, command: `codegraph`)
@@ -46,12 +44,10 @@ Copy `.env.example` to `.env` and customize:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CHAMBER_PORT` | `8000` | Host port for Web UI |
-| `OLLAMA_PORT` | `11434` | Host port for Ollama API |
 | `OPENCODE_SERVER_PASSWORD` | `devonly` | OpenCode API password |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
 | `OPENCODE_PLUGINS` | `oh-my-openagent` | Comma-separated plugin list |
 | `WORKSPACE_PATH` | *(named volume)* | Host path for workspace bind mount |
-| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama service URL |
 
 ### Plugin Version Management (Development)
 
