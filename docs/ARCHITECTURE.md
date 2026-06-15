@@ -31,13 +31,8 @@ graph TB
             API["API :4095"]
             TOOLS["開發工具<br/>git, python, tmux..."]
         end
-
-        subgraph "ollama 容器"
-            OLLAMA["Ollama<br/>LLM 推論引擎"]
-            MODELS["模型檔案"]
-        end
     end
-
+    
     subgraph "主機資源"
         HOST_DOCKER["Docker Socket"]
     end
@@ -46,7 +41,6 @@ graph TB
     CH -->|"WebSocket :4095"| API
     TERMINAL -->|"命令列"| OC
     OC -->|"API :4095"| API
-    API <-->|"API :11434"| OLLAMA
     
     OC -.->|"透過 named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
     OC -.->|"讀寫"| HOST_DOCKER
@@ -56,7 +50,6 @@ graph TB
     style OC fill:#fff3e0
     style CH fill:#f3e5f5
     style API fill:#e3f2fd
-    style OLLAMA fill:#fce4ec
     style GIT_VOLS fill:#e8f5e9
 ```
 
@@ -74,13 +67,6 @@ graph LR
         INIT_SCRIPTS["初始化腳本"]
     end
 
-    subgraph "ollama 服務"
-        direction TB
-        PORT11434[":11434 API"]
-        HEALTHCHECK["健康檢查"]
-        PULL_MODEL["自動拉取模型"]
-    end
-
     PORT3000 -->|"WebSocket"| OC_API
     OC_API -->|"API :11434"| PORT11434
     ENTRYPOINT --> INIT_SCRIPTS
@@ -96,15 +82,12 @@ graph LR
 
 ```mermaid
 graph TD
-    A["ai-dev 啟動"] --> B{"等待依賴"}
-    B --> C["ollama healthy"]
-    C --> D["OpenCode API :4095 就緒"]
+    A["ai-dev 啟動"] --> D["OpenCode API :4095 就緒"]
     D --> E["OpenChamber Web :3000 啟動"]
     E --> F["開啟 Web UI"]
 
     G["使用者訪問 :8000"] --> H["OpenChamber :3000"]
     H -->|"WebSocket/SSE"| I["OpenCode :4095"]
-    I -->|"API"| J["ollama :11434"]
     
     style A fill:#fff3e0
     style D fill:#e3f2fd
@@ -166,37 +149,6 @@ graph TB
     style CH_SERVER fill:#f3e5f5
 ```
 
-### ollama 容器結構
-
-```mermaid
-graph TB
-    subgraph "ollama 容器"
-        OLLAMA_SERVER["Ollama Server"]
-        
-        subgraph "模型管理"
-            MODEL_DIR["/root/.ollama/"]
-            NOMIC["nomic-embed-text<br/>嵌入模型"]
-            USER_MODEL["使用者模型"]
-        end
-
-        subgraph "API 端點"
-            API_TAGS["/api/tags<br/>模型列表"]
-            API_GENERATE["/api/generate<br/>文字生成"]
-            API_EMBED["/api/embed<br/>向量嵌入"]
-        end
-    end
-
-    OLLAMA_SERVER --> MODEL_DIR
-    MODEL_DIR --> NOMIC
-    MODEL_DIR --> USER_MODEL
-    OLLAMA_SERVER --> API_TAGS
-    OLLAMA_SERVER --> API_GENERATE
-    OLLAMA_SERVER --> API_EMBED
-
-    style OLLAMA_SERVER fill:#fce4ec
-    style NOMIC fill:#f8bbd9
-```
-
 ## 資料流
 
 ### AI 對話流程
@@ -248,7 +200,6 @@ flowchart LR
 graph TB
     subgraph "Host Network"
         HOST_PORT_8000[":8000 OpenChamber UI"]
-        HOST_PORT_11434[":11434 Ollama API"]
     end
 
     subgraph "Docker Bridge Network"
@@ -256,23 +207,15 @@ graph TB
             CONTAINER_3000["3000 OpenChamber<br/>Web Server"]
             CONTAINER_4095["4095 OpenCode<br/>API Server"]
         end
-
-        subgraph "ollama"
-            CONTAINER_11434["11434 Ollama API"]
-        end
     end
 
     HOST_PORT_8000 -->|"映射"| CONTAINER_3000
-    HOST_PORT_11434 -->|"映射"| CONTAINER_11434
     
     CONTAINER_3000 -->|"WebSocket/SSE"| CONTAINER_4095
-    CONTAINER_4095 -->|"API"| CONTAINER_11434
 
     style HOST_PORT_8000 fill:#f3e5f5
-    style HOST_PORT_11434 fill:#e8eaf6
     style CONTAINER_3000 fill:#f3e5f5
     style CONTAINER_4095 fill:#e3f2fd
-    style CONTAINER_11434 fill:#fce4ec
 ```
 
 ### 環境變數配置
@@ -280,8 +223,6 @@ graph TB
 | 變數 | 用途 | 預設值 | 範圍 |
 |------|------|--------|------|
 | `CHAMBER_PORT` | Web UI 埠號 | 8000 | 主機 |
-| `OLLAMA_PORT` | Ollama API 埠號 | 11434 | 主機 |
-| `OLLAMA_BASE_URL` | Ollama 內部 URL | `http://ollama:11434` | 容器網路 |
 | `OPENCODE_SERVER_PASSWORD` | API 認證 | `devonly` | 應用層 |
 | `OPENCHAMBER_UI_PASSWORD` | Web UI 認證 | `chamber` | 應用層 |
 
@@ -298,7 +239,6 @@ graph TB
         VOL_CACHE["opencode-cache<br/>快取"]
         VOL_OHMY["ohmyopencode-cache<br/>插件快取"]
         VOL_CHAMBER["openchamber-data<br/>UI 設定"]
-        VOL_OLLAMA["ollama-data<br/>模型檔案"]
         VOL_GIT["git-config<br/>Git 設定"]
         VOL_SSH["ssh-keys<br/>SSH 金鑰"]
         VOL_GH["gh-config<br/>GitHub CLI 設定"]
@@ -315,7 +255,6 @@ graph TB
         C_CACHE["~/.cache/opencode"]
         C_OHMY["~/.cache/oh-my-opencode"]
         C_CHAMBER["~/.config/openchamber"]
-        O_OLLAMA["/root/.ollama"]
         C_GIT["~/.config/git<br/>~/.gitconfig"]
         C_SSH["~/.ssh"]
         C_GH["~/.config/gh"]
@@ -327,7 +266,6 @@ graph TB
     VOL_CACHE --> C_CACHE
     VOL_OHMY --> C_OHMY
     VOL_CHAMBER --> C_CHAMBER
-    VOL_OLLAMA --> O_OLLAMA
     VOL_GIT --> C_GIT
     VOL_SSH --> C_SSH
     VOL_GH --> C_GH
@@ -336,7 +274,6 @@ graph TB
 
     style VOL_WS fill:#fff3e0
     style VOL_DATA fill:#e3f2fd
-    style VOL_OLLAMA fill:#fce4ec
     style VOL_GIT fill:#e8f5e9
     style VOL_SSH fill:#e8f5e9
     style VOL_GH fill:#e8f5e9
@@ -353,7 +290,6 @@ graph TB
 | SSH 金鑰 | ssh-keys | 重要 | 包含 known_hosts |
 | GitHub CLI 設定 | gh-config | 重要 | 包含主機認證、快取 |
 | 快取資料 | opencode-cache | 可重建 | 不需備份 |
-| AI 模型 | ollama-data | 可重建 | 不需備份 |
 | UI 設定 | openchamber-data | 一般 | 不需備份 |
 | lean-ctx 向量索引/知識庫 | lean-ctx-data | 重要 | 包含 sessions, vectors, graphs, knowledge |
 | lean-ctx 事件日誌/狀態 | lean-ctx-state | 一般 | 包含 events, journal, agent keys |
@@ -365,15 +301,9 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant D as Docker Compose
-    participant O as ollama
     participant I as init scripts
     participant A as ai-dev
 
-    D->>O: 啟動 ollama 容器
-    O->>O: 啟動 ollama 服務
-    O->>O: 拉取 nomic-embed-text 模型
-    O->>D: 健康檢查通過
-    
     D->>A: 啟動 ai-dev 容器
     A->>I: 執行 entrypoint.d 腳本
     
@@ -444,16 +374,6 @@ flowchart LR
 | 前端框架 | React (Tauri for desktop) |
 
 > 📝 **架構說明**：OpenChamber 並非 OpenCode 的一部分，而是獨立的專案（[openchamber/openchamber](https://github.com/openchamber/openchamber)）。它作為客戶端，透過 `@opencode-ai/sdk/v2` 連線至 OpenCode 伺服器，可選擇本地自動啟動或連線至遠端伺服器。
-
-### Ollama
-
-| 屬性 | 說明 |
-|------|------|
-| 功能 | 本地 LLM 推論引擎 |
-| 版本 | latest |
-| 模型儲存 | `/root/.ollama/` |
-| API 埠號 | 11434 |
-| 預設模型 | nomic-embed-text (嵌入) |
 
 ### 開發工具鏈
 

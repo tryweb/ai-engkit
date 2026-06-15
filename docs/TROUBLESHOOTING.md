@@ -8,7 +8,6 @@
 - [容器問題](#容器問題)
 - [網路連線問題](#網路連線問題)
 - [權限問題](#權限問題)
-- [Ollama 問題](#ollama-問題)
 - [Web UI 問題](#web-ui-問題)
 - [效能問題](#效能問題)
 - [資料問題](#資料問題)
@@ -154,37 +153,6 @@ docker compose up -d
 sudo ufw allow 8000/tcp
 ```
 
-### Ollama 連線失敗
-
-```mermaid
-sequenceDiagram
-    participant A as ai-dev
-    participant O as ollama
-    participant N as Docker Network
-
-    A->>N: 解析 ollama 主機名
-    N->>O: 連線到 11434 埠號
-    alt 連線成功
-        O-->>A: 回應
-    else 連線失敗
-        A->>A: 檢查 OLLAMA_BASE_URL
-        A->>O: 檢查 ollama 容器狀態
-        O-->>A: 容器不存在或未就緒
-    end
-```
-
-```bash
-# 檢查 Ollama 容器
-docker compose ps ollama
-docker compose logs ollama
-
-# 測試 Ollama API
-docker exec ollama curl -s http://localhost:11434/api/tags
-
-# 檢查環境變數
-docker exec ai-dev env | grep OLLAMA
-```
-
 ## 權限問題
 
 ### 權限錯誤診斷圖
@@ -300,65 +268,6 @@ docker exec ai-dev docker ps
 # 如果無權限，將 devuser 加入 docker 群組
 docker exec -u root ai-dev usermod -aG docker devuser
 docker compose restart ai-dev
-```
-
-## Ollama 問題
-
-### 模型下載失敗
-
-```mermaid
-flowchart TD
-    A["模型下載失敗"] --> B{"錯誤原因"}
-    
-    B --> C["網路問題"]
-    B --> D["磁碟空間不足"]
-    B --> E["模型不存在"]
-    
-    C --> F{"測試連線"}
-    F -->|"成功"| G["重試下載"]
-    F -->|"失敗"| H["設定代理或鏡像"]
-    
-    D --> I["清理快取"]
-    I --> J["docker system prune"]
-    
-    E --> K["確認模型名稱"]
-    K --> L["ollama list<br/>查看可用模型"]
-    
-    style A fill:#ffcccc
-    style G fill:#ccffcc
-    style H fill:#ffffcc
-    style I fill:#ffffcc
-    style L fill:#ccffcc
-```
-
-```bash
-# 檢查 Ollama 狀態
-docker compose logs ollama
-
-# 列出已下載模型
-docker exec ollama ollama list
-
-# 手動下載模型
-docker exec ollama ollama pull nomic-embed-text
-
-# 檢查磁碟空間
-docker exec ollama df -h /root/.ollama
-```
-
-### Ollama 記憶體不足
-
-```bash
-# 檢查可用記憶體
-free -h
-
-# 設定較小的模型
-# 在 .env 中調整
-echo "OLLAMA_MODEL=qwen2:0.5b" >> .env
-
-# 或設定記憶體限制
-# 在 docker-compose.yml 中加入
-# environment:
-#   - OLLAMA_MAX_LOADED_MB=2048
 ```
 
 ## Web UI 問題
@@ -540,7 +449,6 @@ graph LR
 docker compose logs -f
 
 # 查看特定服務日誌
-docker compose logs ollama
 docker compose logs ai-dev
 
 # 查看最近日誌

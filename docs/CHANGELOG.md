@@ -207,7 +207,7 @@
 
 ### 修復
 - 移除 `entrypoint.sh` 中的 `sg docker` 包裝，解決環境變數繼承問題
-  - 此問題導致 `memory_stats` 等 tool 回報 "ollama embedding service appears to be offline"
+  - 此問題導致 `memory_stats` 等 tool 回報 embedding service 離線錯誤
 - 新增 `entrypoint.d/02-init-config.sh` 中的 stale plugin cache 清理機制
 - `docker-compose.dev.yml` hardcode plugins 避免 host shell 污染環境變數
 - 修正 `.env.example` 中的 plugin 名稱 (`oh-my-opencode` → `oh-my-openagent`)
@@ -274,7 +274,7 @@
 - OpenCode 版本降級至 1.3.7 (相容 lancedb-opencode-pro)
 - OpenChamber 版本升級至 1.9.4
 - 修正 docker-compose 命令相容性問題
-- 修正 release-memory-test.sh 容器名稱 (codeforge-dev, ollama-dev)
+- 修正 release-memory-test.sh 容器名稱
 
 ### 修復
 - 修正 Memory plugin 在 OpenCode 1.3.7 下的初始化問題
@@ -317,7 +317,7 @@
 - 基於 Ubuntu 24.04 的 Docker 開發環境
 - 整合 OpenCode AI 程式碼助手 (v1.3.13)
 - 整合 OpenChamber Web UI (v1.9.3)
-- 整合 Ollama 本地 LLM 推論引擎
+- 整合本地 LLM 推論引擎（已移除）
 - 支援 LanceDB 向量搜尋插件
 - 內建 GitHub CLI
 - 完整的開發工具鏈（git, python, tmux, jq 等）
@@ -326,7 +326,7 @@
 - 整合測試套件（39 個測試項目）
 
 ### 架構
-- 雙容器設計（ai-dev + ollama）
+- 雙容器設計（ai-dev + LLM 推論容器，後已移除）
 - Docker named volumes 資料持久化
 - 支援 bind mount 本地開發模式
 - 健康檢查與自動重啟

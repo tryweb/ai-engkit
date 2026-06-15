@@ -192,7 +192,7 @@ docker inspect ai-dev --format '{{.HostConfig.CapAdd}}'
 
 ### 5. 映像檔安全
 
-- 使用官方映像檔（`ollama/ollama:latest`、`ubuntu:24.04`）
+- 使用官方映像檔（`ubuntu:24.04`）
 - CI 已整合 Grype 漏洞掃描
 - 定期更新至最新版本
 

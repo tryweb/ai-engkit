@@ -199,7 +199,7 @@ docker compose -f docker-compose.dev.yml exec ai-dev bash
 
 例如：
 feat(docker): 新增 GPU 支援
-fix(ollama): 修正模型下載超時問題
+fix(core): 修正記憶體洩漏問題
 docs(security): 新增安全政策文件
 ```
 
