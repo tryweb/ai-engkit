@@ -106,6 +106,10 @@ RUN bun install -g @colbymchenry/codegraph
 # ── LeanCTX — AI 代理的認知上下文層 ──────────────────
 RUN curl -fsSL https://leanctx.com/install.sh | sh
 
+# lean-ctx 3.8.5+ XDG shell env — 讓 ctx_shell / bash -c 自動載入 lean-ctx 環境
+ENV BASH_ENV="/home/${USERNAME}/.config/lean-ctx/env.sh"
+ENV CLAUDE_ENV_FILE="/home/${USERNAME}/.config/lean-ctx/env.sh"
+
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
 RUN rm -rf ~/.bun/install/cache && \
@@ -165,8 +169,11 @@ RUN mkdir -p /opt/opencode/baked-plugins && \
 RUN mkdir -p \
     /home/${USERNAME}/workspace \
     /home/${USERNAME}/.local/share/opencode \
+    /home/${USERNAME}/.local/share/lean-ctx \
     /home/${USERNAME}/.local/bin \
     /home/${USERNAME}/.local/state \
+    /home/${USERNAME}/.local/state/lean-ctx \
+    /home/${USERNAME}/.cache/lean-ctx \
     /home/${USERNAME}/.ssh && \
     chmod 700 /home/${USERNAME}/.ssh && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.local
@@ -190,6 +197,8 @@ WORKDIR /home/${USERNAME}/workspace
 VOLUME [ \
     "/home/${USERNAME}/workspace", \
     "/home/${USERNAME}/.local/share/opencode", \
+    "/home/${USERNAME}/.local/share/lean-ctx", \
+    "/home/${USERNAME}/.local/state/lean-ctx", \
     "/home/${USERNAME}/.config/opencode", \
     "/home/${USERNAME}/.cache/opencode", \
     "/home/${USERNAME}/.cache/oh-my-opencode", \

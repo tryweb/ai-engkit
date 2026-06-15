@@ -77,6 +77,17 @@ link_superpowers_skills() {
   [ "$linked" -gt 0 ]
 }
 
+# --- lean-ctx XDG migration (v3.8.5+) ---
+# Detect legacy single-dir layout (~/.config/lean-ctx with data files)
+# and migrate to XDG split (config→XDG_CONFIG_HOME, data→XDG_DATA_HOME, …).
+# The migration is crash-safe (atomic rename, idempotent, no clobber).
+if command -v lean-ctx &>/dev/null; then
+  if [ -d "$HOME/.config/lean-ctx/sessions" ] || [ -d "$HOME/.config/lean-ctx/vectors" ]; then
+    echo "Detected legacy lean-ctx single-dir layout; migrating to XDG Base Directory..."
+    lean-ctx doctor --fix 2>/dev/null || true
+  fi
+fi
+
 # --- OpenCode config ---
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"

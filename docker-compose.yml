@@ -34,6 +34,8 @@ services:
     volumes:
       - workspace:/home/devuser/workspace
       - opencode-data:/home/devuser/.local/share/opencode
+      - lean-ctx-data:/home/devuser/.local/share/lean-ctx
+      - lean-ctx-state:/home/devuser/.local/state/lean-ctx
       - opencode-config:/home/devuser/.config/opencode
       - opencode-cache:/home/devuser/.cache/opencode
       - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode
@@ -60,6 +62,8 @@ services:
 volumes:
   workspace:
   opencode-data:
+  lean-ctx-data:
+  lean-ctx-state:
   opencode-config:
   opencode-cache:
   ohmyopencode-cache:
