@@ -13,6 +13,7 @@ A self-hosted AI development environment powered by [OpenCode](https://opencode.
 - **OpenSpec** — Spec-driven development tooling
 - **GitHub CLI** — Built-in `gh` (GitHub) and `glab` (GitLab) for repository management
 - **CodeGraph** — Knowledge graph tool for mapping codebases (`@colbymchenry/codegraph` package, command: `codegraph`)
+- **leanCTX** — Context Engineering Layer with intelligent `ctx_*` commands for efficient codebase navigation
 - **Superpowers** — Agentic skills framework for software development methodology
 - **Full Dev Toolchain** — git, jq, tree, tmux, python3, ssh, rsync, and more
 - **Persistent Configuration** — All settings and data survive container restarts
@@ -84,6 +85,37 @@ This allows you to edit files with your local IDE while the container runs.
 | `opencode-cache` | `/home/devuser/.cache/opencode` | Model metadata, plugin cache |
 | `openchamber-data` | `/home/devuser/.config/openchamber` | OpenChamber settings, themes |
 | `workspace` | `/home/devuser/workspace` | Project workspace |
+| `lean-ctx-data` | `/home/devuser/.local/share/lean-ctx` | Vector index, knowledge base, sessions |
+| `lean-ctx-state` | `/home/devuser/.local/state/lean-ctx` | Event logs, journal, agent keys |
+
+## leanCTX — Context Engineering Layer
+
+[leanCTX](https://github.com/neilotoole/lean-ctx) is a context engineering tool integrated as an MCP server in OpenCode. It provides intelligent `ctx_*` commands for efficient codebase navigation, replacing traditional read/search/shell workflows:
+
+| Instead of | Use |
+|------------|-----|
+| `cat` / `head` / `tail` | `ctx_read(path, mode)` |
+| `grep` / `rg` / `find` | `ctx_search(pattern, path)` |
+| `bash` / `shell` | `ctx_shell(command)` |
+
+**Key capabilities:**
+- **Smart file reading** — Full, diff, signatures, map, and region modes with automatic caching
+- **Code search** — Regex search with `.gitignore` awareness
+- **Code graph** — Dependency analysis, symbol relationships, impact/blast radius, Mermaid diagrams
+- **Session management** — Cross-session memory with task/finding/decision tracking
+- **Knowledge persistence** — Store and recall project facts, patterns, and gotchas across sessions
+- **External providers** — Query GitHub, GitLab, Jira directly from context
+
+### Data Persistence
+
+leanCTX maintains two named volumes separate from the project workspace:
+
+| Volume | Path | Content |
+|--------|------|---------|
+| `lean-ctx-data` | `~/.local/share/lean-ctx` | Vector index, knowledge embeddings, code graphs, sessions |
+| `lean-ctx-state` | `~/.local/state/lean-ctx` | Event logs, journals, agent key material |
+
+Both volumes survive container restarts. The data volume contains critical knowledge artifacts (sessions, vectors, graphs) and should be backed up regularly.
 
 ## Git Authentication
 
