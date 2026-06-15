@@ -218,21 +218,6 @@ if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   fi
 fi
 
-OPENCODE_DIR="$HOME/.opencode"
-mkdir -p "$OPENCODE_DIR"
-LANCEDB_SIDECAR="$OPENCODE_DIR/lancedb-opencode-pro.json"
-OLLAMA_URL="${LANCEDB_OPENCODE_PRO_OLLAMA_BASE_URL:-${OLLAMA_BASE_URL:-http://localhost:11434}}"
-EMBED_PROVIDER="${LANCEDB_OPENCODE_PRO_EMBEDDING_PROVIDER:-ollama}"
-EMBED_MODEL="${LANCEDB_OPENCODE_PRO_EMBEDDING_MODEL:-nomic-embed-text}"
-
-jq -n \
-  --arg ollama_url "$OLLAMA_URL" \
-  --arg provider "$EMBED_PROVIDER" \
-  --arg model "$EMBED_MODEL" \
-  '{embedding: {provider: $provider, model: $model, baseUrl: $ollama_url}}' \
-  > "$LANCEDB_SIDECAR"
-echo "Updated: $LANCEDB_SIDECAR"
-
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
 LANCEDB_PLUGIN_DIR="$OPENCODE_CACHE_PKG/lancedb-opencode-pro@latest"
 if [ -d "$LANCEDB_PLUGIN_DIR" ]; then

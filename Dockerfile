@@ -204,8 +204,7 @@ VOLUME [ \
     "/home/${USERNAME}/.cache/oh-my-opencode", \
     "/home/${USERNAME}/.config/openchamber", \
     "/home/${USERNAME}/.ssh", \
-    "/home/${USERNAME}/.config/git", \
-    "/home/${USERNAME}/.ollama" \
+    "/home/${USERNAME}/.config/git" \
 ]
 
 EXPOSE 3000 4095
