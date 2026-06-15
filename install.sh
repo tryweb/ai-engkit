@@ -67,7 +67,7 @@ check_system() {
             echo "     - AVX2 未支援 (lancedb prebuilt binary 需要)"
         fi
         echo ""
-        echo "  這些指令集為 opencode + lancedb-opencode-pro 的必要條件。"
+        echo "  這些指令集為 opencode 的必要條件。"
         echo "  常見不支援的環境: 舊型 CPU、部分雲端 VM (t2.micro 等)、QEMU 預設模式"
         echo "  建議: 使用支援 AVX2 的機器 (Intel Haswell 2013+ / AMD Excavator 2015+)"
         exit 1

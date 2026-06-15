@@ -141,7 +141,7 @@
 
 ### 變更
 - `.env.example` 預設 plugins 改為 `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git`
-- 移除 `lancedb-opencode-pro` 相關 release 測試（插件已不再使用）
+- 移除舊版 release 測試（插件已不再使用）
 
 ## [0.7.1] - 2026-05-04
 
@@ -158,7 +158,7 @@
 - 新增 graphify 和 superpowers 驗證測試至 run-tests.sh
 
 ### 變更
-- 移除 lancedb-opencode-pro plugin（導致 release test 失敗）
+- 移除舊版 plugin（導致 release test 失敗）
 
 ## [0.6.2] - 2026-04-25
 
@@ -271,7 +271,7 @@
 - README.md 新增版本徽章
 
 ### 變更
-- OpenCode 版本降級至 1.3.7 (相容 lancedb-opencode-pro)
+- OpenCode 版本降級至 1.3.7
 - OpenChamber 版本升級至 1.9.4
 - 修正 docker-compose 命令相容性問題
 - 修正 release-memory-test.sh 容器名稱

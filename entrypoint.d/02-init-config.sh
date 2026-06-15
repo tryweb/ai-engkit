@@ -218,20 +218,4 @@ if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   fi
 fi
 
-OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
-LANCEDB_PLUGIN_DIR="$OPENCODE_CACHE_PKG/lancedb-opencode-pro@latest"
-if [ -d "$LANCEDB_PLUGIN_DIR" ]; then
-  echo "Testing LanceDB plugin initialization..."
-  cd "$LANCEDB_PLUGIN_DIR"
-  TEST_OUTPUT=$(bun -e "try { const lancedb = require('@lancedb/lancedb'); console.log('LanceDB: OK'); } catch(e) { console.error('LanceDB: ERROR', e.message); process.exit(1); }" 2>&1)
-  echo "$TEST_OUTPUT"
-  if echo "$TEST_OUTPUT" | grep -q "OK"; then
-    echo "LanceDB plugin validated successfully"
-    echo "Pre-loading native bindings for OpenCode..."
-    bun -e "require('@lancedb/lancedb-linux-x64-gnu')" 2>/dev/null || true
-  else
-    echo "Warning: LanceDB validation failed, but continuing..."
-  fi
-fi
-
 echo "Default configs initialized"

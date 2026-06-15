@@ -107,7 +107,7 @@ graph TB
         
         subgraph "應用層"
             OC_SERVER["OpenCode Server"]
-            OC_PLUGINS["插件系統<br/>oh-my-opencode<br/>lancedb-opencode-pro"]
+            OC_PLUGINS["插件系統<br/>oh-my-openagent"]
             CH_SERVER["OpenChamber Server"]
         end
 
@@ -422,7 +422,6 @@ graph LR
 | 插件 | 功能 | 說明 | 版本管理 |
 |------|------|------|----------|
 | `oh-my-openagent` | 核心框架 | OpenCode 基礎功能擴展 | 支援 build 時指定版本 |
-| `lancedb-opencode-pro` | 向量搜尋 | 基於 LanceDB 的程式碼索引 | 支援 build 時指定版本 |
 
 ### Plugin 版本管理（開發用）
 
