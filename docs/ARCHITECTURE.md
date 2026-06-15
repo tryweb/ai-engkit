@@ -160,7 +160,7 @@ sequenceDiagram
     participant API as OpenCode API
     participant OC as OpenCode Engine
     participant DB as 資料庫
-    participant OL as Ollama
+    participant OL as LLM-Model
 
     U->>UI: 輸入提示詞
     UI->>API: WebSocket/SSE 請求
@@ -174,22 +174,6 @@ sequenceDiagram
     OC-->>API: SSE 回應
     API-->>UI: SSE 回應
     UI-->>U: 顯示結果
-```
-
-### 嵌入向量流程（LanceDB）
-
-```mermaid
-flowchart LR
-    A["文件/程式碼"] --> B["文本分割"]
-    B --> C["嵌入模型<br/>nomic-embed-text"]
-    C --> D["向量資料庫<br/>LanceDB"]
-    D --> E["語意搜尋"]
-    E --> F["上下文注入"]
-    F --> G["LLM 生成"]
-
-    style A fill:#e8f5e9
-    style D fill:#e3f2fd
-    style G fill:#fff3e0
 ```
 
 ## 網路架構
