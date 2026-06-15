@@ -302,11 +302,15 @@ graph TB
         VOL_GIT["git-config<br/>Git 設定"]
         VOL_SSH["ssh-keys<br/>SSH 金鑰"]
         VOL_GH["gh-config<br/>GitHub CLI 設定"]
+        VOL_LC_DATA["lean-ctx-data<br/>向量索引/知識庫"]
+        VOL_LC_STATE["lean-ctx-state<br/>事件日誌"]
     end
 
     subgraph "容器路徑"
         C_WS["~/workspace"]
         C_DATA["~/.local/share/opencode"]
+        C_LC_DATA["~/.local/share/lean-ctx"]
+        C_LC_STATE["~/.local/state/lean-ctx"]
         C_CONFIG["~/.config/opencode"]
         C_CACHE["~/.cache/opencode"]
         C_OHMY["~/.cache/oh-my-opencode"]
@@ -327,6 +331,8 @@ graph TB
     VOL_GIT --> C_GIT
     VOL_SSH --> C_SSH
     VOL_GH --> C_GH
+    VOL_LC_DATA --> C_LC_DATA
+    VOL_LC_STATE --> C_LC_STATE
 
     style VOL_WS fill:#fff3e0
     style VOL_DATA fill:#e3f2fd
@@ -349,6 +355,8 @@ graph TB
 | 快取資料 | opencode-cache | 可重建 | 不需備份 |
 | AI 模型 | ollama-data | 可重建 | 不需備份 |
 | UI 設定 | openchamber-data | 一般 | 不需備份 |
+| lean-ctx 向量索引/知識庫 | lean-ctx-data | 重要 | 包含 sessions, vectors, graphs, knowledge |
+| lean-ctx 事件日誌/狀態 | lean-ctx-state | 一般 | 包含 events, journal, agent keys |
 
 ## 啟動流程
 

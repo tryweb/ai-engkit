@@ -6,9 +6,18 @@
 
 ## [Unreleased]
 
+### 新增
+- feat: lean-ctx XDG Base Directory 支援 (v3.8.5+)
+  - Dockerfile: 新增 `BASH_ENV` / `CLAUDE_ENV_FILE` 讓 bash 自動載入 lean-ctx 環境
+  - Dockerfile: 預建 `~/.local/share/lean-ctx`, `~/.local/state/lean-ctx`, `~/.cache/lean-ctx` 目錄
+  - Dockerfile: 新增 `lean-ctx-data` / `lean-ctx-state` VOLUMEs 確保存留向量索引、知識庫、sessions
+  - docker-compose.yml / dev.yml: 新增 `lean-ctx-data` / `lean-ctx-state` named volumes
+  - entrypoint.d/00-fix-perms.sh: 新增 lean-ctx 目錄的權限修復
+  - entrypoint.d/02-init-config.sh: 自動偵測舊版 single-dir 佈局並執行 `lean-ctx doctor --fix` 遷移
+  - docs/ARCHITECTURE.md: 新增 lean-ctx volumes 至架構圖與持久化策略表
+
 ## [0.11.9] - 2026-06-14
 - update apt packages
-
 
 ## [0.11.8] - 2026-06-14
 - update apt packages
