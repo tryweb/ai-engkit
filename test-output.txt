@@ -14,7 +14,7 @@
 
 --- Versions ---
   [0;32mPASS[0m opencode version (1.17.7)
-  [0;32mPASS[0m openchamber version (1.12.4)
+  [0;32mPASS[0m openchamber version (1.13.0)
   [0;32mPASS[0m openspec installed (1.4.1)
   [0;32mPASS[0m gh CLI installed
 
@@ -76,9 +76,9 @@
   [0;32mPASS[0m node command available at /home/devuser/.bun/bin/node
 
 --- Playwright / Chromium ---
-  [0;32mPASS[0m playwright 1.60.0 CLI works
+  [0;32mPASS[0m playwright 1.61.0 CLI works
   [0;32mPASS[0m @playwright/mcp 0.0.76 CLI works
-  [0;32mPASS[0m chromium binary exists at /ms-playwright/chromium-1223/chrome-linux64/chrome
+  [0;32mPASS[0m chromium binary exists at /ms-playwright/chromium-1228/chrome-linux64/chrome
   [0;32mPASS[0m chromium launches headless successfully
   [0;32mPASS[0m opencode.json @playwright/mcp version matches MCP build arg (0.0.76)
 
