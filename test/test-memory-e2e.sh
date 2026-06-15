@@ -2,7 +2,6 @@
 set -uo pipefail
 
 CONTAINER="${1:-codeforge-dev}"
-OLLAMA_HOST="${2:-ollama-dev}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -21,7 +20,6 @@ TEST_TEXT="E2E_HOOK_TEST_${TEST_TIMESTAMP} - This is a test memory stored via pl
 echo "============================================"
 echo " Memory Plugin E2E Test"
 echo " Container: $CONTAINER"
-echo " Ollama: $OLLAMA_HOST"
 echo " Date: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================"
 
@@ -64,40 +62,7 @@ else
   EXIT_CODE=1
 fi
 
-echo ""
-echo "--- Ollama Service ---"
-OLLAMA_BASE_URL=$(docker exec "$CONTAINER" sh -c 'echo $OLLAMA_BASE_URL' 2>/dev/null || echo "")
-info "OLLAMA_BASE_URL=$OLLAMA_BASE_URL"
 
-OLLAMA_TEST=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r '.models[].name' 2>/dev/null | wc -l" || echo "0")
-if [ "$OLLAMA_TEST" -gt 0 ]; then
-  pass "Ollama is accessible ($OLLAMA_TEST models available)"
-else
-  fail "Ollama is not accessible"
-  EXIT_CODE=1
-fi
-
-EMBED_MODEL=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf http://${OLLAMA_HOST}:11434/api/tags 2>/dev/null | jq -r '.models[].name' 2>/dev/null | grep -q 'nomic-embed-text' && echo 'available' || echo 'not_found'" 2>/dev/null || echo "error")
-if [ "$EMBED_MODEL" = "available" ]; then
-  pass "nomic-embed-text model is available"
-else
-  fail "nomic-embed-text model not found"
-  EXIT_CODE=1
-fi
-
-echo ""
-echo "--- Embedding Test ---"
-EMBED_TEST=$(docker exec "$CONTAINER" sh -c \
-  "curl -sf http://${OLLAMA_HOST}:11434/api/embeddings -d '{\"model\":\"nomic-embed-text\",\"prompt\":\"test\"}' 2>/dev/null | jq -r '.embedding[0] // empty'" 2>/dev/null || echo "")
-
-if [ -n "$EMBED_TEST" ] && [ ${#EMBED_TEST} -gt 5 ]; then
-  pass "Embedding model functional"
-else
-  fail "Embedding model not working"
-  EXIT_CODE=1
-fi
 
 echo ""
 echo "--- Plugin Hook Load Test ---"
@@ -105,7 +70,7 @@ PLUGIN_LOAD=$(docker exec "$CONTAINER" bash -c 'bun -e "
 import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
-    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\" } }; } },
     session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
   },
   project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
@@ -138,7 +103,7 @@ if [ $EXIT_CODE -eq 0 ]; then
 import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
-    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\" } }; } },
     session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
   },
   project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
@@ -172,7 +137,7 @@ if [ $EXIT_CODE -eq 0 ]; then
 import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
-    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\" } }; } },
     session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
   },
   project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
@@ -204,7 +169,7 @@ if [ $EXIT_CODE -eq 0 ]; then
 import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
-    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\" } }; } },
     session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
   },
   project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
@@ -236,7 +201,7 @@ if [ -n "$TEST_MEMORY_ID" ]; then
 import plugin from \"/home/devuser/.cache/opencode/packages/lancedb-opencode-pro@latest/node_modules/lancedb-opencode-pro/dist/index.js\";
 const hooks = await plugin({
   client: {
-    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\", embedding: { provider: \"ollama\", model: \"nomic-embed-text\", baseUrl: \"http://ollama-dev:11434\" } } }; } },
+    config: { get() { return { memory: { provider: \"lancedb-opencode-pro\", dbPath: \"/home/devuser/.opencode/memory/lancedb\" } }; } },
     session: { messages() { return []; }, get() { return { directory: \"/workspace\" }; } },
   },
   project: { id: \"proj-test\", worktree: \"/workspace\", vcs: \"git\", time: { created: Date.now() } },
@@ -268,7 +233,6 @@ if [ $EXIT_CODE -eq 0 ]; then
   echo "Verified:"
   echo "  - opencode CLI available"
   echo "  - Plugin configured correctly"
-  echo "  - Ollama embedding model functional"
   echo "  - Plugin hooks loaded successfully"
   echo "  - memory_remember tool executed"
   echo "  - memory_search found stored memory"
