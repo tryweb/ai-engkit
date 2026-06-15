@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-15
+
 ### 新增
 - feat: lean-ctx XDG Base Directory 支援 (v3.8.5+)
   - Dockerfile: 新增 `BASH_ENV` / `CLAUDE_ENV_FILE` 讓 bash 自動載入 lean-ctx 環境
@@ -15,6 +17,10 @@
   - entrypoint.d/00-fix-perms.sh: 新增 lean-ctx 目錄的權限修復
   - entrypoint.d/02-init-config.sh: 自動偵測舊版 single-dir 佈局並執行 `lean-ctx doctor --fix` 遷移
   - docs/ARCHITECTURE.md: 新增 lean-ctx volumes 至架構圖與持久化策略表
+
+### 移除
+- 移除 Ollama 本地 LLM 推論引擎（docker-compose, Dockerfile, entrypoint, docs, tests）
+- 移除 lancedb-opencode-pro OpenCode plugin（entrypoint, tests, docs）
 
 ## [0.11.9] - 2026-06-14
 - update apt packages
