@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-06-16
+- update LEANCTX_VERSION to v3.8.7
+
+
 ## [0.12.0] - 2026-06-15
 
 ### 新增
