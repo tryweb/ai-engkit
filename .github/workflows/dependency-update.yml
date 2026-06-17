@@ -572,39 +572,9 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Create Pull Request
-        if: steps.decision.outputs.action == 'create-pr'
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: chore/update-dockerfile-versions-${{ steps.branch-date.outputs.date }}
-          commit-message: "chore: update Dockerfile pinned versions"
-          title: "chore: update Dockerfile pinned versions"
-          body: |
-            ## Dependency Version Updates
-
-            This PR updates pinned versions in the Dockerfile:
-
-            ${{ steps.update-dockerfile.outputs.summary }}
-
-            ### Test Results
-            Integration tests passed on the updated image.
-
-            ### Latest Package Changes
-            ${{ needs.check-versions.outputs.latest-updates }}
-
-            ### APT Updates
-            ${{ needs.check-versions.outputs.apt-updates }}
-
-            ---
-            *Generated automatically by the Dependency Update workflow*
-          labels: |
-            dependencies
-            automated
-
       # ===== Auto-Release Path: latest/apt changes only =====
       - name: Determine next version
-        if: steps.decision.outputs.action == 'auto-release'
+        if: steps.decision.outputs.action == 'create-pr' || steps.decision.outputs.action == 'auto-release'
         id: version
         run: |
           set -euo pipefail
@@ -620,7 +590,7 @@ jobs:
           echo "::notice::Version bump: $LATEST_TAG -> $NEXT_VERSION"
 
       - name: Extract current package versions
-        if: steps.decision.outputs.action == 'auto-release'
+        if: steps.decision.outputs.action == 'create-pr' || steps.decision.outputs.action == 'auto-release'
         id: pkg-versions
         run: |
           set -euo pipefail
@@ -639,7 +609,7 @@ jobs:
           echo "chamber-version=$CHAMBER_VER" >> "$GITHUB_OUTPUT"
 
       - name: Update README badges
-        if: steps.decision.outputs.action == 'auto-release'
+        if: steps.decision.outputs.action == 'create-pr' || steps.decision.outputs.action == 'auto-release'
         run: |
           set -euo pipefail
           OPENCODE_VER="${{ steps.pkg-versions.outputs.opencode-version }}"
@@ -653,7 +623,7 @@ jobs:
           fi
 
       - name: Update CHANGELOG
-        if: steps.decision.outputs.action == 'auto-release'
+        if: steps.decision.outputs.action == 'create-pr' || steps.decision.outputs.action == 'auto-release'
         run: |
           set -euo pipefail
           NEXT_VERSION="${{ steps.version.outputs.next-version }}"
@@ -665,54 +635,162 @@ jobs:
             exit 0
           fi
 
-          # Build change summary
+          PINNED_UPDATES='${{ needs.check-versions.outputs.pinned-updates }}'
           LATEST_UPDATES='${{ needs.check-versions.outputs.latest-updates }}'
           APT_UPDATES='${{ needs.check-versions.outputs.apt-updates }}'
 
-          CHANGES=""
-          if [[ "$LATEST_UPDATES" != "[]" && -n "$LATEST_UPDATES" ]]; then
-            while IFS= read -r item; do
-              name="$(echo "$item" | jq -r '.name')"
-              current="$(echo "$item" | jq -r '.current')"
-              CHANGES="${CHANGES}\n- update ${name} to ${current}"
-            done < <(echo "$LATEST_UPDATES" | jq -c '.[]' 2>/dev/null || true)
-          fi
-          if [[ "$APT_UPDATES" != "All packages are up to date" ]]; then
-            CHANGES="${CHANGES}\n- update apt packages"
-          fi
+          python3 - "$CHANGELOG" "$NEXT_VERSION" "$TODAY" "$PINNED_UPDATES" "$LATEST_UPDATES" "$APT_UPDATES" <<'PYEOF'
+          import json
+          import re
+          import sys
 
-          if [[ -z "$CHANGES" ]]; then
-            CHANGES="\n- dependency updates (apt packages)"
-          fi
+          changelog_path, version, date, pinned_raw, latest_raw, apt_updates = sys.argv[1:7]
+          version_no_v = version.lstrip('v')
+          repo = 'https://github.com/tryweb/Codeforge'
 
-          # Insert new version section after [Unreleased]
-          python3 - "$CHANGELOG" "$NEXT_VERSION" "$TODAY" "$CHANGES" <<'PYEOF'
-          import sys, re
+          def parse_items(raw):
+              try:
+                  data = json.loads(raw)
+              except Exception:
+                  return []
+              return data if isinstance(data, list) else []
 
-          changelog_path = sys.argv[1]
-          version = sys.argv[2]
-          date = sys.argv[3]
-          changes = sys.argv[4].replace('\\n', '\n')
+          def normalize_name(name):
+              mapping = {
+                  'DOCKER_VERSION': 'Docker Engine',
+                  'COMPOSE_VERSION': 'Docker Compose',
+                  'BUILDX_VERSION': 'Docker Buildx',
+                  'OPENCODE_VERSION': 'OpenCode',
+                  'OPENCHAMBER_VERSION': 'OpenChamber',
+                  'PLAYWRIGHT_VERSION': 'Playwright',
+                  'PLAYWRIGHT_MCP_VERSION': '@playwright/mcp',
+                  'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
+                  'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
+                  'LEANCTX_VERSION': 'lean-ctx',
+              }
+              return mapping.get(name, name)
 
-          with open(changelog_path, 'r') as f:
-              content = f.read()
+          pinned_updates = parse_items(pinned_raw)
+          latest_updates = parse_items(latest_raw)
+          bullets = []
 
-          unreleased_pattern = r'(## \[Unreleased\].*?\n)'
-          new_section = f'\n## [{version.lstrip("v")}] - {date}\n{changes.strip()}\n'
+          for item in pinned_updates:
+              current = item.get('current')
+              latest = item.get('latest')
+              if current and latest:
+                  bullets.append(f"- 升級 {normalize_name(item.get('name', '相依套件'))} {current} → {latest}")
 
-          if re.search(unreleased_pattern, content):
-              content = re.sub(
-                  unreleased_pattern,
-                  r'\1' + new_section + '\n',
-                  content,
-                  count=1
-              )
+          for item in latest_updates:
+              current = item.get('current')
+              previous = item.get('previous')
+              display = normalize_name(item.get('name', '追蹤版本'))
+              if current and previous and previous != 'missing':
+                  bullets.append(f"- 更新 {display} 最新追蹤版本 {previous} → {current}")
+              elif current:
+                  bullets.append(f"- 記錄 {display} 最新追蹤版本為 {current}")
+
+          if apt_updates != 'All packages are up to date':
+              bullets.append(f"- 更新 Ubuntu 24.04 APT 套件快照（{apt_updates}）")
+
+          if not bullets:
+              bullets.append('- 維護相依套件版本與發行記錄')
+
+          new_section = "\n".join([
+              f"## [{version_no_v}] - {date}",
+              '',
+              '### 變更',
+              *bullets,
+              '',
+          ])
+
+          with open(changelog_path, 'r', encoding='utf-8') as fh:
+              content = fh.read()
+
+          footer_marker = '\n---\n\n## 版本格式說明'
+          if footer_marker in content:
+              body, footer = content.split(footer_marker, 1)
+              footer = footer_marker + footer
           else:
-              content = f'## [Unreleased]\n\n{new_section}\n{content}'
+              body, footer = content, ''
 
-          with open(changelog_path, 'w') as f:
-              f.write(content)
+          version_block_pattern = re.compile(
+              rf'^## \[{re.escape(version_no_v)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n(?:.*?)(?=^## \[|\Z)',
+              re.MULTILINE | re.DOTALL,
+          )
+          body = re.sub(version_block_pattern, '', body).rstrip() + '\n'
+
+          if '## [Unreleased]' not in body:
+              body = body.rstrip() + '\n\n## [Unreleased]\n'
+
+          unreleased_pattern = re.compile(r'(## \[Unreleased\]\n(?:\n)?)', re.MULTILINE)
+          if unreleased_pattern.search(body):
+              body = unreleased_pattern.sub(lambda m: m.group(1) + '\n' + new_section + '\n', body, count=1)
+          else:
+              body = body.rstrip() + '\n\n## [Unreleased]\n\n' + new_section + '\n'
+
+          body = re.sub(r'\n{3,}', '\n\n', body).rstrip() + '\n'
+
+          footer_without_links = re.sub(
+              r'\n*(?:\[Unreleased\]|\[\d+\.\d+\.\d+\]): https://github\.com/tryweb/Codeforge/[^\n]+',
+              '',
+              footer,
+          ).rstrip()
+
+          versions_desc = re.findall(r'^## \[(\d+\.\d+\.\d+)\] - ', body, re.MULTILINE)
+          versions_asc = list(reversed(versions_desc))
+          links = []
+          if versions_desc:
+              links.append(f'[Unreleased]: {repo}/compare/v{versions_desc[0]}...HEAD')
+              first = versions_asc[0]
+              links.append(f'[{first}]: {repo}/releases/tag/v{first}')
+              previous = first
+              for current in versions_asc[1:]:
+                  links.append(f'[{current}]: {repo}/compare/v{previous}...v{current}')
+                  previous = current
+
+          final_parts = [body.rstrip()]
+          if footer_without_links:
+              final_parts.append(footer_without_links)
+          if links:
+              final_parts.append('\n'.join(links))
+
+          with open(changelog_path, 'w', encoding='utf-8') as fh:
+              fh.write('\n\n'.join(part for part in final_parts if part).rstrip() + '\n')
           PYEOF
+
+      - name: Create Pull Request
+        if: steps.decision.outputs.action == 'create-pr'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/update-dockerfile-versions-${{ steps.branch-date.outputs.date }}
+          commit-message: "chore: update Dockerfile pinned versions"
+          title: "chore: update Dockerfile pinned versions"
+          body: |
+            ## Dependency Version Updates
+
+            This PR updates pinned versions in the Dockerfile and synchronizes release documentation:
+
+            ${{ steps.update-dockerfile.outputs.summary }}
+
+            ### Documentation Updates
+            - README badges synchronized with pinned package versions
+            - CHANGELOG entry prepared for the next patch release
+
+            ### Test Results
+            Integration tests passed on the updated image.
+
+            ### Latest Package Changes
+            ${{ needs.check-versions.outputs.latest-updates }}
+
+            ### APT Updates
+            ${{ needs.check-versions.outputs.apt-updates }}
+
+            ---
+            *Generated automatically by the Dependency Update workflow*
+          labels: |
+            dependencies
+            automated
 
       - name: Commit release changes
         if: steps.decision.outputs.action == 'auto-release'
