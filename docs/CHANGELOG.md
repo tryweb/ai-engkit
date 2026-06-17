@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.12.3] - 2026-06-17
+
+### 變更
+- 升級 OpenChamber 1.13.0 → 1.13.1
+
 ## [0.12.2] - 2026-06-16
 
 ### 變更
@@ -411,8 +416,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.2...HEAD
-[0.12.2]: https://github.com/tryweb/Codeforge/compare/v0.12.1...v0.12.2
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.3...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -456,3 +460,5 @@
 [0.11.10]: https://github.com/tryweb/Codeforge/compare/v0.11.9...v0.11.10
 [0.12.0]: https://github.com/tryweb/Codeforge/compare/v0.11.10...v0.12.0
 [0.12.1]: https://github.com/tryweb/Codeforge/compare/v0.12.0...v0.12.1
+[0.12.2]: https://github.com/tryweb/Codeforge/compare/v0.12.1...v0.12.2
+[0.12.3]: https://github.com/tryweb/Codeforge/compare/v0.12.2...v0.12.3
