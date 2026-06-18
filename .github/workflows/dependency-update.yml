@@ -506,6 +506,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download updated image artifact
         uses: actions/download-artifact@v4
@@ -585,12 +587,28 @@ jobs:
             ' "$input" | sort -u > "$output"
           }
 
-          if [[ -f grype-baseline-results.json ]]; then
-            extract_criticals grype-baseline-results.json baseline-criticals.tsv
-          else
-            : > baseline-criticals.tsv
+          if [[ -z "${{ steps.baseline-tag.outputs.tag }}" ]]; then
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            echo "findings=" >> "$GITHUB_OUTPUT"
+            echo "::warning::No stable release tag found; delta gate skipped."
+            exit 0
           fi
 
+          if [[ "${{ steps.baseline-image.outcome }}" != "success" ]]; then
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            echo "findings=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Baseline image ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }} not available; delta gate skipped."
+            exit 0
+          fi
+
+          if [[ ! -f grype-baseline-results.json ]]; then
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            echo "findings=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Baseline scan results missing; delta gate skipped."
+            exit 0
+          fi
+
+          extract_criticals grype-baseline-results.json baseline-criticals.tsv
           extract_criticals grype-updated-results.json updated-criticals.tsv
           comm -13 baseline-criticals.tsv updated-criticals.tsv > new-criticals.tsv || true
 
@@ -601,12 +619,6 @@ jobs:
             echo "findings=$findings" >> "$GITHUB_OUTPUT"
             echo "::error::New critical findings introduced relative to published baseline: $findings"
             exit 1
-          fi
-
-          if [[ -z "${{ steps.baseline-tag.outputs.tag }}" ]]; then
-            echo "::warning::No stable release tag found; delta gate skipped."
-          elif [[ "${{ steps.baseline-image.outcome }}" != "success" ]]; then
-            echo "::warning::Baseline image ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }} not available; delta gate skipped."
           fi
 
           echo "count=0" >> "$GITHUB_OUTPUT"
