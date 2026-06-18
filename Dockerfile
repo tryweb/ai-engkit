@@ -45,6 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     procps \
     lsof \
+    # GitLab CLI（取代 Homebrew 版本，避免 GO-2026-5026 依賴漏洞）
+    glab \
     # node-gyp / 原生模組編譯所需
     pkg-config \
     libssl-dev \
@@ -94,7 +96,7 @@ ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 
-RUN brew install gh glab
+RUN brew install gh
 
 # ── Bun ────────────────────────────────────────────────
 RUN curl -fsSL https://bun.sh/install | bash
