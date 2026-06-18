@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-06-18
+
+### 變更
+- 升級 Docker Buildx 0.34.1 → 0.35.0
+- 升級 OpenChamber 1.13.1 → 1.13.2
+
 ## [0.12.4] - 2026-06-17
 
 ### 變更
@@ -423,7 +429,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.4...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.5...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -470,3 +476,4 @@
 [0.12.2]: https://github.com/tryweb/Codeforge/compare/v0.12.1...v0.12.2
 [0.12.3]: https://github.com/tryweb/Codeforge/compare/v0.12.2...v0.12.3
 [0.12.4]: https://github.com/tryweb/Codeforge/compare/v0.12.3...v0.12.4
+[0.12.5]: https://github.com/tryweb/Codeforge/compare/v0.12.4...v0.12.5
