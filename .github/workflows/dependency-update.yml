@@ -36,6 +36,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+        with:
+          fetch-depth: 0
 
       - name: Download previous version snapshot
         id: prev-snapshot
@@ -436,6 +438,16 @@ jobs:
           tags: codeforge:updated
           build-args: ${{ steps.build-args.outputs.args }}
 
+      - name: Save updated image artifact
+        run: docker save codeforge:updated -o /tmp/updated-image.tar
+
+      - name: Upload updated image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-image
+          path: /tmp/updated-image.tar
+          retention-days: 7
+
       - name: Start services
         run: |
           set -euo pipefail
@@ -480,11 +492,141 @@ jobs:
         run: docker compose -f docker-compose.dev.yml down -v --remove-orphans || true
 
   # ---------------------------------------------------------------------------
-  # Job 3: Handle updates — PR, auto-release, or issue
+  # Job 3: Scan updated image
+  scan-updated-image:
+    name: Scan Updated Image Delta
+    needs: [check-versions, build-and-test]
+    if: always() && needs.check-versions.outputs.updates-needed == 'true' && needs.build-and-test.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      new-critical-count: ${{ steps.compare.outputs.count }}
+      new-critical-findings: ${{ steps.compare.outputs.findings }}
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download updated image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-image
+          path: /tmp
+
+      - name: Load updated image
+        run: docker load -i /tmp/updated-image.tar
+
+      - name: Determine baseline release tag
+        id: baseline-tag
+        run: |
+          set -euo pipefail
+          BASELINE_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          echo "tag=$BASELINE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Pull baseline release image
+        id: baseline-image
+        if: steps.baseline-tag.outputs.tag != ''
+        continue-on-error: true
+        env:
+          BASELINE_IMAGE: ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }}
+        run: docker pull "$BASELINE_IMAGE"
+
+      - name: Tag baseline image locally
+        if: steps.baseline-tag.outputs.tag != '' && steps.baseline-image.outcome == 'success'
+        env:
+          BASELINE_IMAGE: ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }}
+        run: docker tag "$BASELINE_IMAGE" codeforge:baseline
+
+      - name: Scan baseline image to JSON
+        if: steps.baseline-tag.outputs.tag != '' && steps.baseline-image.outcome == 'success'
+        uses: anchore/scan-action@v7
+        with:
+          image: "codeforge:baseline"
+          output-format: json
+          output-file: grype-baseline-results.json
+          severity-cutoff: critical
+          fail-build: false
+
+      - name: Scan updated image to JSON
+        uses: anchore/scan-action@v7
+        with:
+          image: "codeforge:updated"
+          output-format: json
+          output-file: grype-updated-results.json
+          severity-cutoff: critical
+          fail-build: false
+
+      - name: Run Grype SARIF scan for updated image
+        uses: anchore/scan-action@v7
+        with:
+          image: "codeforge:updated"
+          output-format: sarif
+          output-file: grype-updated-results.sarif
+          severity-cutoff: critical
+          fail-build: false
+
+      - name: Compare critical findings against baseline
+        id: compare
+        run: |
+          set -euo pipefail
+
+          extract_criticals() {
+            local input="$1"
+            local output="$2"
+            jq -r '
+              .matches[]? |
+              select((.vulnerability.severity // "" | ascii_downcase) == "critical") |
+              [
+                (.vulnerability.id // "unknown"),
+                (.artifact.name // "unknown"),
+                (.artifact.version // "unknown"),
+                (.artifact.locations[0].path // "unknown")
+              ] | @tsv
+            ' "$input" | sort -u > "$output"
+          }
+
+          if [[ -f grype-baseline-results.json ]]; then
+            extract_criticals grype-baseline-results.json baseline-criticals.tsv
+          else
+            : > baseline-criticals.tsv
+          fi
+
+          extract_criticals grype-updated-results.json updated-criticals.tsv
+          comm -13 baseline-criticals.tsv updated-criticals.tsv > new-criticals.tsv || true
+
+          count=$(wc -l < new-criticals.tsv | tr -d ' ')
+          if [[ "$count" -gt 0 ]]; then
+            findings=$(python3 -c 'from pathlib import Path; lines=[line.strip().split("\t") for line in Path("new-criticals.tsv").read_text(encoding="utf-8").splitlines() if line.strip()]; formatted=[f"{cve} ({name}@{version} at {path})" for cve, name, version, path in lines]; print("; ".join(formatted[:20]))')
+            echo "count=$count" >> "$GITHUB_OUTPUT"
+            echo "findings=$findings" >> "$GITHUB_OUTPUT"
+            echo "::error::New critical findings introduced relative to published baseline: $findings"
+            exit 1
+          fi
+
+          if [[ -z "${{ steps.baseline-tag.outputs.tag }}" ]]; then
+            echo "::warning::No stable release tag found; delta gate skipped."
+          elif [[ "${{ steps.baseline-image.outcome }}" != "success" ]]; then
+            echo "::warning::Baseline image ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }} not available; delta gate skipped."
+          fi
+
+          echo "count=0" >> "$GITHUB_OUTPUT"
+          echo "findings=" >> "$GITHUB_OUTPUT"
+          echo "::notice::No new critical findings introduced relative to baseline image."
+
+      - name: Upload Grype results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: grype-updated-results.sarif
+          category: sca-grype-dependency-update
+
+  # Job 4: Handle updates — PR, auto-release, or issue
   # ---------------------------------------------------------------------------
   handle-updates:
     name: Handle Dependency Updates
-    needs: [check-versions, build-and-test]
+    needs: [check-versions, build-and-test, scan-updated-image]
     if: always() && (needs.check-versions.outputs.updates-needed == 'true' || needs.check-versions.outputs.check-failed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -515,33 +657,35 @@ jobs:
         run: |
           set -euo pipefail
           TEST_RESULT="${{ needs.build-and-test.result }}"
+          SCAN_RESULT="${{ needs.scan-updated-image.result }}"
           DOCKERFILE_CHANGES="${{ needs.check-versions.outputs.dockerfile-changes-needed }}"
           CHECK_FAILED="${{ needs.check-versions.outputs.check-failed }}"
 
           echo "test-result=$TEST_RESULT" >> "$GITHUB_OUTPUT"
+          echo "scan-result=$SCAN_RESULT" >> "$GITHUB_OUTPUT"
           echo "dockerfile-changes=$DOCKERFILE_CHANGES" >> "$GITHUB_OUTPUT"
 
           # Decision tree:
           # 1. All checks failed → warning issue
-          # 2. Dockerfile changes + tests passed → PR
-          # 3. Dockerfile changes + tests failed → issue
-          # 4. Tests failed (no dockerfile changes) → issue
-          # 5. Only latest/apt changed + tests passed → auto-release
+          # 2. Dockerfile changes + tests passed + scan passed → PR
+          # 3. Dockerfile changes + tests/scan failed → issue
+          # 4. Tests or scan failed (no dockerfile changes) → issue
+          # 5. Only latest/apt changed + tests passed + scan passed → auto-release
           if [[ "$CHECK_FAILED" == "true" ]]; then
             echo "action=warning-issue" >> "$GITHUB_OUTPUT"
             echo "::notice::Action: Create warning issue (all version checks failed)"
-          elif [[ "$DOCKERFILE_CHANGES" == "true" && "$TEST_RESULT" == "success" ]]; then
+          elif [[ "$DOCKERFILE_CHANGES" == "true" && "$TEST_RESULT" == "success" && "$SCAN_RESULT" == "success" ]]; then
             echo "action=create-pr" >> "$GITHUB_OUTPUT"
             echo "::notice::Action: Create PR with Dockerfile version changes"
-          elif [[ "$DOCKERFILE_CHANGES" == "true" && "$TEST_RESULT" != "success" ]]; then
+          elif [[ "$DOCKERFILE_CHANGES" == "true" && ( "$TEST_RESULT" != "success" || "$SCAN_RESULT" != "success" ) ]]; then
             echo "action=create-issue" >> "$GITHUB_OUTPUT"
-            echo "::notice::Action: Create issue (Dockerfile changes needed but tests failed)"
-          elif [[ "$TEST_RESULT" != "success" ]]; then
+            echo "::notice::Action: Create issue (Dockerfile changes needed but tests or scan failed)"
+          elif [[ "$TEST_RESULT" != "success" || "$SCAN_RESULT" != "success" ]]; then
             echo "action=create-issue" >> "$GITHUB_OUTPUT"
-            echo "::notice::Action: Create issue (tests failed)"
+            echo "::notice::Action: Create issue (tests or scan failed)"
           else
             echo "action=auto-release" >> "$GITHUB_OUTPUT"
-            echo "::notice::Action: Auto-release (latest/apt changes only, tests passed)"
+            echo "::notice::Action: Auto-release (latest/apt changes only, tests and scan passed)"
           fi
 
       # ===== PR Path: Dockerfile pinned version changes =====
@@ -780,6 +924,9 @@ jobs:
             ### Test Results
             Integration tests passed on the updated image.
 
+            ### Security Scan Results
+            No new critical Grype findings were introduced relative to the latest published release image.
+
             ### Latest Package Changes
             ${{ needs.check-versions.outputs.latest-updates }}
 
@@ -922,6 +1069,9 @@ jobs:
         with:
           script: |
             const testResult = '${{ needs.build-and-test.result }}';
+            const scanResult = '${{ needs.scan-updated-image.result }}';
+            const newCriticalCount = '${{ needs.scan-updated-image.outputs.new-critical-count }}';
+            const newCriticalFindings = `${{ needs.scan-updated-image.outputs.new-critical-findings }}`;
             const dockerfileChanges = '${{ needs.check-versions.outputs.dockerfile-changes-needed }}';
             const pinnedUpdates = `${{ needs.check-versions.outputs.pinned-updates }}`;
             const latestUpdates = `${{ needs.check-versions.outputs.latest-updates }}`;
@@ -938,8 +1088,8 @@ jobs:
             }
 
             const reason = dockerfileChanges === 'true'
-              ? 'Dockerfile version update tests failed'
-              : 'Dependency update tests failed';
+              ? 'Dockerfile version update validation failed'
+              : 'Dependency update validation failed';
 
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -962,11 +1112,16 @@ jobs:
                 '## Dependency Update Check Failed\n',
                 `**Reason:** ${reason}`,
                 `**Test result:** ${testResult}`,
+                `**Scan result:** ${scanResult}`,
+                `**New critical findings vs baseline:** ${newCriticalCount || '0'}`,
                 `**Dockerfile changes needed:** ${dockerfileChanges}\n`,
                 '### Pinned Version Updates',
                 '```json',
                 pinnedUpdates,
                 '```\n',
+                '### New Critical Findings',
+                newCriticalFindings || 'None recorded',
+                '',
                 '### Latest Package Updates',
                 '```json',
                 latestUpdates,
