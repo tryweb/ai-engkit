@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.12.7] - 2026-06-18
+
+### 變更
+- 升級 Docker Engine 29.5.3 → 29.6.0
+- 更新 oh-my-openagent 最新追蹤版本 4.11.0 → 4.11.1
+- 更新 lean-ctx 最新追蹤版本 v3.8.8 → v3.8.9
+
 ## [0.12.6] - 2026-06-18
 
 ### 修復
@@ -437,7 +444,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.5...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.7...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -485,3 +492,5 @@
 [0.12.3]: https://github.com/tryweb/Codeforge/compare/v0.12.2...v0.12.3
 [0.12.4]: https://github.com/tryweb/Codeforge/compare/v0.12.3...v0.12.4
 [0.12.5]: https://github.com/tryweb/Codeforge/compare/v0.12.4...v0.12.5
+[0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
+[0.12.7]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.12.7
