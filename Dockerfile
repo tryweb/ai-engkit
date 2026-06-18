@@ -7,6 +7,7 @@ ARG COMPOSE_VERSION=5.1.4
 ARG BUILDX_VERSION=0.34.1
 ARG OPENCODE_VERSION=1.17.8
 ARG OPENCHAMBER_VERSION=1.13.1
+ARG GLAB_VERSION=1.103.0
 ARG PLAYWRIGHT_VERSION=1.61.0
 ARG PLAYWRIGHT_MCP_VERSION=0.0.76
 ARG OH_MY_OPENAGENT_VERSION=latest
@@ -45,8 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     htop \
     procps \
     lsof \
-    # GitLab CLI（取代 Homebrew 版本，避免 GO-2026-5026 依賴漏洞）
-    glab \
     # node-gyp / 原生模組編譯所需
     pkg-config \
     libssl-dev \
@@ -62,6 +61,21 @@ RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${
     | tar xz -C /tmp && \
     mv /tmp/docker/docker /usr/local/bin/ && \
     rm -rf /tmp/docker
+
+RUN mkdir -p /usr/local/bin && \
+    ARCH="$(dpkg --print-architecture)" && \
+    case "$ARCH" in \
+        amd64) GLAB_ARCH="amd64" ;; \
+        arm64) GLAB_ARCH="arm64" ;; \
+        *) echo "Unsupported glab architecture: $ARCH" >&2; exit 1 ;; \
+    esac && \
+    GLAB_TARBALL="glab_${GLAB_VERSION}_linux_${GLAB_ARCH}.tar.gz" && \
+    curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/${GLAB_TARBALL}" -o "/tmp/${GLAB_TARBALL}" && \
+    curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/checksums.txt" -o /tmp/checksums.txt && \
+    grep -F "  ${GLAB_TARBALL}" /tmp/checksums.txt | head -n 1 | (cd /tmp && sha256sum -c -) && \
+    tar -xzf "/tmp/${GLAB_TARBALL}" -C /tmp && \
+    install -m 0755 /tmp/bin/glab /usr/local/bin/glab && \
+    rm -rf /tmp/bin "/tmp/${GLAB_TARBALL}" /tmp/checksums.txt
 
 # 安裝 Docker Compose V2 Plugin（從 GitHub 下載，安裝到 Docker CLI plugins 目錄）
 # 之後可使用 `docker compose` 命令（plugin 模式，而非獨立的 docker-compose）
