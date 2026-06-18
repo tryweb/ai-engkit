@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-06-18
+
+### 修復
+- auto-start dev container and detect container name in release skill
+
+### 變更
+- install glab from official release binary
+
 ## [0.12.5] - 2026-06-18
 
 ### 變更
