@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-20
+
+### 新增
+- add markdown LSP support for project-level `.md` navigation
+
+### 變更
+- expand tooling and authentication docs
+- add knowledge capture scaffold
+- add knowledge base placeholders
+- add knowledge base references
+
 ## [0.14.0] - 2026-06-20
 
 ### 新增
