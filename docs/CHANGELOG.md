@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-20
+
+### 新增
+- add karpathy-guidelines as baked global skill（Karpathy 四項程式碼品質原則）
+
 ## [0.13.1] - 2026-06-19
 
 ### 變更
@@ -506,3 +511,7 @@
 [0.12.3]: https://github.com/tryweb/Codeforge/compare/v0.12.2...v0.12.3
 [0.12.4]: https://github.com/tryweb/Codeforge/compare/v0.12.3...v0.12.4
 [0.12.5]: https://github.com/tryweb/Codeforge/compare/v0.12.4...v0.12.5
+[0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
+[0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
+[0.13.1]: https://github.com/tryweb/Codeforge/compare/v0.13.0...v0.13.1
+[0.14.0]: https://github.com/tryweb/Codeforge/compare/v0.13.1...v0.14.0
