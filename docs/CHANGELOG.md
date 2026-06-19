@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-06-19
+
+### 新增
+- add baked skills mechanism: enable-project-knowledge 和 knowledge-capture 內建為全域 skill
+- add entrypoint 啟動時自動 symlink baked skills 到 ~/.config/opencode/skills/
+- add versioned bootstrap-knowledge.sh 腳本至 .opencode/scripts/
+
+### 變更
+- 更新 README OpenChamber badge: 1.13.1 → 1.13.2
+
 ## [0.12.6] - 2026-06-18
 
 ### 修復
