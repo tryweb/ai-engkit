@@ -181,6 +181,10 @@ RUN mkdir -p /opt/opencode/baked-plugins && \
     rm -rf /tmp/superpowers-bake && \
     chown -R ${USERNAME}:${USERNAME} /opt/opencode
 
+# 預裝 baked skills 到 image（供 entrypoint 在 runtime 時 symlink 到 SKILLS_ROOT）
+COPY .opencode/baked-skills /opt/opencode/baked-skills
+RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
+
 # 目錄預建（確保 volume mount 前所有人都正確）
 RUN mkdir -p \
     /home/${USERNAME}/workspace \

@@ -218,4 +218,19 @@ if echo "$PLUGINS" | tr ',' '\n' | grep -q '^superpowers@\|^superpowers$'; then
   fi
 fi
 
+# --- Baked skills (enable-project-knowledge) ---
+BAKED_SKILLS_DIR="/opt/opencode/baked-skills"
+if [ -d "$BAKED_SKILLS_DIR" ]; then
+  mkdir -p "$SKILLS_ROOT"
+  while IFS= read -r skill_dir; do
+    [ -n "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    target="$SKILLS_ROOT/$skill_name"
+    if [ ! -e "$target" ]; then
+      ln -s "$skill_dir" "$target"
+      echo "Baked skill symlinked: $target -> $skill_dir"
+    fi
+  done < <(find "$BAKED_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
+fi
+
 echo "Default configs initialized"
