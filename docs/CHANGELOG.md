@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-06-19
+
+### 變更
+- 升級 Docker Engine 29.5.3 → 29.6.0
+
+### 修復
+- 修復 CHANGELOG comparison links for v0.12.6 and v0.13.0
+
 ## [0.13.0] - 2026-06-19
 
 ### 新增
@@ -447,7 +455,8 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/tryweb/Codeforge/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
 [0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
