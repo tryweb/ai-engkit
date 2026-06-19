@@ -447,7 +447,9 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.12.5...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
+[0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
