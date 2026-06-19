@@ -3,6 +3,10 @@ set -euo pipefail
 
 OPCODE_CONFIG_DIR="$HOME/.config/opencode"
 OPENCHAMBER_DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/workspace}"
+PROJECT_OPENCODE_DIR="$WORKSPACE_DIR/.opencode"
+PROJECT_LSP_CONFIG_FILE="$PROJECT_OPENCODE_DIR/lsp.json"
+DEFAULT_LSP_CONFIG_FILE="/etc/opencode/lsp.json.default"
 
 init_file() {
   local file="$1"
@@ -10,6 +14,32 @@ init_file() {
   if [ ! -f "$file" ]; then
     echo "Creating default: $file"
     echo "$content" > "$file"
+  fi
+}
+
+merge_project_lsp_config() {
+  if [ ! -f "$DEFAULT_LSP_CONFIG_FILE" ]; then
+    return 0
+  fi
+
+  mkdir -p "$PROJECT_OPENCODE_DIR"
+
+  if [ ! -f "$PROJECT_LSP_CONFIG_FILE" ]; then
+    cp "$DEFAULT_LSP_CONFIG_FILE" "$PROJECT_LSP_CONFIG_FILE"
+    echo "Creating default: $PROJECT_LSP_CONFIG_FILE"
+    return 0
+  fi
+
+  local merged_file
+  merged_file="$(mktemp)"
+
+  if jq -s '.[0] * .[1]' "$DEFAULT_LSP_CONFIG_FILE" "$PROJECT_LSP_CONFIG_FILE" > "$merged_file"; then
+    mv "$merged_file" "$PROJECT_LSP_CONFIG_FILE"
+    echo "Merged default Markdown LSP config into: $PROJECT_LSP_CONFIG_FILE"
+  else
+    rm -f "$merged_file"
+    echo "Warning: Failed to merge $PROJECT_LSP_CONFIG_FILE with defaults" >&2
+    return 1
   fi
 }
 
@@ -102,6 +132,12 @@ OPCODE_CONFIG=$(jq -n \
   '{
     "$schema": "https://opencode.ai/config.json",
     plugin: $plugins,
+    lsp: {
+      marksman: {
+        command: ["marksman", "server"],
+        extensions: [".md", ".markdown"]
+      }
+    },
     mcp: {
       codegraph: {
         type: "local",
@@ -122,6 +158,8 @@ OPCODE_CONFIG=$(jq -n \
   }')
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
+
+merge_project_lsp_config
 
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
 if [ -f "$OPENCODE_CACHE_PKG/package.json" ]; then

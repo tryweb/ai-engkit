@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     zip \
     jq \
+    ripgrep \
     tree \
     less \
     nano \
@@ -110,7 +111,7 @@ ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 
-RUN brew install gh
+RUN brew install gh marksman
 
 # ── Bun ────────────────────────────────────────────────
 RUN curl -fsSL https://bun.sh/install | bash
@@ -158,6 +159,12 @@ jq -n \
   '{
     autoupdate: false,
     plugin: [$agent_plugin, $superpowers_plugin],
+    lsp: {
+      marksman: {
+        command: ["marksman", "server"],
+        extensions: [".md", ".markdown"]
+      }
+    },
     mcp: {
       playwright: {
         type: "local",
@@ -166,6 +173,14 @@ jq -n \
       }
     }
   }' > /etc/opencode/opencode.json.default
+
+jq -n \
+  '{
+    marksman: {
+      command: ["marksman", "server"],
+      extensions: [".md", ".markdown"]
+    }
+  }' > /etc/opencode/lsp.json.default
 EOF
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
