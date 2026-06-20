@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-20
+
+### 新增
+- add .dockerignore to reduce build context size
+- replace brew-installed gh and marksman with static binaries
+  (saves ~2GB, image 6.27GB → 4.25GB)
+- upgrade gh from 2.67.0 to 2.95.0
+- add GH_VERSION and MARKSMAN_VERSION to dependency-update.yml
+
+### 其他
+- add knowledge entry for test container name mismatch
+- add docker image slimming issue tracker link (#17)
+
 ## [0.15.1] - 2026-06-20
 
 ### 變更
@@ -530,3 +543,4 @@
 [0.14.0]: https://github.com/tryweb/Codeforge/compare/v0.13.1...v0.14.0
 [0.15.0]: https://github.com/tryweb/Codeforge/compare/v0.14.0...v0.15.0
 [0.15.1]: https://github.com/tryweb/Codeforge/compare/v0.15.0...v0.15.1
+[0.16.0]: https://github.com/tryweb/Codeforge/compare/v0.15.1...v0.16.0
