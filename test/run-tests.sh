@@ -269,8 +269,11 @@ else
 fi
 
 # CodeGraph installs its agent configuration via MCP, not a SKILL.md file
-if docker exec "$CONTAINER" sh -c 'jq -r ".mcpServers.codegraph // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "codegraph"'; then
-  pass "codegraph MCP server configured in opencode.json"
+# Check both `.mcp.codegraph` (entrypoint format) and `.mcpServers.codegraph` (codegraph install format)
+if docker exec "$CONTAINER" sh -c 'jq -r ".mcp.codegraph // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "codegraph"'; then
+  pass "codegraph MCP server configured in opencode.json (.mcp.codegraph)"
+elif docker exec "$CONTAINER" sh -c 'jq -r ".mcpServers.codegraph // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "codegraph"'; then
+  pass "codegraph MCP server configured in opencode.json (.mcpServers.codegraph - legacy)"
 else
   # CodeGraph may store MCP config elsewhere (e.g., project-level .codegraph/)
   skip "codegraph MCP config not found in opencode.json (may be project-scoped)"

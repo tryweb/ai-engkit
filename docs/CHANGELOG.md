@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-06-20
+
+### 修復
+- 修復 CodeGraph MCP config key 測試不一致問題：同時檢查 `.mcp.codegraph`（entrypoint 格式）和 `.mcpServers.codegraph`（legacy 格式）
+
+### 變更
+- 更新 oh-my-openagent 最新追蹤版本 4.12.0 → 4.12.1
+  - CodeGraph init guidance: 未初始化 workspace 時提供明確引導而非靜默失敗
+  - CodeGraph MCP bootstrap: LazyCodex 在 MCP serve 階段預先初始化 CodeGraph runtime
+  - Background task polling: 不再誤導使用者輪詢 background_output
+  - Ultraresearch: workers 傾向協作團隊 + 即時廣播發現
+
 ## [0.16.1] - 2026-06-20
 
 ### 其他
@@ -495,7 +507,8 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/tryweb/Codeforge/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/tryweb/Codeforge/compare/v0.16.0...v0.16.1
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
