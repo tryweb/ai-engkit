@@ -52,7 +52,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # node-gyp / 原生模組編譯所需
     pkg-config \
     libssl-dev \
-    libclang-dev \
     && if [ "$UPGRADE_PACKAGES" = "true" ]; then \
         apt-get upgrade -y --no-install-recommends && \
         apt-get autoremove -y; \
@@ -128,7 +127,8 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
 # ── CodeGraph 知識圖譜工具 ────────────────────────────
-RUN bun install -g @colbymchenry/codegraph
+RUN bun install -g @colbymchenry/codegraph && \
+    rm -rf ~/.bun/install/cache
 
 # ── LeanCTX — AI 代理的認知上下文層 ──────────────────
 RUN curl -fsSL https://leanctx.com/install.sh | sh
@@ -144,7 +144,8 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
     bun install -g @fission-ai/openspec --trust && \
     bun install -g @code-yeongyu/comment-checker --trust && \
-    ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node
+    ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
+    rm -rf ~/.bun/install/cache
 
 # ── Playwright browsers + MCP server (for browser automation & testing) ─────
 # Playwright browsers and @playwright/mcp are versioned independently upstream.
@@ -154,7 +155,8 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
-    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
+    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
+    rm -rf ~/.bun/install/cache
 
 USER root
 
