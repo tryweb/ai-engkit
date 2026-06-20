@@ -1,0 +1,33 @@
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# CI / GitHub
+.github/
+
+# Tests
+test/
+test-output.txt
+
+# Documentation (not needed in runtime image)
+docs/
+*.md
+*.mdx
+
+# Environment & config
+.env
+.env.*
+docker-compose*.yml
+docker-compose*.yaml
+install.sh
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS artifacts
+.DS_Store
+Thumbs.db

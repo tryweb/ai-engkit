@@ -10,6 +10,8 @@ ARG OPENCHAMBER_VERSION=1.13.2
 ARG GLAB_VERSION=1.103.0
 ARG PLAYWRIGHT_VERSION=1.61.0
 ARG PLAYWRIGHT_MCP_VERSION=0.0.76
+ARG GH_VERSION=2.95.0
+ARG MARKSMAN_VERSION=2026-02-08
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -111,7 +113,15 @@ ENV HOMEBREW_CELLAR=/home/linuxbrew/.linuxbrew/Cellar
 ENV HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
 ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 
-RUN brew install gh marksman
+# gh (GitHub CLI) — 從 GitHub Release 下載靜態二進位，避免 Homebrew 拉入 Go toolchain
+RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+    | sudo tar xz -C /usr/local --strip-components=1
+
+# marksman (LSP) — 從 GitHub Release 下載獨立二進位，避免 Homebrew 拉入 .NET runtime
+RUN curl -fsSL "https://github.com/artempyanykh/marksman/releases/download/${MARKSMAN_VERSION}/marksman-linux-x64" \
+    -o /tmp/marksman && \
+    sudo install -m 0755 /tmp/marksman /usr/local/bin/marksman && \
+    rm /tmp/marksman
 
 # ── Bun ────────────────────────────────────────────────
 RUN curl -fsSL https://bun.sh/install | bash

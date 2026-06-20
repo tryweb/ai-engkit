@@ -189,15 +189,15 @@ jobs:
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
             esac
-          done < <(grep -oP '^ARG \K\w+=[0-9][0-9.]*' Dockerfile | sed 's/=/ /' | awk '{print $1"="$2}')
+          done < <(grep -oP '^ARG \K\w+=[0-9][0-9.-]*' Dockerfile | sed 's/=/ /' | awk '{print $1"="$2}')
 
-          if [[ "${#PINNED_NAMES[@]}" -ne 7 ]]; then
-            echo "::error::Expected 7 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+          if [[ "${#PINNED_NAMES[@]}" -ne 9 ]]; then
+            echo "::error::Expected 9 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
             exit 1
           fi
 
@@ -222,6 +222,8 @@ jobs:
               OPENCHAMBER_VERSION) source='@openchamber/web'; latest="$(get_npm_version "$source")" ;;
               PLAYWRIGHT_VERSION)  source='playwright';    latest="$(get_npm_version "$source")" ;;
               PLAYWRIGHT_MCP_VERSION) source='@playwright/mcp'; latest="$(get_npm_version "$source")" ;;
+              GH_VERSION)       source='cli/cli';          latest="$(get_github_tag "$source")" ;;
+              MARKSMAN_VERSION) source='artempyanykh/marksman'; latest="$(get_github_tag "$source")" ;;
             esac
 
             if [[ "$latest" == "unknown" ]]; then
@@ -355,7 +357,9 @@ jobs:
               "OPENCODE_VERSION": $(json_quote "${PINNED_VERSIONS[3]}"),
               "OPENCHAMBER_VERSION": $(json_quote "${PINNED_VERSIONS[4]}"),
               "PLAYWRIGHT_VERSION": $(json_quote "${PINNED_VERSIONS[5]}"),
-              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[6]}")
+              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[6]}"),
+              "GH_VERSION": $(json_quote "${PINNED_VERSIONS[7]}"),
+              "MARKSMAN_VERSION": $(json_quote "${PINNED_VERSIONS[8]}")
             },
             "latest": {
               "OH_MY_OPENAGENT_VERSION": $(json_quote "$(get_npm_version 'oh-my-openagent')"),
@@ -818,6 +822,8 @@ jobs:
                   'OPENCHAMBER_VERSION': 'OpenChamber',
                   'PLAYWRIGHT_VERSION': 'Playwright',
                   'PLAYWRIGHT_MCP_VERSION': '@playwright/mcp',
+                  'GH_VERSION': 'GitHub CLI',
+                  'MARKSMAN_VERSION': 'Marksman',
                   'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
                   'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
                   'LEANCTX_VERSION': 'lean-ctx',
