@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-06-20
+
+### 變更
+- 更新 oh-my-openagent 最新追蹤版本 4.11.1 → 4.12.0
+
 ## [0.15.0] - 2026-06-20
 
 ### 新增
@@ -471,10 +476,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.13.1...HEAD
-[0.13.1]: https://github.com/tryweb/Codeforge/compare/v0.13.0...v0.13.1
-[0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
-[0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.15.1...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -526,3 +528,5 @@
 [0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
 [0.13.1]: https://github.com/tryweb/Codeforge/compare/v0.13.0...v0.13.1
 [0.14.0]: https://github.com/tryweb/Codeforge/compare/v0.13.1...v0.14.0
+[0.15.0]: https://github.com/tryweb/Codeforge/compare/v0.14.0...v0.15.0
+[0.15.1]: https://github.com/tryweb/Codeforge/compare/v0.15.0...v0.15.1
