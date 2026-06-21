@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-06-21
+
+### 變更
+- 升級 OpenCode 1.17.8 → 1.17.9
+
 ## [0.16.3] - 2026-06-20
 
 ### 變更
@@ -513,7 +518,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.16.3...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.16.4...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -571,3 +576,4 @@
 [0.16.1]: https://github.com/tryweb/Codeforge/compare/v0.16.0...v0.16.1
 [0.16.2]: https://github.com/tryweb/Codeforge/compare/v0.16.1...v0.16.2
 [0.16.3]: https://github.com/tryweb/Codeforge/compare/v0.16.2...v0.16.3
+[0.16.4]: https://github.com/tryweb/Codeforge/compare/v0.16.3...v0.16.4
