@@ -65,7 +65,7 @@
   [0;32mPASS[0m codegraph --help works
   [0;32mPASS[0m codegraph MCP server configured in opencode.json (.mcp.codegraph)
   [0;32mPASS[0m playwright MCP server configured in opencode.json
-  [0;32mPASS[0m playwright MCP uses bunx (Bun-runtime compatible)
+  [0;32mPASS[0m playwright MCP command resolves via pw-mcp wrapper on PATH
 
 --- Superpowers (Agentic Skills Framework) ---
   [0;32mPASS[0m superpowers plugin configured in opencode.json
@@ -76,12 +76,14 @@
   [0;32mPASS[0m node command available at /home/devuser/.bun/bin/node
 
 --- Playwright / Chromium ---
-  [0;32mPASS[0m playwright 1.61.0 CLI works
+  [0;32mPASS[0m playwright 1.61.1 CLI works
   [0;32mPASS[0m @playwright/mcp 0.0.76 CLI works
   [0;32mPASS[0m chromium binary exists at /ms-playwright/chromium-1228/chrome-linux64/chrome
   [0;32mPASS[0m chromium launches headless successfully
-  [0;32mPASS[0m opencode.json @playwright/mcp version matches MCP build arg (0.0.76)
+  [0;32mPASS[0m pw-mcp wrapper is installed and executable
+  [0;32mPASS[0m opencode.json mcp.playwright uses pw-mcp wrapper
+  [0;32mPASS[0m pw-mcp wrapper pins @playwright/mcp@0.0.76
 
 ============================================
- Results: \033[0;32m49 passed\033[0m, \033[0;31m0 failed\033[0m, \033[1;33m5 skipped\033[0m
+ Results: \033[0;32m51 passed\033[0m, \033[0;31m0 failed\033[0m, \033[1;33m5 skipped\033[0m
 ============================================

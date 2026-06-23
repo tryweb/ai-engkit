@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-06-23
+
+### 變更
+- 升級 Docker Compose 5.1.4 → 5.2.0
+- 升級 Playwright 1.61.0 → 1.61.1
+
 ## [0.17.0] - 2026-06-23
 
 ### 新增
@@ -531,7 +537,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.17.1...HEAD
 [0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
@@ -591,3 +597,5 @@
 [0.16.3]: https://github.com/tryweb/Codeforge/compare/v0.16.2...v0.16.3
 [0.16.4]: https://github.com/tryweb/Codeforge/compare/v0.16.3...v0.16.4
 [0.16.5]: https://github.com/tryweb/Codeforge/compare/v0.16.4...v0.16.5
+[0.17.0]: https://github.com/tryweb/Codeforge/compare/v0.16.5...v0.17.0
+[0.17.1]: https://github.com/tryweb/Codeforge/compare/v0.17.0...v0.17.1
