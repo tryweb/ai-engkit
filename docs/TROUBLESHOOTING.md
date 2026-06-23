@@ -153,6 +153,67 @@ docker compose up -d
 sudo ufw allow 8000/tcp
 ```
 
+### 容器內啟動的子專案，從 host 連不到
+
+> ⚠️ **本節描述的是 host Docker daemon 環境問題，並非 Codeforge bug**。在標準 Docker 主機（CI / staging / production）上不會發生，與下方的 [glab credential helper 路徑問題](#glab-作為-git-credential-helper-的版本化路徑問題) 屬同類型：問題在使用者的 host 端，容器內不受影響。
+
+**情境**：在 Codeforge 容器內以 `docker compose up -d` 啟動自己的子專案，port mapping 設定正確（例如 `0.0.0.0:8020:80`），但從 host 端 `curl http://localhost:8020/` 回 `Connection refused`。
+
+**快速診斷**（在 Codeforge 容器內執行）：
+
+```bash
+# 1. 子專案容器在跑嗎？port mapping 已建立嗎？
+docker ps --format 'table {{.Names}}\t{{.Ports}}'
+
+# 2. 子專案容器內部服務可達嗎？（確認容器本身沒事）
+docker exec <子專案容器> curl -s -o /dev/null -w "%{http_code}\n" http://localhost:80
+
+# 3. 子專案的 bridge gateway IP 是哪個？
+docker network inspect <子專案網路名> --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+```
+
+**三組症狀對照表**（可一次判定問題歸屬）：
+
+| 測試位置 | 結果 | 意義 |
+|---------|------|------|
+| `curl http://<容器 IP>:8020/` | ❌ Connection refused | 子容器多落在 172.20.0.0/16，host 路由表沒這段 |
+| `curl http://localhost:8020/` | ❌ Connection refused | host docker-proxy 沒起來，host 沒 listen 8020 |
+| `curl http://<bridge gateway>:8020/` | ✅ 200 OK | **容器服務本身健康，純粹是 host NAT 問題** |
+
+**根本原因**（不在 Codeforge 範圍）：
+
+1. **Host 缺少 docker bridge 路由**：`docker compose` 自動建立 bridge（例如 172.20.0.0/16），但 host 路由表沒對應 entry，導致 host 直連容器 IP 失敗。
+2. **Host docker userland-proxy 沒運行**：`daemon.json` 設了 `userland-proxy: true`，但 dockerd 沒把 proxy process 拉起來。常見於多 netns、自訂 iptables 規則被沖掉、rootless docker、WSL2 等環境。
+
+**暫時 workaround**（在 Codeforge 容器內繞過 host NAT）：
+
+```bash
+# 用 bridge gateway IP 而非 localhost 存取
+curl http://<bridge gateway>:8020/
+```
+
+**永久修復**（需在 **host** 上操作，**不是** Codeforge 範圍）：
+
+```bash
+# 1. 確認 docker iptables 鏈還在
+sudo iptables -t nat -L -n | grep -i docker
+sudo iptables -L -n      | grep -i docker
+
+# 2. 鏈不見了？重啟 dockerd 會重建
+sudo systemctl restart docker
+
+# 3. 仍不行？看 dockerd log
+sudo journalctl -u docker --since "10 min ago"
+
+# 4. 確認 daemon.json 沒關掉 userland-proxy
+cat /etc/docker/daemon.json   # 應含 "ip-forward": true, "userland-proxy": true
+```
+
+**如何向使用者確認這不是 Codeforge 的問題**：
+
+- 在另一台標準 Docker 主機跑同一份子專案 `docker-compose.yml`，若可連線 → 確認是當前 host 環境問題
+- 在 Codeforge 容器內 `docker exec <子專案容器> curl http://localhost:80` 回 200 → 確認容器服務本身沒事
+
 ## 權限問題
 
 ### 權限錯誤診斷圖
