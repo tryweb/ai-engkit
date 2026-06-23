@@ -15,7 +15,7 @@ It is designed for teams and individuals who want a reproducible AI coding works
 - **Agent plugins and skills** — OpenSpec, Superpowers, baked skills, and OpenCode plugin support
 - **Docker-ready development** — Docker CLI, `docker compose`, and Buildx with Docker socket passthrough
 - **Complete CLI toolchain** — git, `gh`, `glab`, Homebrew, bun, python3, ripgrep, jq, tmux, ssh, rsync, comment-checker, and common build tools
-- **Browser automation** — Playwright + Chromium for testing and web workflows
+- **Browser automation** — Playwright + bundled Chromium (resolved at runtime via `pw-mcp` wrapper) for testing and web workflows
 - **Extensible package install** — Add extra apt, brew, or bun packages at runtime
 - **Persistent volumes** — Config, caches, workspace, and knowledge data survive container restarts
 - **Isolated credentials** — Separate git / SSH / `gh` / `glab` volumes inside the container
@@ -111,7 +111,7 @@ Codeforge ships with a preconfigured MCP stack for code navigation and browser a
 
 - **CodeGraph** — code graph and dependency analysis
 - **lean-ctx** — context-aware read/search/shell workflow helpers
-- **Playwright** — browser automation with Chromium preinstalled
+- **Playwright** — browser automation with Playwright-bundled Chromium (resolved via `pw-mcp` wrapper)
 
 For deeper details, see:
 

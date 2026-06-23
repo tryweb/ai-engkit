@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-23
+
+### 新增
+- 新增 `vuln-scan` skill：整合 GitHub code scanning alert triage + Dockerfile 版本更新
+
+### 修復
+- 修復 Playwright MCP 找不到瀏覽器的問題：新增 `pw-mcp` wrapper 自動解析 `/ms-playwright` 內的 bundled Chromium 並以 `--executable-path` 傳遞給 `@playwright/mcp`，避免預設 `--browser` 走 system Chrome channel。Full Chromium 重新納入 image（先前 `--only-shell` 的改動已退回），headless shell 同時保留作為最小可行備援
+
 ## [0.16.5] - 2026-06-22
 
 ### 變更

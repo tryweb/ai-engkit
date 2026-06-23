@@ -280,16 +280,19 @@ else
 fi
 
 # Playwright MCP — should be baked into the image for E2E browser-driven verification
-if docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright // empty" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "playwright"'; then
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp.playwright | type == \"object\"" /home/devuser/.config/opencode/opencode.json 2>/dev/null >/dev/null'; then
   pass "playwright MCP server configured in opencode.json"
 else
   fail "playwright MCP server not configured in opencode.json"
 fi
 
-if docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright.command | join(\" \")" /home/devuser/.config/opencode/opencode.json 2>/dev/null | grep -q "bunx"'; then
-  pass "playwright MCP uses bunx (Bun-runtime compatible)"
+# The MCP command is invoked via the pw-mcp wrapper, which internally calls
+# `bunx -y "@playwright/mcp@<version>"`. Verify the wrapper itself is installed
+# and on PATH so the MCP can resolve to it.
+if docker exec "$CONTAINER" sh -c 'command -v pw-mcp >/dev/null'; then
+  pass "playwright MCP command resolves via pw-mcp wrapper on PATH"
 else
-  fail "playwright MCP command should use bunx for Bun-runtime compatibility"
+  fail "pw-mcp wrapper not on PATH (playwright MCP cannot launch)"
 fi
 
 # --------------------------------------------------
@@ -350,7 +353,7 @@ else
   fail "@playwright/mcp CLI not available (expected version: ${PLAYWRIGHT_MCP_VERSION})"
 fi
 
-CHROMIUM_BIN=$(docker exec "$CONTAINER" sh -c 'ls /ms-playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | head -1')
+CHROMIUM_BIN=$(docker exec "$CONTAINER" sh -c 'find /ms-playwright -type f -name chrome -path "*/chrome-linux64/*" 2>/dev/null | head -1')
 if [ -n "$CHROMIUM_BIN" ]; then
   pass "chromium binary exists at ${CHROMIUM_BIN}"
 else
@@ -358,7 +361,7 @@ else
 fi
 
 if docker exec "$CONTAINER" sh -c '
-  CHROME=$(ls /ms-playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | head -1)
+  CHROME=$(find /ms-playwright -type f -name chrome -path "*/chrome-linux64/*" 2>/dev/null | head -1)
   [ -n "$CHROME" ] && timeout 5 "$CHROME" --headless --no-sandbox --disable-gpu --dump-dom about:blank 2>/dev/null | grep -q "html"
 '; then
   pass "chromium launches headless successfully"
@@ -366,11 +369,24 @@ else
   fail "chromium failed to launch headless"
 fi
 
-CONFIG_PW_VERSION=$(docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright.command | join(\" \")" ~/.config/opencode/opencode.json 2>/dev/null | grep -oP "@playwright/mcp@\K[^\"]*"')
-if [ "$CONFIG_PW_VERSION" = "$PLAYWRIGHT_MCP_VERSION" ]; then
-  pass "opencode.json @playwright/mcp version matches MCP build arg (${CONFIG_PW_VERSION})"
+if docker exec "$CONTAINER" sh -c 'command -v pw-mcp >/dev/null && [ -x "$(command -v pw-mcp)" ]'; then
+  pass "pw-mcp wrapper is installed and executable"
 else
-  fail "opencode.json @playwright/mcp version (${CONFIG_PW_VERSION}) != PLAYWRIGHT_MCP_VERSION (${PLAYWRIGHT_MCP_VERSION})"
+  fail "pw-mcp wrapper not found in PATH"
+fi
+
+CONFIG_PW_CMD=$(docker exec "$CONTAINER" sh -c 'jq -r ".mcp.playwright.command | join(\" \")" /home/devuser/.config/opencode/opencode.json 2>/dev/null')
+if [ "$CONFIG_PW_CMD" = "pw-mcp" ]; then
+  pass "opencode.json mcp.playwright uses pw-mcp wrapper"
+else
+  fail "opencode.json mcp.playwright command is '${CONFIG_PW_CMD}', expected 'pw-mcp'"
+fi
+
+WRAPPER_VERSION=$(docker exec "$CONTAINER" sh -c 'grep -oP "@playwright/mcp@\K[^\"]+" /usr/local/bin/pw-mcp 2>/dev/null | head -1')
+if [ "$WRAPPER_VERSION" = "$PLAYWRIGHT_MCP_VERSION" ]; then
+  pass "pw-mcp wrapper pins @playwright/mcp@${WRAPPER_VERSION}"
+else
+  fail "pw-mcp wrapper version (${WRAPPER_VERSION}) != PLAYWRIGHT_MCP_VERSION (${PLAYWRIGHT_MCP_VERSION})"
 fi
 
 # --------------------------------------------------

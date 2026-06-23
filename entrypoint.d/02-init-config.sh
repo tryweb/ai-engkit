@@ -146,7 +146,7 @@ OPCODE_CONFIG=$(jq -n \
       },
       playwright: {
         type: "local",
-        command: ["bunx", "-y", "@playwright/mcp@\($playwright_mcp_version)"],
+        command: ["pw-mcp"],
         enabled: true
       },
       "lean-ctx": {

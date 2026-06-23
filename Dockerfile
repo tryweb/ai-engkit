@@ -151,12 +151,24 @@ RUN rm -rf ~/.bun/install/cache && \
 # Playwright browsers and @playwright/mcp are versioned independently upstream.
 # Pin both explicitly for reproducible builds.
 # install --with-deps handles both system deps + browser download in one step.
+# Full Chromium is required so @playwright/mcp can launch it via --executable-path
+# (the MCP server does not auto-resolve to /ms-playwright without an explicit path).
+# The headless shell is also installed so tests and MCP can use the smallest viable binary.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
     bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
     rm -rf ~/.bun/install/cache
+
+# pw-mcp: 動態解析 Playwright bundled Chromium 路徑並啟動 @playwright/mcp。
+# 用 wrapper 是因為 bundled browser 的 revision 目錄（chromium-<rev>）會隨 Playwright 版本變動，
+# 寫死路徑會在升版時失效。@playwright/mcp 預設 --browser 走的是 system Chrome channel，
+# 因此必須用 --executable-path 明確指向 /ms-playwright 下的 bundled Chromium。
+COPY --chmod=0755 scripts/pw-mcp.sh /tmp/pw-mcp.sh
+RUN sudo sed -i "s|\${PLAYWRIGHT_MCP_VERSION}|${PLAYWRIGHT_MCP_VERSION}|g" /tmp/pw-mcp.sh && \
+    sudo install -m 0755 /tmp/pw-mcp.sh /usr/local/bin/pw-mcp && \
+    sudo rm /tmp/pw-mcp.sh
 
 USER root
 
@@ -180,7 +192,7 @@ jq -n \
     mcp: {
       playwright: {
         type: "local",
-        command: ["bunx", "-y", "@playwright/mcp@\($playwright_mcp_version)"],
+        command: ["pw-mcp"],
         enabled: true
       }
     }

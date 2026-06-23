@@ -19,7 +19,7 @@ CodeForge preconfigures these MCP servers for OpenCode:
 |------|---------|-------|
 | **CodeGraph** | Code graph, symbol relationships, dependency analysis | Installed as `@colbymchenry/codegraph` |
 | **lean-ctx** | Context-aware read/search/shell workflows | Includes persistent state and knowledge volumes |
-| **Playwright** | Browser automation and UI testing | Chromium is preinstalled |
+| **Playwright** | Browser automation and UI testing | Playwright-bundled Chromium; `pw-mcp` wrapper resolves the executable path and launches `@playwright/mcp` with `--executable-path --no-sandbox --headless` |
 
 Related files:
 
