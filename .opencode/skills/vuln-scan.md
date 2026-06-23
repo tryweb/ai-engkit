@@ -18,17 +18,26 @@ Two-mode skill: (A) triage GitHub code scanning alerts via `gh`, (B) check Docke
 
 ## Quick Reference
 
-For routine operations, use the helper script:
+For routine operations, use the helper scripts:
 
 ```bash
+# Mode A — GitHub code scanning alerts (requires `gh auth login`)
 .opencode/scripts/vuln-scan.sh count       # Total open alert count
 .opencode/scripts/vuln-scan.sh list        # List open alerts grouped by path
 .opencode/scripts/vuln-scan.sh dismiss     # Batch-dismiss all open alerts
 .opencode/scripts/vuln-scan.sh verify      # Verify no open alerts remain
+
+# Mode B — Dockerfile version pin check (no auth required for npm/GitLab; gh auth needed for GitHub)
+.opencode/scripts/check-versions.sh check       # Full table: pinned vs latest
+.opencode/scripts/check-versions.sh outdated     # Only outdated pins (exit 1 if any)
+.opencode/scripts/check-versions.sh json         # Machine-readable JSON
 ```
 
-The script handles: pagination merging, parallel dismissal (xargs -P 8),
+`vuln-scan.sh` handles: pagination merging, parallel dismissal (xargs -P 8),
 3× retry with backoff, progress tracking, and result verification.
+`check-versions.sh` handles: per-ARG upstream lookup (GitHub / npm / GitLab),
+graceful per-pin failure (no abort on a single network error), and three output
+formats for different consumers.
 
 ---
 
@@ -197,65 +206,65 @@ Output format:
 ## Mode B: Dockerfile Version Pin Check
 
 Use when the user wants to check if pinned versions in `Dockerfile` are outdated.
+**Always prefer the helper script** — it handles the registry lookups, error
+recovery, and output formatting in one shot.
 
-### 1. Extract Current Pins
-
-From `Dockerfile` (ARG lines ~5-13):
-
-| ARG | Purpose | Source URL |
-|-----|---------|-----------|
-| `DOCKER_VERSION` | Docker CLI static binary | https://github.com/docker/docker/releases |
-| `COMPOSE_VERSION` | Docker Compose plugin | https://github.com/docker/compose/releases |
-| `BUILDX_VERSION` | Docker Buildx plugin | https://github.com/docker/buildx/releases |
-| `OPENCODE_VERSION` | npm: opencode-ai | https://www.npmjs.com/package/opencode-ai |
-| `OPENCHAMBER_VERSION` | npm: @openchamber/web | https://www.npmjs.com/package/@openchamber/web |
-
-### 2. Check Latest Versions
-
-**Docker CLI:**
-```bash
-gh release list --repo docker/docker --limit 5 --json tagName,isLatest
-```
-
-**Compose:**
-```bash
-gh release list --repo docker/compose --limit 5 --json tagName,isLatest
-```
-
-**Buildx:**
-```bash
-gh release list --repo docker/buildx --limit 5 --json tagName,isLatest
-```
-
-**OpenCode (npm):**
-```bash
-npm view opencode-ai versions --json | jq -r 'last'
-```
-
-**OpenChamber (npm):**
-```bash
-npm view @openchamber/web versions --json | jq -r 'last'
-```
-
-### 3. Compare & Report
-
-Format output as a table:
-
-```
-| Package | Pinned | Latest | Needs Update? |
-|---------|--------|--------|---------------|
-| DOCKER  | X.Y.Z  | A.B.C  | ✅ / ⬆️ → A.B.C |
-| COMPOSE | X.Y.Z  | A.B.C  | ✅ / ⬆️ → A.B.C |
-| BUILDX  | X.Y.Z  | A.B.C  | ✅ / ⬆️ → A.B.C |
-| OPENCODE | X.Y.Z | A.B.C  | ✅ / ⬆️ → A.B.C |
-| OPENCHAMBER | X.Y.Z | A.B.C | ✅ / ⬆️ → A.B.C |
-```
-
-For each outdated pin, show the diff:
+### 1. Run the helper script
 
 ```bash
-gh release view v{VERSION} --repo docker/{repo} --json body --jq '.body' | head -20
+.opencode/scripts/check-versions.sh check
 ```
+
+This walks every `ARG <NAME>=...` in `Dockerfile` and prints a table like:
+
+```
+PACKAGE                PINNED       LATEST       SOURCE                           STATUS
+-------                ------       ------       ------                           ------
+DOCKER_VERSION         29.6.0       29.6.0       github:docker/docker             OK current
+COMPOSE_VERSION        5.1.4        5.1.4        github:docker/compose            OK current
+...
+```
+
+For machine consumption (e.g. CI), use `json`. For "is anything outdated?"
+checks, use `outdated` (exit 1 if anything needs bumping).
+
+### 2. Sources (kept in sync with the script)
+
+| ARG | Source | Registry |
+|-----|--------|----------|
+| `DOCKER_VERSION` | github:docker/docker | `gh release view` (strip `docker-` + `v` prefix) |
+| `COMPOSE_VERSION` | github:docker/compose | `gh release view` |
+| `BUILDX_VERSION` | github:docker/buildx | `gh release view` |
+| `GH_VERSION` | github:cli/cli | `gh release view` |
+| `MARKSMAN_VERSION` | github:artempyanykh/marksman | `gh release view` (date-based) |
+| `OPENCODE_VERSION` | npm:opencode-ai | `https://registry.npmjs.org/opencode-ai/latest` |
+| `OPENCHAMBER_VERSION` | npm:@openchamber/web | `https://registry.npmjs.org/@openchamber/web/latest` |
+| `PLAYWRIGHT_VERSION` | npm:playwright | `https://registry.npmjs.org/playwright/latest` |
+| `PLAYWRIGHT_MCP_VERSION` | npm:@playwright/mcp | `https://registry.npmjs.org/@playwright/mcp/latest` |
+| `GLAB_VERSION` | gitlab:gitlab-org/cli | `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest` |
+
+### 3. Manual lookup (when the script can't reach a source)
+
+If a source returns `check_failed` because the network is blocked or the
+script doesn't have the right tool installed, you can query directly. **Do not
+guess endpoints** — use the documented APIs above.
+
+```bash
+# GitHub release (any repo)
+gh release view --repo <org>/<repo> --json tagName --jq '.tagName'
+
+# npm package
+curl -fsSL "https://registry.npmjs.org/<package>/latest" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])'
+
+# GitLab release (URL-encode the project path)
+curl -fsSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])'
+```
+
+> **Why the URL-encoded form?** GitLab's REST API uses `path%2Fsubpath` (the
+> slash encoded as `%2F`) when referring to a project by its full path.
+> `https://gitlab.com/api/v4/projects/gitlab-org/cli` (unescaped) returns 404.
 
 ### 4. Apply Updates
 
@@ -310,6 +319,29 @@ docker run --rm codeforge-ai-dev docker buildx version
 ### "the --slurp option is not supported with --jq"
 - **Cause**: `gh` CLI doesn't allow combining `--slurp` and `--jq`.
 - **Fix**: Drop `--slurp` and use `2>/dev/null | jq -s 'add'` instead.
+
+### check-versions.sh reports `? check_failed` for some pins
+- **Cause**: A network call failed for that pin (GitHub / npm / GitLab).
+  Possible reasons: rate limit, no network, missing `gh` auth, or the registry
+  endpoint is down.
+- **Fix**: Re-run after fixing connectivity. The script is designed to keep
+  going past per-pin failures — only the failed pin is marked `check_failed`;
+  the others report normally. If the failure is a wrong API endpoint (e.g.
+  GitLab 404), see "GitLab `gitlab-org/cli` returns 404" below.
+
+### GitLab `gitlab-org/cli` returns 404
+- **Cause**: The project path must be URL-encoded — `gitlab-org/cli` becomes
+  `gitlab-org%2Fcli` in the API URL. An unencoded slash is treated as part of
+  the URL path, not a separator.
+- **Fix**: Use `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest`.
+  Do **not** guess the project ID — the canonical project path is
+  `gitlab-org/cli` (verified via `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli` → `id: 34675721`).
+
+### `check-versions.sh outdated` always exits 1 even when nothing is outdated
+- **Cause**: An older version of the script had a final `[[ ... ]]` test whose
+  exit code leaked. Fixed by an explicit `exit 0` / `exit 1` branch.
+- **Fix**: Use the latest version of the script — exit 0 means "no outdated
+  pins", exit 1 means "at least one outdated".
 
 ---
 
