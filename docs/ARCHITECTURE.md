@@ -339,7 +339,7 @@ flowchart LR
 | 屬性 | 說明 |
 |------|------|
 | 功能 | AI 程式碼助手（後端引擎） |
-| 版本 | 1.4.3 |
+| 版本 | 見 `Dockerfile` `ARG OPENCODE_VERSION` |
 | 設定檔 | `~/.config/opencode/opencode.json` |
 | 資料庫 | `~/.local/share/opencode/opencode.db` |
 | API 埠號 | 4095 |
@@ -351,7 +351,7 @@ flowchart LR
 | 屬性 | 說明 |
 |------|------|
 | 功能 | OpenCode 的 Web/Desktop UI（前端的 GUI） |
-| 版本 | 1.9.4 |
+| 版本 | 見 `Dockerfile` `ARG OPENCHAMBER_VERSION` |
 | 與 OpenCode 關係 | 獨立專案，透過 API 連線至 OpenCode |
 | 服務埠號 | 3000 (映射至主機 8000) |
 | 通訊方式 | WebSocket (terminal) + SSE (chat) |
