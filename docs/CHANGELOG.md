@@ -6,6 +6,9 @@
 
 ## [Unreleased]
 
+### 修復
+- `vuln-scan.md` skill 內 docker 驗證範例的 `ai-engkit-ai-dev` typo 已修正為 `ai-engkit-dev`（改名前是 `codeforge-ai-dev`，改名時字面替換沒對齊 `docker-compose.dev.yml` 的真實 container name）。
+
 ## [1.0.0] - 2026-06-24
 
 ### 變更

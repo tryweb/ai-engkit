@@ -289,9 +289,9 @@ docker compose -f docker-compose.dev.yml build ai-dev
 Verify after build:
 
 ```bash
-docker run --rm ai-engkit-ai-dev docker --version
-docker run --rm ai-engkit-ai-dev docker compose version
-docker run --rm ai-engkit-ai-dev docker buildx version
+docker run --rm ai-engkit-dev docker --version
+docker run --rm ai-engkit-dev docker compose version
+docker run --rm ai-engkit-dev docker buildx version
 ```
 
 ---
