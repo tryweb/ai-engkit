@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-24
+
 ### 變更
 - **專案改名**：`tryweb/Codeforge` → `tryweb/ai-engkit`。理由：「Codeforge」一詞在 AI 編碼工具市場上已被 10+ 個商業產品與開源專案佔用，搜尋噪音過高；新名 `ai-engkit` 直接點出「Self-hosted AI Engineering Kit for Dev & Ops」的本質，避開命名碰撞。Tagline：**Your Self-hosted AI Engineering Kit for Dev & Ops**。
   - GitHub repo 已建立 301 永久重導向，舊 `tryweb/Codeforge` 連結繼續可用
