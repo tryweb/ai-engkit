@@ -33,6 +33,8 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ## Upgrade
 
+> **Tip:** Re-running `install.sh` on an existing installation (when `docker-compose.yml` is already present) automatically downloads `upgrade.sh` and delegates to it — so both commands reach the same upgrade flow. Use `upgrade.sh` for scripted/cron-driven upgrades and `install.sh` for first-time setup.
+
 To update an existing installation to the latest version:
 
 ```bash
