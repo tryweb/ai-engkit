@@ -551,70 +551,6 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-<<<<<<< HEAD
-[Unreleased]: https://github.com/tryweb/Codeforge/compare/v0.17.1...HEAD
-[0.3.0]: https://github.com/tryweb/Codeforge/releases/tag/v0.3.0
-[0.3.3]: https://github.com/tryweb/Codeforge/compare/v0.3.0...v0.3.3
-[0.5.0]: https://github.com/tryweb/Codeforge/compare/v0.3.3...v0.5.0
-[0.5.1]: https://github.com/tryweb/Codeforge/compare/v0.5.0...v0.5.1
-[0.5.2]: https://github.com/tryweb/Codeforge/compare/v0.5.1...v0.5.2
-[0.5.4]: https://github.com/tryweb/Codeforge/compare/v0.5.2...v0.5.4
-[0.5.5]: https://github.com/tryweb/Codeforge/compare/v0.5.4...v0.5.5
-[0.5.6]: https://github.com/tryweb/Codeforge/compare/v0.5.5...v0.5.6
-[0.5.8]: https://github.com/tryweb/Codeforge/compare/v0.5.6...v0.5.8
-[0.5.9]: https://github.com/tryweb/Codeforge/compare/v0.5.8...v0.5.9
-[0.5.10]: https://github.com/tryweb/Codeforge/compare/v0.5.9...v0.5.10
-[0.5.11]: https://github.com/tryweb/Codeforge/compare/v0.5.10...v0.5.11
-[0.5.12]: https://github.com/tryweb/Codeforge/compare/v0.5.11...v0.5.12
-[0.5.13]: https://github.com/tryweb/Codeforge/compare/v0.5.12...v0.5.13
-[0.5.14]: https://github.com/tryweb/Codeforge/compare/v0.5.13...v0.5.14
-[0.5.15]: https://github.com/tryweb/Codeforge/compare/v0.5.14...v0.5.15
-[0.5.16]: https://github.com/tryweb/Codeforge/compare/v0.5.15...v0.5.16
-[0.6.0]: https://github.com/tryweb/Codeforge/compare/v0.5.16...v0.6.0
-[0.6.1]: https://github.com/tryweb/Codeforge/compare/v0.6.0...v0.6.1
-[0.6.2]: https://github.com/tryweb/Codeforge/compare/v0.6.1...v0.6.2
-[0.7.0]: https://github.com/tryweb/Codeforge/compare/v0.6.2...v0.7.0
-[0.7.1]: https://github.com/tryweb/Codeforge/compare/v0.7.0...v0.7.1
-[0.8.0]: https://github.com/tryweb/Codeforge/compare/v0.7.1...v0.8.0
-[0.8.1]: https://github.com/tryweb/Codeforge/compare/v0.8.0...v0.8.1
-[0.8.2]: https://github.com/tryweb/Codeforge/compare/v0.8.1...v0.8.2
-[0.8.3]: https://github.com/tryweb/Codeforge/compare/v0.8.2...v0.8.3
-[0.9.1]: https://github.com/tryweb/Codeforge/compare/v0.8.3...v0.9.1
-[0.9.2]: https://github.com/tryweb/Codeforge/compare/v0.9.1...v0.9.2
-[0.9.3]: https://github.com/tryweb/Codeforge/compare/v0.9.2...v0.9.3
-[0.10.0]: https://github.com/tryweb/Codeforge/compare/v0.9.3...v0.10.0
-[0.11.0]: https://github.com/tryweb/Codeforge/compare/v0.10.0...v0.11.0
-[0.11.1]: https://github.com/tryweb/Codeforge/compare/v0.11.0...v0.11.1
-[0.11.2]: https://github.com/tryweb/Codeforge/compare/v0.11.1...v0.11.2
-[0.11.3]: https://github.com/tryweb/Codeforge/compare/v0.11.2...v0.11.3
-[0.11.4]: https://github.com/tryweb/Codeforge/compare/v0.11.3...v0.11.4
-[0.11.5]: https://github.com/tryweb/Codeforge/compare/v0.11.4...v0.11.5
-[0.11.6]: https://github.com/tryweb/Codeforge/compare/v0.11.5...v0.11.6
-[0.11.7]: https://github.com/tryweb/Codeforge/compare/v0.11.6...v0.11.7
-[0.11.8]: https://github.com/tryweb/Codeforge/compare/v0.11.7...v0.11.8
-[0.11.9]: https://github.com/tryweb/Codeforge/compare/v0.11.8...v0.11.9
-[0.11.10]: https://github.com/tryweb/Codeforge/compare/v0.11.9...v0.11.10
-[0.12.0]: https://github.com/tryweb/Codeforge/compare/v0.11.10...v0.12.0
-[0.12.1]: https://github.com/tryweb/Codeforge/compare/v0.12.0...v0.12.1
-[0.12.2]: https://github.com/tryweb/Codeforge/compare/v0.12.1...v0.12.2
-[0.12.3]: https://github.com/tryweb/Codeforge/compare/v0.12.2...v0.12.3
-[0.12.4]: https://github.com/tryweb/Codeforge/compare/v0.12.3...v0.12.4
-[0.12.5]: https://github.com/tryweb/Codeforge/compare/v0.12.4...v0.12.5
-[0.12.6]: https://github.com/tryweb/Codeforge/compare/v0.12.5...v0.12.6
-[0.13.0]: https://github.com/tryweb/Codeforge/compare/v0.12.6...v0.13.0
-[0.13.1]: https://github.com/tryweb/Codeforge/compare/v0.13.0...v0.13.1
-[0.14.0]: https://github.com/tryweb/Codeforge/compare/v0.13.1...v0.14.0
-[0.15.0]: https://github.com/tryweb/Codeforge/compare/v0.14.0...v0.15.0
-[0.15.1]: https://github.com/tryweb/Codeforge/compare/v0.15.0...v0.15.1
-[0.16.0]: https://github.com/tryweb/Codeforge/compare/v0.15.1...v0.16.0
-[0.16.1]: https://github.com/tryweb/Codeforge/compare/v0.16.0...v0.16.1
-[0.16.2]: https://github.com/tryweb/Codeforge/compare/v0.16.1...v0.16.2
-[0.16.3]: https://github.com/tryweb/Codeforge/compare/v0.16.2...v0.16.3
-[0.16.4]: https://github.com/tryweb/Codeforge/compare/v0.16.3...v0.16.4
-[0.16.5]: https://github.com/tryweb/Codeforge/compare/v0.16.4...v0.16.5
-[0.17.0]: https://github.com/tryweb/Codeforge/compare/v0.16.5...v0.17.0
-[0.17.1]: https://github.com/tryweb/Codeforge/compare/v0.17.0...v0.17.1
-=======
 [Unreleased]: https://github.com/tryweb/ai-engkit/compare/v0.16.5...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
@@ -675,4 +611,3 @@
 [0.16.3]: https://github.com/tryweb/ai-engkit/compare/v0.16.2...v0.16.3
 [0.16.4]: https://github.com/tryweb/ai-engkit/compare/v0.16.3...v0.16.4
 [0.16.5]: https://github.com/tryweb/ai-engkit/compare/v0.16.4...v0.16.5
->>>>>>> 776111c (chore!: rename project from Codeforge to ai-engkit)
