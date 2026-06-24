@@ -264,72 +264,57 @@ sequenceDiagram
 
 ## 版本管理與 CVE 追蹤
 
-### 關鍵元件版本
+### 來源：Dockerfile
 
-Dockerfile 中的版本號應定期更新以修補安全漏洞。以下是目前的版本與建議：
+所有可執行元件的版本都是 **`Dockerfile` 的 `ARG` 宣告** 為唯一來源（single source of truth）：
 
-| 元件 | Dockerfile 行號 | 目前版本 | 最新穩定版 | 狀態 |
-|------|-----------------|---------|-----------|------|
-| Docker CLI | L5, L54-57 | 29.4.0 | 29.4.0 | 🟢 已是最新 |
-| Docker Compose Plugin | L6, L61-64 | 5.1.2 | 5.1.2 | 🟢 已是最新 |
-| Ubuntu Base | L1 | 24.04 | 24.04 | 🟢 穩定 |
-| OpenCode | L7 | 1.3.12 | see opencode.ai | 需評估 |
-| OpenChamber | L8 | 1.9.4 | see openchamber.dev | 需評估 |
-| Bun | L90 | latest | latest | 🟢 自動更新 |
+- `DOCKER_VERSION` / `COMPOSE_VERSION` / `BUILDX_VERSION`
+- `OPENCODE_VERSION` / `OPENCHAMBER_VERSION` / `GLAB_VERSION` / `GH_VERSION` / `MARKSMAN_VERSION`
+- `PLAYWRIGHT_VERSION` / `PLAYWRIGHT_MCP_VERSION`
+- `OH_MY_OPENAGENT_VERSION`（runtime 追蹤 latest）
+- `UPGRADE_PACKAGES=true`（build 時 `apt-get upgrade`）
 
-### 已知 CVE 清單
+> 本文件**不再**硬編碼版本表 — 任何列出特定版本號的段落都會在 CI 升版後過時。
 
-以下列出關鍵元件的已知 CVE（僅列 Critical/High）：
+### 自動化更新流程
 
-#### Docker Compose Plugin (v5.1.2) — ✅ 已升級
+版本監控與升級由 `.github/workflows/dependency-update.yml` **每日 20:00 UTC** 自動執行：
 
-**狀態**: 2026-04-10 升級至 v5.1.2，原 v2.24.5 的 ~68 個 alerts 已消除。
+1. 對比 `Dockerfile` pinned 與上游 GitHub Release / npm registry
+2. 對比 `lean-ctx` snapshot 與當前 latest
+3. 對比 `ubuntu:24.04` base image 內 apt 套件 snapshot
+4. 跑 build + test + Grype 掃描（與上一個 stable release 做 critical CVE delta）
+5. 依決策樹自動動作：
+   - Dockerfile 變更 + 全過 → 開 PR（人工 review 破壞性變更）
+   - 只 latest / apt 變更 + 全過 → 自動 release（push GHCR + tag + GitHub Release）
+   - 任一失敗 → 開 issue
 
-> **注意**: 新版本仍可能有新 CVE，請定期檢查 GitHub Security Advisories。
-
-#### Docker CLI (v29.4.0) — ✅ 已升級
-
-**狀態**: 2026-04-10 升級至 v29.4.0，原 v25.0.4 的 ~20 個 alerts 已消除。
-
-> **注意**: 新版本仍可能有新 CVE，請定期檢查 GitHub Security Advisories。
-
-#### Ubuntu apt 套件
-
-apt 套件層的 CVE 需依賴 Ubuntu upstream 修補，`UPGRADE_PACKAGES=true` 已是正確策略。
-
-主要受影響套件：
-- `build-essential` / `binutils`: ~40 個 alerts (High)
-- `python3-pip`: 4 個 alerts (High)
-- `vim` / `vim-runtime`: 3 個 alerts (High)
-- `openssh-client`: 1 個 alert (High)
-
-> **建議**: 評估移除非必要套件（vim, python3-pip），考慮 multi-stage build 隔離編譯工具
+> Grype 結果同時上傳到 GitHub Security tab，與 dependency graph 整合追蹤。
 
 ### 版本更新流程
 
 ```mermaid
 flowchart TD
-    A[收到 CVE 通知] --> B{嚴重性}
+    A[收到 CVE 通知 / daily cron] --> B{嚴重性}
     B -->|Critical| C[立即處理]
     B -->|High| D[排入 sprint]
     B -->|Medium/Low| E[定期檢視]
-    
+
     C --> F[更新 Dockerfile ARG]
     D --> F
-    F --> G[本地測試]
-    G --> H{測試通過?}
-    H -->|是| I[提交 PR]
+    F --> G[CI build + test + scan]
+    G --> H{通過?}
+    H -->|是| I[PR / auto-release]
     H -->|否| J[問題排查]
     J --> F
-    I --> K[CI/CD 驗證]
-    K --> L[合併至 main]
-    
+    I --> K[合併至 main]
+
     style C fill:#ff9999
     style D fill:#ffcc99
     style E fill:#ccff99
 ```
 
-### 更新檢查命令
+### 手動更新檢查命令
 
 ```bash
 # 檢查 Docker CLI 最新版本
@@ -347,7 +332,7 @@ grype ai-engkit:latest
 
 ### 待處理事項
 
-詳細的技術債務和安全改進事項請參閱 [backlog.md](./backlog.md)。
+技術債務、安全改進、功能請求統一在 [GitHub Issues](https://github.com/tryweb/ai-engkit/issues) 追蹤與管理。
 
 ---
 
