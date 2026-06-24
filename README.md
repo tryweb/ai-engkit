@@ -87,7 +87,7 @@ Copy `.env.example` to `.env` and customize:
 | `OPENCODE_SERVER_PASSWORD` | `devonly` | OpenCode API password |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
 | `OPENCODE_PLUGINS` | `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git` | Comma-separated plugin list |
-| `WORKSPACE_PATH` | *(named volume)* | Host path for workspace bind mount |
+| `WORKSPACE_PATH` | *(unset → named volume `workspace`)* | Host path for workspace bind mount |
 | `APT_PACKAGES` | *(empty)* | Extra apt packages installed at container startup |
 | `BREW_PACKAGES` | *(empty)* | Extra Homebrew packages installed at container startup |
 | `BUN_PACKAGES` | *(empty)* | Extra global bun packages installed at container startup |
@@ -115,8 +115,10 @@ By default, the workspace uses a Docker named volume. To use a host directory fo
 ```bash
 # Use a bind mount to a local directory
 echo "WORKSPACE_PATH=./workspace" >> .env
-docker compose up -d
+docker compose up -d --force-recreate
 ```
+
+Leave `WORKSPACE_PATH` commented or unset to keep using the default named volume.
 
 This allows you to edit files with your local IDE while the container runs.
 
