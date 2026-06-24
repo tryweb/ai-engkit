@@ -3,6 +3,27 @@ set -euo pipefail
 
 REPO_URL="https://raw.githubusercontent.com/tryweb/ai-engkit/main"
 
+set_env_value() {
+    local key="$1"
+    local value="$2"
+
+    if grep -qE "^[[:space:]]*#?[[:space:]]*${key}=" .env 2>/dev/null; then
+        sed -i "s|^[[:space:]]*#\{0,1\}[[:space:]]*${key}=.*|${key}=${value}|" .env
+    else
+        echo "${key}=${value}" >> .env
+    fi
+}
+
+unset_env_value() {
+    local key="$1"
+
+    if grep -qE "^[[:space:]]*#?[[:space:]]*${key}=" .env 2>/dev/null; then
+        sed -i "s|^[[:space:]]*#\{0,1\}[[:space:]]*${key}=.*|# ${key}=|" .env
+    else
+        echo "# ${key}=" >> .env
+    fi
+}
+
 check_system() {
     echo "========================================"
     echo "1. 檢查系統硬體規格"
@@ -270,7 +291,7 @@ setup_env() {
                 echo "  📁 建立目錄: ./workspace"
                 mkdir -p "./workspace"
             fi
-            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=./workspace|" .env 2>/dev/null || true
+            set_env_value "WORKSPACE_PATH" "./workspace"
             echo "  ✅ 使用 bind mount: ./workspace"
             ;;
         3)
@@ -281,11 +302,11 @@ setup_env() {
                 echo "  📁 建立目錄: $WS_PATH"
                 mkdir -p "$WS_PATH"
             fi
-            sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=$WS_PATH|" .env 2>/dev/null || true
+            set_env_value "WORKSPACE_PATH" "$WS_PATH"
             echo "  ✅ WORKSPACE_PATH 已設定為: $WS_PATH"
             ;;
         *)
-            sed -i "s|^WORKSPACE_PATH=.*|# WORKSPACE_PATH=|" .env 2>/dev/null || true
+            unset_env_value "WORKSPACE_PATH"
             echo "  ✅ 使用 named volume (預設)"
             ;;
     esac

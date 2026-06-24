@@ -5,7 +5,7 @@ services:
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:
-      - workspace:/home/devuser/workspace
+      - ${WORKSPACE_PATH:-workspace}:/home/devuser/workspace
       - opencode-data:/home/devuser/.local/share/opencode
       - lean-ctx-data:/home/devuser/.local/share/lean-ctx
       - lean-ctx-state:/home/devuser/.local/state/lean-ctx
