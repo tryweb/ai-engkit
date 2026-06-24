@@ -243,7 +243,6 @@ GitHub Actions will automatically:
 │   ├── SECURITY.md
 │   ├── TOOLING.md
 │   ├── TROUBLESHOOTING.md
-│   ├── backlog.md
 │   └── knowledge/               # Git-backed knowledge base (manual, human-readable)
 │       ├── README.md
 │       ├── _template.md
