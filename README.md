@@ -31,6 +31,32 @@ curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/in
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
 
+## Upgrade
+
+To update an existing installation to the latest version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/upgrade.sh | bash
+```
+
+The upgrade script will:
+
+1. **Back up** your current `docker-compose.yml` and `.env` to a timestamped directory (`backup_<timestamp>/`)
+2. **Download** the latest `docker-compose.yml` from upstream
+3. **Merge** any new environment variables into your `.env` (preserving your custom values)
+4. **Pull** the latest container image
+5. **Recreate** the container with `docker compose up -d --force-recreate`
+6. **Clean up** dangling images to free disk space
+
+If you need to roll back, the backup directory contains your previous configuration:
+
+```bash
+docker compose down
+cp backup_<timestamp>/docker-compose.yml docker-compose.yml
+cp backup_<timestamp>/.env .env
+docker compose up -d
+```
+
 ## Documentation Map
 
 - [docs/TOOLING.md](./docs/TOOLING.md) — built-in MCP servers, CLI tools, package managers, and extension points
@@ -195,6 +221,7 @@ GitHub Actions will automatically:
 │       └── vuln-scan.md
 ├── docker-compose.yml          # User-facing (uses pre-built image)
 ├── docker-compose.dev.yml      # Developer (builds from Dockerfile)
+├── upgrade.sh                  # One-liner upgrade from existing installation
 ├── Dockerfile                  # Ubuntu 24.04 based image
 ├── entrypoint.sh               # Main entrypoint
 ├── entrypoint.d/               # Initialization scripts
