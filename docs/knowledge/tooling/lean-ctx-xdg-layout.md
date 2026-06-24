@@ -2,15 +2,16 @@
 
 ## Context
 
-ai-engkit runs lean-ctx inside a Docker container with persistent named volumes mounted at XDG base directories:
+ai-engkit runs lean-ctx inside a Docker container. lean-ctx uses the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) layout, with these four directories:
 
-| Volume | Mount | Purpose |
-|--------|-------|---------|
-| `lean-ctx-data` | `$XDG_DATA_HOME/lean-ctx` | Sessions, vectors, graphs, knowledge |
-| `lean-ctx-state` | `$XDG_STATE_HOME/lean-ctx` | Event logs, journals, agent runtime env |
-| `lean-ctx-cache` | `$XDG_CACHE_HOME/lean-ctx` | Semantic cache, models, learned patterns |
+| XDG Base | Container path | Purpose | Persisted? | Mechanism |
+|----------|---------------|---------|-----------|-----------|
+| `XDG_DATA_HOME` | `~/.local/share/lean-ctx` | Sessions, vectors, graphs, knowledge | ✅ | `lean-ctx-data` named volume |
+| `XDG_STATE_HOME` | `~/.local/state/lean-ctx` | Event logs, journals, agent runtime env | ✅ | `lean-ctx-state` named volume |
+| `XDG_CACHE_HOME` | `~/.cache/lean-ctx` | Semantic cache, models, learned patterns | ❌ (ephemeral) | in-image only — recreated on container recreate (cache is rebuildable) |
+| `XDG_CONFIG_HOME` | `~/.config/lean-ctx` | `config.toml`, `layout.toml` (pin), `env.sh` | ❌ (ephemeral) | in-image only — created by `lean-ctx` install at build time, regenerated on first lean-ctx invocation |
 
-These volumes survive container restarts and are separate from the `opencode-config` volume where `config.toml` lives (`$XDG_CONFIG_HOME/lean-ctx`).
+Only `lean-ctx-data` and `lean-ctx-state` are **named volumes** declared in `docker-compose.yml`. The `~/.cache/lean-ctx` directory is pre-created in the image (Dockerfile L235) but **not** mounted from a volume, so it does not survive `docker compose down && docker compose up`. The `~/.config/lean-ctx` directory is created by the `lean-ctx` install at build time (Dockerfile L134) and is **not** in the `opencode-config` volume — that volume mounts `~/.config/opencode/`, a sibling directory, not `~/.config/`.
 
 lean-ctx v3.8.5 introduced [proper XDG Base Directory compliance](https://github.com/yvgude/lean-ctx/releases/tag/v3.8.5) (#408), splitting data/state/cache/config into separate directories. Before v3.8.9, this split was enforced by a **heuristic**: if no legacy `~/.lean-ctx` marker was found, the XDG layout was used. However, a stray marker (an old backup restored, a concurrent older binary writing `~/.lean-ctx`, or even an empty `sessions/` directory) could silently **collapse** all four directories back into one, causing config to look empty, dashboard graphs to disappear, and data to appear lost.
 
@@ -52,7 +53,11 @@ The pin is crash-safe (written atomically) and idempotent (re-writing the same p
 
 - **No rollback**: Once pinned, there is no automatic way to revert to a legacy single-directory layout. Manual removal of the pin file + migration would be required. In practice this is desirable for ai-engkit (we want XDG permanence).
 - **Legacy installs are unaffected**: Installs that never migrated to XDG continue working in single-directory mode. The pin is only written when the XDG layout is active.
-- **Container compatibility**: The pin survives container rebuilds only if the `opencode-config` volume (containing `$XDG_CONFIG_HOME`) persists. If the config volume is lost, re-running `lean-ctx setup` or the MCP server start re-creates the pin.
+- **Container compatibility**: The pin's persistence depends on which event happens:
+  - `docker compose down && up` (recreate): `~/.config/lean-ctx/` survives because the directory is in the image (created at build time by `lean-ctx` install), not because of any volume. The two `lean-ctx-*` named volumes are unaffected.
+  - `docker compose down -v && up` (drop volumes): drops `lean-ctx-data` and `lean-ctx-state` only. `~/.config/lean-ctx/` still survives from the image.
+  - Image rebuild (`docker compose build --no-cache`): produces a new image with fresh `~/.config/lean-ctx/`, so the pin is **lost**. lean-ctx auto-recreates it on the first `setup` / MCP start / `doctor --fix` run after rebuild.
+  - `docker compose down -v --rmi all` (nuclear): loses both volumes and the image, so all four directories are reset.
 
 ## Evidence
 
@@ -60,7 +65,9 @@ The pin is crash-safe (written atomically) and idempotent (re-writing the same p
 - [XDG Base Directory compliance v3.8.5 (#408)](https://github.com/yvgude/lean-ctx/releases/tag/v3.8.5)
 - ai-engkit `README.md` — volume configuration table
 - ai-engkit `docs/ARCHITECTURE.md` — lean-ctx integration overview
-- ai-engkit `docker-compose.yml` — `lean-ctx-data`, `lean-ctx-state`, `lean-ctx-cache` volume definitions
+- ai-engkit `docker-compose.yml` — `lean-ctx-data`, `lean-ctx-state` volume declarations (only the persistent ones; `lean-ctx-cache` is in-image only)
+- ai-engkit `Dockerfile` L134 (`lean-ctx` install creates `~/.config/lean-ctx/` at build time) and L235 (pre-creates `~/.cache/lean-ctx/` in image)
+- ai-engkit `Dockerfile` L256-267 (`VOLUME` array declares `~/.local/share/lean-ctx` and `~/.local/state/lean-ctx` only)
 
 ## Related Files
 
