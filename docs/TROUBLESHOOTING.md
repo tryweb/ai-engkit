@@ -155,11 +155,11 @@ sudo ufw allow 8000/tcp
 
 ### 容器內啟動的子專案，從 host 連不到
 
-> ⚠️ **本節描述的是 host Docker daemon 環境問題，並非 Codeforge bug**。在標準 Docker 主機（CI / staging / production）上不會發生，與下方的 [glab credential helper 路徑問題](#glab-作為-git-credential-helper-的版本化路徑問題) 屬同類型：問題在使用者的 host 端，容器內不受影響。
+> ⚠️ **本節描述的是 host Docker daemon 環境問題，並非 ai-engkit bug**。在標準 Docker 主機（CI / staging / production）上不會發生，與下方的 [glab credential helper 路徑問題](#glab-作為-git-credential-helper-的版本化路徑問題) 屬同類型：問題在使用者的 host 端，容器內不受影響。
 
-**情境**：在 Codeforge 容器內以 `docker compose up -d` 啟動自己的子專案，port mapping 設定正確（例如 `0.0.0.0:8020:80`），但從 host 端 `curl http://localhost:8020/` 回 `Connection refused`。
+**情境**：在 ai-engkit 容器內以 `docker compose up -d` 啟動自己的子專案，port mapping 設定正確（例如 `0.0.0.0:8020:80`），但從 host 端 `curl http://localhost:8020/` 回 `Connection refused`。
 
-**快速診斷**（在 Codeforge 容器內執行）：
+**快速診斷**（在 ai-engkit 容器內執行）：
 
 ```bash
 # 1. 子專案容器在跑嗎？port mapping 已建立嗎？
@@ -180,19 +180,19 @@ docker network inspect <子專案網路名> --format '{{range .IPAM.Config}}{{.G
 | `curl http://localhost:8020/` | ❌ Connection refused | host docker-proxy 沒起來，host 沒 listen 8020 |
 | `curl http://<bridge gateway>:8020/` | ✅ 200 OK | **容器服務本身健康，純粹是 host NAT 問題** |
 
-**根本原因**（不在 Codeforge 範圍）：
+**根本原因**（不在 ai-engkit 範圍）：
 
 1. **Host 缺少 docker bridge 路由**：`docker compose` 自動建立 bridge（例如 172.20.0.0/16），但 host 路由表沒對應 entry，導致 host 直連容器 IP 失敗。
 2. **Host docker userland-proxy 沒運行**：`daemon.json` 設了 `userland-proxy: true`，但 dockerd 沒把 proxy process 拉起來。常見於多 netns、自訂 iptables 規則被沖掉、rootless docker、WSL2 等環境。
 
-**暫時 workaround**（在 Codeforge 容器內繞過 host NAT）：
+**暫時 workaround**（在 ai-engkit 容器內繞過 host NAT）：
 
 ```bash
 # 用 bridge gateway IP 而非 localhost 存取
 curl http://<bridge gateway>:8020/
 ```
 
-**永久修復**（需在 **host** 上操作，**不是** Codeforge 範圍）：
+**永久修復**（需在 **host** 上操作，**不是** ai-engkit 範圍）：
 
 ```bash
 # 1. 確認 docker iptables 鏈還在
@@ -209,10 +209,10 @@ sudo journalctl -u docker --since "10 min ago"
 cat /etc/docker/daemon.json   # 應含 "ip-forward": true, "userland-proxy": true
 ```
 
-**如何向使用者確認這不是 Codeforge 的問題**：
+**如何向使用者確認這不是 ai-engkit 的問題**：
 
 - 在另一台標準 Docker 主機跑同一份子專案 `docker-compose.yml`，若可連線 → 確認是當前 host 環境問題
-- 在 Codeforge 容器內 `docker exec <子專案容器> curl http://localhost:80` 回 200 → 確認容器服務本身沒事
+- 在 ai-engkit 容器內 `docker exec <子專案容器> curl http://localhost:80` 回 200 → 確認容器服務本身沒事
 
 ## 權限問題
 
@@ -292,7 +292,7 @@ docker exec ai-dev sudo chown -R devuser:devuser /home/devuser/.config/gh/
 
 ### glab 作為 git credential helper 的版本化路徑問題
 
-> 相關 issue: [#4](https://github.com/tryweb/Codeforge/issues/4)
+> 相關 issue: [#4](https://github.com/tryweb/ai-engkit/issues/4)
 > 註：此問題發生在使用者的**主機**環境，並非容器內。容器內的 git 使用 `credential.helper store`（見 `entrypoint.d/04-init-git-ssh.sh`），不受此影響。
 
 **症狀**：當使用者手動把 glab 設為 git 的 credential helper 後，一旦 `brew upgrade glab`，push/pull 等需要認證的操作就會失敗：
@@ -588,7 +588,7 @@ docker compose up -d
    docker stats --no-stream >> diagnostics.txt
    ```
 
-2. **搜尋現有問題**：[GitHub Issues](https://github.com/tryweb/codeforge/issues)
+2. **搜尋現有問題**：[GitHub Issues](https://github.com/tryweb/ai-engkit/issues)
 
 3. **提交新 Issue**：附上診斷資訊和重現步驟
 

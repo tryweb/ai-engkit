@@ -32,7 +32,7 @@ jobs:
         with:
           context: .
           outputs: type=docker,dest=/tmp/image.tar
-          tags: codeforge:ci
+          tags: ai-engkit:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -68,7 +68,7 @@ jobs:
           cat > docker-compose.override.yml << 'EOF'
           services:
             ai-dev:
-              image: codeforge:ci
+              image: ai-engkit:ci
               container_name: ci-test
               environment:
                 - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
@@ -126,7 +126,7 @@ jobs:
       - name: Run Grype vulnerability scan
         uses: anchore/scan-action@v7
         with:
-          image: "codeforge:ci"
+          image: "ai-engkit:ci"
           output-format: sarif
           output-file: grype-results.sarif
           severity-cutoff: critical
@@ -168,9 +168,9 @@ jobs:
       - name: Tag and push
         run: |
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
-          docker tag codeforge:ci "${IMAGE}:${{ github.ref_name }}"
-          docker tag codeforge:ci "${IMAGE}:sha-${{ github.sha }}"
-          docker tag codeforge:ci "${IMAGE}:latest"
+          docker tag ai-engkit:ci "${IMAGE}:${{ github.ref_name }}"
+          docker tag ai-engkit:ci "${IMAGE}:sha-${{ github.sha }}"
+          docker tag ai-engkit:ci "${IMAGE}:latest"
           docker push --all-tags "${IMAGE}"
 
   release:
@@ -316,9 +316,9 @@ jobs:
         run: |
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
           NEXT_VERSION="${{ steps.version.outputs.next-version }}"
-          docker tag codeforge:ci "${IMAGE}:${NEXT_VERSION}"
-          docker tag codeforge:ci "${IMAGE}:sha-${{ github.sha }}"
-          docker tag codeforge:ci "${IMAGE}:latest"
+          docker tag ai-engkit:ci "${IMAGE}:${NEXT_VERSION}"
+          docker tag ai-engkit:ci "${IMAGE}:sha-${{ github.sha }}"
+          docker tag ai-engkit:ci "${IMAGE}:latest"
           docker push --all-tags "${IMAGE}"
           echo "::notice::Pushed image: ${IMAGE}:${NEXT_VERSION}"
 

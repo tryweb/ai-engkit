@@ -2,7 +2,7 @@
 
 ## Context
 
-Codeforge runs lean-ctx inside a Docker container with persistent named volumes mounted at XDG base directories:
+ai-engkit runs lean-ctx inside a Docker container with persistent named volumes mounted at XDG base directories:
 
 | Volume | Mount | Purpose |
 |--------|-------|---------|
@@ -50,7 +50,7 @@ The pin is crash-safe (written atomically) and idempotent (re-writing the same p
 
 ## Side Effects / Tradeoffs
 
-- **No rollback**: Once pinned, there is no automatic way to revert to a legacy single-directory layout. Manual removal of the pin file + migration would be required. In practice this is desirable for Codeforge (we want XDG permanence).
+- **No rollback**: Once pinned, there is no automatic way to revert to a legacy single-directory layout. Manual removal of the pin file + migration would be required. In practice this is desirable for ai-engkit (we want XDG permanence).
 - **Legacy installs are unaffected**: Installs that never migrated to XDG continue working in single-directory mode. The pin is only written when the XDG layout is active.
 - **Container compatibility**: The pin survives container rebuilds only if the `opencode-config` volume (containing `$XDG_CONFIG_HOME`) persists. If the config volume is lost, re-running `lean-ctx setup` or the MCP server start re-creates the pin.
 
@@ -58,9 +58,9 @@ The pin is crash-safe (written atomically) and idempotent (re-writing the same p
 
 - [Release v3.8.9 — XDG layout pin (#623)](https://github.com/yvgude/lean-ctx/releases/tag/v3.8.9)
 - [XDG Base Directory compliance v3.8.5 (#408)](https://github.com/yvgude/lean-ctx/releases/tag/v3.8.5)
-- Codeforge `README.md` — volume configuration table
-- Codeforge `docs/ARCHITECTURE.md` — lean-ctx integration overview
-- Codeforge `docker-compose.yml` — `lean-ctx-data`, `lean-ctx-state`, `lean-ctx-cache` volume definitions
+- ai-engkit `README.md` — volume configuration table
+- ai-engkit `docs/ARCHITECTURE.md` — lean-ctx integration overview
+- ai-engkit `docker-compose.yml` — `lean-ctx-data`, `lean-ctx-state`, `lean-ctx-cache` volume definitions
 
 ## Related Files
 

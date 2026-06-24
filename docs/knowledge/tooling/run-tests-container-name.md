@@ -6,7 +6,7 @@
 
 ## Problem
 
-`test/run-tests.sh` 第 10 行預設 `CONTAINER="${1:-ai-dev}"`，但 `docker-compose.dev.yml` 中 `container_name: codeforge-dev`。因此直接執行 `bash test/run-tests.sh` 會報錯：
+`test/run-tests.sh` 第 10 行預設 `CONTAINER="${1:-ai-dev}"`，但 `docker-compose.dev.yml` 中 `container_name: ai-engkit-dev`。因此直接執行 `bash test/run-tests.sh` 會報錯：
 
 ```
 OCI runtime exec failed: exec failed: unable to start container process: exec: "./test/run-tests.sh": stat ./test/run-tests.sh: no such file or directory
@@ -17,12 +17,12 @@ OCI runtime exec failed: exec failed: unable to start container process: exec: "
 執行時必須明確傳入 container name：
 
 ```bash
-bash test/run-tests.sh codeforge-dev
+bash test/run-tests.sh ai-engkit-dev
 ```
 
 ## Why It Works
 
-`docker-compose.dev.yml` 定義 `container_name: codeforge-dev`，而測試腳本使用 `docker exec "$CONTAINER"` 操作。若預設值 `ai-dev` 與實際名稱不符，docker 找不到 container 導致測試失敗。
+`docker-compose.dev.yml` 定義 `container_name: ai-engkit-dev`，而測試腳本使用 `docker exec "$CONTAINER"` 操作。若預設值 `ai-dev` 與實際名稱不符，docker 找不到 container 導致測試失敗。
 
 ## Side Effects / Tradeoffs
 
@@ -31,12 +31,12 @@ bash test/run-tests.sh codeforge-dev
 ## Evidence
 
 - 第一次執行 `bash test/run-tests.sh` → 失敗
-- 第二次執行 `bash test/run-tests.sh codeforge-dev` → 48 PASS / 0 FAIL / 6 SKIP
+- 第二次執行 `bash test/run-tests.sh ai-engkit-dev` → 48 PASS / 0 FAIL / 6 SKIP
 
 ## Related Files
 
 - `test/run-tests.sh` (line 10: `CONTAINER="${1:-ai-dev}"`)
-- `docker-compose.dev.yml` (line 9: `container_name: codeforge-dev`)
+- `docker-compose.dev.yml` (line 9: `container_name: ai-engkit-dev`)
 
 ## Tags
 

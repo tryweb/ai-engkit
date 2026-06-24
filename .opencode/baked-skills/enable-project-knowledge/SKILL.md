@@ -144,7 +144,7 @@ ls ~/.config/opencode/skills/knowledge-capture/SKILL.md
 ```
 
 The project-local copy at `.opencode/skills/knowledge-capture.md` (created by
-the bootstrap script) exists for git portability outside Codeforge environments.
+the bootstrap script) exists for git portability outside ai-engkit environments.
 
 ---
 

@@ -10,6 +10,6 @@
 - Remaining real CVEs: 768
 
 ## API Approach
-- `gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate` for fetching
-- `gh api -X PATCH repos/tryweb/Codeforge/code-scanning/alerts/{NUMBER}` for dismissal
+- `gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate` for fetching
+- `gh api -X PATCH repos/tryweb/ai-engkit/code-scanning/alerts/{NUMBER}` for dismissal
 - Sequential calls with 0.5s sleep to avoid rate limiting

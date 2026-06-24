@@ -13,10 +13,10 @@ When the user asks to release, follow these steps in order:
 
 ### 1. Ensure Dev Container Is Running
 
-The tests require the `codeforge-dev` container (from `docker-compose.dev.yml`) to be running. Check if it's up:
+The tests require the `ai-engkit-dev` container (from `docker-compose.dev.yml`) to be running. Check if it's up:
 
 ```bash
-docker inspect codeforge-dev --format='{{.State.Status}}' 2>/dev/null
+docker inspect ai-engkit-dev --format='{{.State.Status}}' 2>/dev/null
 ```
 
 If the container is not running or does not exist, build and start it automatically:
@@ -31,7 +31,7 @@ Then wait for the container to be healthy and ready:
 ```bash
 echo "[release] Waiting for container to be ready..."
 for i in $(seq 1 30); do
-  STATUS=$(docker inspect codeforge-dev --format='{{.State.Status}}' 2>/dev/null)
+  STATUS=$(docker inspect ai-engkit-dev --format='{{.State.Status}}' 2>/dev/null)
   if [ "$STATUS" = "running" ]; then
     echo "[release] Container is running."
     break

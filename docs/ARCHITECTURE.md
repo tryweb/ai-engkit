@@ -1,6 +1,6 @@
 # 架構說明
 
-本文檔說明 Codeforge 專案的系統架構、元件間的關係及資料流程。
+本文檔說明 ai-engkit 專案的系統架構、元件間的關係及資料流程。
 
 ## 目錄
 
@@ -15,7 +15,7 @@
 
 ## 系統概覽
 
-Codeforge 是一個基於 Docker 的 AI 開發環境，整合了 OpenCode AI 助手（後端）、OpenChamber Web UI（前端的 Web 介面）以及預先安裝好的常用開發工具。
+ai-engkit 是一個基於 Docker 的 AI 開發環境，整合了 OpenCode AI 助手（後端）、OpenChamber Web UI（前端的 Web 介面）以及預先安裝好的常用開發工具。
 
 ```mermaid
 graph TB

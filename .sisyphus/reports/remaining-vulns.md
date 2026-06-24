@@ -1,7 +1,7 @@
 # Remaining Vulnerability Report
 
 > **Generated**: 2026-06-12 | **Tool**: Grype SCA (anchore/scan-action@v7)
-> **Context**: CodeForge Ubuntu 24.04 dev container
+> **Context**: ai-engkit Ubuntu 24.04 dev container
 > **Total**: 768 alerts | **Dismissed as FP**: 1,318 (Chrome/Chromium, X11/Xvfb, CUPS/Pixman, systemd/udev)
 
 ---

@@ -342,7 +342,7 @@ curl -s https://api.github.com/repos/docker/compose/releases/latest | jq -r '.ta
 apt-get update && apt-get list --upgradable
 
 # 執行漏洞掃描
-grype codeforge:latest
+grype ai-engkit:latest
 ```
 
 ### 待處理事項

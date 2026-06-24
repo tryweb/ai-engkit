@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-CONTAINER="${1:-codeforge-dev}"
+CONTAINER="${1:-ai-engkit-dev}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -287,7 +287,7 @@ jobs:
 
           # --- Check apt updates inside ubuntu:24.04 base image ---
           # This runs against the actual base image (not the GitHub runner) so only
-          # packages relevant to the CodeForge image are reported. Results are tracked
+          # packages relevant to the ai-engkit image are reported. Results are tracked
           # in version-snapshot across runs so the same stale updates aren't re-reported.
           apt_summary="All packages are up to date"
           declare -A APT_PACKAGES
@@ -436,11 +436,11 @@ jobs:
         with:
           context: .
           load: true
-          tags: codeforge:updated
+          tags: ai-engkit:updated
           build-args: ${{ steps.build-args.outputs.args }}
 
       - name: Save updated image artifact
-        run: docker save codeforge:updated -o /tmp/updated-image.tar
+        run: docker save ai-engkit:updated -o /tmp/updated-image.tar
 
       - name: Upload updated image artifact
         uses: actions/upload-artifact@v7
@@ -455,7 +455,7 @@ jobs:
           cat > docker-compose.override.yml << 'EOF'
           services:
             ai-dev:
-              image: codeforge:updated
+              image: ai-engkit:updated
               container_name: ci-test
               environment:
                 - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
@@ -540,13 +540,13 @@ jobs:
         if: steps.baseline-tag.outputs.tag != '' && steps.baseline-image.outcome == 'success'
         env:
           BASELINE_IMAGE: ghcr.io/${{ github.repository }}:${{ steps.baseline-tag.outputs.tag }}
-        run: docker tag "$BASELINE_IMAGE" codeforge:baseline
+        run: docker tag "$BASELINE_IMAGE" ai-engkit:baseline
 
       - name: Scan baseline image to JSON
         if: steps.baseline-tag.outputs.tag != '' && steps.baseline-image.outcome == 'success'
         uses: anchore/scan-action@v7
         with:
-          image: "codeforge:baseline"
+          image: "ai-engkit:baseline"
           output-format: json
           output-file: grype-baseline-results.json
           severity-cutoff: critical
@@ -555,7 +555,7 @@ jobs:
       - name: Scan updated image to JSON
         uses: anchore/scan-action@v7
         with:
-          image: "codeforge:updated"
+          image: "ai-engkit:updated"
           output-format: json
           output-file: grype-updated-results.json
           severity-cutoff: critical
@@ -564,7 +564,7 @@ jobs:
       - name: Run Grype SARIF scan for updated image
         uses: anchore/scan-action@v7
         with:
-          image: "codeforge:updated"
+          image: "ai-engkit:updated"
           output-format: sarif
           output-file: grype-updated-results.sarif
           severity-cutoff: critical
@@ -803,7 +803,7 @@ jobs:
 
           changelog_path, version, date, pinned_raw, latest_raw, apt_updates = sys.argv[1:7]
           version_no_v = version.lstrip('v')
-          repo = 'https://github.com/tryweb/Codeforge'
+          repo = 'https://github.com/tryweb/ai-engkit'
 
           def parse_items(raw):
               try:
@@ -890,7 +890,7 @@ jobs:
           body = re.sub(r'\n{3,}', '\n\n', body).rstrip() + '\n'
 
           footer_without_links = re.sub(
-              r'\n*(?:\[Unreleased\]|\[\d+\.\d+\.\d+\]): https://github\.com/tryweb/Codeforge/[^\n]+',
+              r'\n*(?:\[Unreleased\]|\[\d+\.\d+\.\d+\]): https://github\.com/tryweb/ai-engkit/[^\n]+',
               '',
               footer,
           ).rstrip()

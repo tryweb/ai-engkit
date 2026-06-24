@@ -1,10 +1,10 @@
 # Tooling Guide
 
-This document summarizes the tools that ship with CodeForge and where to extend them.
+This document summarizes the tools that ship with ai-engkit and where to extend them.
 
 ## Overview
 
-CodeForge combines four layers of tooling in one container:
+ai-engkit combines four layers of tooling in one container:
 
 1. **AI workspace** — OpenCode, OpenChamber, OpenSpec, plugins, and baked skills
 2. **MCP integrations** — CodeGraph, lean-ctx, and Playwright
@@ -13,7 +13,7 @@ CodeForge combines four layers of tooling in one container:
 
 ## Built-in MCP Servers
 
-CodeForge preconfigures these MCP servers for OpenCode:
+ai-engkit preconfigures these MCP servers for OpenCode:
 
 | Tool | Purpose | Notes |
 |------|---------|-------|
@@ -48,7 +48,7 @@ See [GIT_AUTHENTICATION.md](./GIT_AUTHENTICATION.md) for auth setup and credenti
 - `libssl-dev`
 - `libclang-dev`
 
-CodeForge is designed for Docker socket passthrough, so containerized workflows can still call Docker from inside the workspace.
+ai-engkit is designed for Docker socket passthrough, so containerized workflows can still call Docker from inside the workspace.
 
 ### General development utilities
 
@@ -66,7 +66,7 @@ Default plugin setup:
 - `oh-my-openagent`
 - `superpowers@git+https://github.com/obra/superpowers.git`
 
-CodeForge also bakes in project-visible skills such as:
+ai-engkit also bakes in project-visible skills such as:
 
 - `karpathy-guidelines`
 - `knowledge-capture`

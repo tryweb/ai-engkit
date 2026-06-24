@@ -1,6 +1,8 @@
-# CodeForge
+# ai-engkit
 
-CodeForge is a self-hosted AI development environment that packages [OpenCode](https://opencode.ai), [OpenChamber](https://openchamber.dev/), browser automation, code navigation, and everyday developer tooling into a single Ubuntu 24.04 container.
+> **Your Self-hosted AI Engineering Kit for Dev & Ops**
+
+ai-engkit is a self-hosted AI development environment that packages [OpenCode](https://opencode.ai), [OpenChamber](https://openchamber.dev/), browser automation, code navigation, and everyday developer tooling into a single Ubuntu 24.04 container.
 
 It is designed for teams and individuals who want a reproducible AI coding workspace without rebuilding their toolchain from scratch.
 
@@ -24,7 +26,7 @@ It is designed for teams and individuals who want a reproducible AI coding works
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tryweb/Codeforge/refs/heads/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/install.sh | bash
 ```
 
 Open [http://localhost:8000](http://localhost:8000) in your browser.
@@ -107,7 +109,7 @@ This allows you to edit files with your local IDE while the container runs.
 
 ## MCP and Knowledge Tooling
 
-Codeforge ships with a preconfigured MCP stack for code navigation and browser automation:
+ai-engkit ships with a preconfigured MCP stack for code navigation and browser automation:
 
 - **CodeGraph** — code graph and dependency analysis
 - **lean-ctx** — context-aware read/search/shell workflow helpers
@@ -136,7 +138,7 @@ For HTTPS, SSH, `gh`, `glab`, multiple accounts, and security notes, see:
 | `3000` | `${CHAMBER_PORT:-8000}` | OpenChamber Web UI |
 | `4095` | *(internal)* | OpenCode service port used inside the container stack |
 
-## When to Use CodeForge
+## When to Use ai-engkit
 
 - You want a ready-to-run AI coding environment with persistent state
 - You need browser automation, code graph tooling, and agent plugins in one place
@@ -174,7 +176,7 @@ This runs the automated release skill which:
 
 GitHub Actions will automatically:
 - Build and test the image
-- Push to `ghcr.io/{owner}/codeforge:{version}`
+- Push to `ghcr.io/{owner}/ai-engkit:{version}`
 - Create a GitHub Release with notes
 
 ## Project Structure

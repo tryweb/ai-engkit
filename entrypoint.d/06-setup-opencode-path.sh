@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROFILE_FILE="$HOME/.profile"
-MARKER="# OpenCode (opencode.ai) - Added by Codeforge entrypoint"
+MARKER="# OpenCode (opencode.ai) - Added by ai-engkit entrypoint"
 
 echo "=== Setting up OpenCode PATH in .profile ==="
 
@@ -11,7 +11,7 @@ touch "$PROFILE_FILE"
 if ! grep -qF "$MARKER" "$PROFILE_FILE" 2>/dev/null; then
   cat >> "$PROFILE_FILE" << 'EOF'
 
-# OpenCode (opencode.ai) - Added by Codeforge entrypoint
+# OpenCode (opencode.ai) - Added by ai-engkit entrypoint
 if [ -d "$HOME/.bun/bin" ]; then
     export PATH="$HOME/.bun/bin:$PATH"
 fi

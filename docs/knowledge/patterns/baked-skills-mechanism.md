@@ -2,7 +2,7 @@
 
 ## Context
 
-Codeforge ships as a Docker image. Users mount `~/.config/opencode` as a Docker volume, so any skill written to that directory at build time is lost at runtime. Skills are discovered from `~/.config/opencode/skills/`, which lives on that volume.
+ai-engkit ships as a Docker image. Users mount `~/.config/opencode` as a Docker volume, so any skill written to that directory at build time is lost at runtime. Skills are discovered from `~/.config/opencode/skills/`, which lives on that volume.
 
 The project needed a way to ship global skills (available to all users without manual install) that survive container rebuilds.
 

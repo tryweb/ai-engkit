@@ -18,7 +18,7 @@
 ## Context
 
 ### Original Request
-Analyze and triage 2,086 open code scanning alerts from Grype vulnerability scanner on the Codeforge Docker dev container.
+Analyze and triage 2,086 open code scanning alerts from Grype vulnerability scanner on the ai-engkit Docker dev container.
 
 ### Interview Summary
 **Key Discussions**:
@@ -108,7 +108,7 @@ Critical Path: Task 1 → Task 2
 - [x] 1. Dismiss False-Positive Alerts (Chrome, X11, CUPS, systemd)
 
   **What to do**:
-  1. Query ALL open alerts via `gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '.[] | select(.state == "open")'`
+  1. Query ALL open alerts via `gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate --jq '.[] | select(.state == "open")'`
   2. Filter to the 4 false-positive categories by matching `most_recent_instance.location.path` or `rule.id`:
      - Chrome: path contains `ms-playwright` or `chrome` or `chromium-browser`, or rule id ends with `-chrome`
      - X11/Xvfb: rule id contains `xserver-common` or `xvfb`, or path contains `xserver` or `xvfb`
@@ -129,7 +129,7 @@ Critical Path: Task 1 → Task 2
      Wait for user confirmation before proceeding. If user rejects, stop and report.
   4. If confirmed, iterate through each alert number and PATCH:
      ```bash
-     gh api -X PATCH repos/tryweb/Codeforge/code-scanning/alerts/{NUMBER} \
+     gh api -X PATCH repos/tryweb/ai-engkit/code-scanning/alerts/{NUMBER} \
        -f state="dismissed" \
        -f dismissed_reason="false positive" \
        -f dismissed_comment="...category-specific comment..."
@@ -150,11 +150,11 @@ Critical Path: Task 1 → Task 2
   **How to filter**:
   ```bash
   # Get all open alerts with path and rule info
-  gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+  gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
     --jq '[.[] | select(.state == "open") | {number, rule: .rule.id, severity: .rule.security_severity_level, path: .most_recent_instance.location.path}]'
   
   # Save to file for processing
-  gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+  gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
     --jq '[.[] | select(.state == "open")]' > /tmp/all-open-alerts.json
   ```
 
@@ -205,7 +205,7 @@ Critical Path: Task 1 → Task 2
     Tool: Bash (gh api)
     Preconditions: All 1,318 dismissal PATCH calls completed
     Steps:
-      1. gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open") | select(.rule.id | endswith("-chrome"))] | length'
+      1. gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open") | select(.rule.id | endswith("-chrome"))] | length'
       2. Also check by path: gh api ... --jq '[.[] | select(.state == "open") | select(.most_recent_instance.location.path // "" | test("ms-playwright|chrome"; "i"))] | length'
     Expected Result: Both commands return 0
     Failure Indicators: Any non-zero result means Chrome alerts weren't fully dismissed
@@ -215,7 +215,7 @@ Critical Path: Task 1 → Task 2
     Tool: Bash (gh api)
     Preconditions: All PATCH calls completed
     Steps:
-      1. gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '[.[] | select(.state == "dismissed")] | length'
+      1. gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate --jq '[.[] | select(.state == "dismissed")] | length'
       2. Compare with expected 1,318 (account for any alerts that may have been dismissed between fetch and execution)
     Expected Result: dismissed_count >= 1280 (accounting for minor timing differences)
     Failure Indicators: dismissed_count < 1000 suggests a major failure
@@ -224,7 +224,7 @@ Critical Path: Task 1 → Task 2
   Scenario: Remaining open alert count is reasonable
     Tool: Bash (gh api)
     Steps:
-      1. gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open")] | length'
+      1. gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate --jq '[.[] | select(.state == "open")] | length'
     Expected Result: open_count ≈ 600-900 (reasonably close to expected 768)
     Failure Indicators: open_count > 1300 suggests many false positives were missed
     Evidence: .sisyphus/evidence/task-1-remaining-count.txt
@@ -385,12 +385,12 @@ No code changes — no commits. All changes are GitHub API state mutations (aler
 ### Verification Commands
 ```bash
 # No Chrome alerts remaining
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open") | select(.rule.id | endswith("-chrome"))] | length'
 # Expected: 0
 
 # Total dismissed count is reasonable
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "dismissed")] | length'
 # Expected: >= 1280
 

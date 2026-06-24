@@ -86,11 +86,11 @@ flowchart TD
 
 ```bash
 # 1. Fork 並 Clone 儲存庫
-git clone https://github.com/YOUR_USERNAME/codeforge.git
-cd codeforge
+git clone https://github.com/YOUR_USERNAME/ai-engkit.git
+cd ai-engkit
 
 # 2. 加入上游儲存庫（選擇性）
-git remote add upstream https://github.com/tryweb/codeforge.git
+git remote add upstream https://github.com/tryweb/ai-engkit.git
 
 # 3. 建立功能分支
 git checkout -b feature/your-feature-name

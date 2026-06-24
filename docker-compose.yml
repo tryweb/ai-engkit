@@ -1,7 +1,7 @@
 services:
   ai-dev:
-    image: ghcr.io/tryweb/codeforge:latest
-    container_name: codeforge
+    image: ghcr.io/tryweb/ai-engkit:latest
+    container_name: ai-engkit
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:

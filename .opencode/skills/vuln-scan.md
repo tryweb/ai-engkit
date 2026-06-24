@@ -48,7 +48,7 @@ formats for different consumers.
 ### WRONG (broken)
 ```bash
 # --jq processes each page independently → per-page fragments
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate --jq 'length'
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate --jq 'length'
 # → "100\n100\n100..." (per page total, not global total)
 
 # --slurp + --jq → ERROR: not supported together
@@ -57,7 +57,7 @@ gh api ... --paginate --slurp --jq '...'
 
 ### CORRECT (pipe to jq -s for merging)
 ```bash
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open") | .number]' \
   2>/dev/null | jq -s 'add'
 ```
@@ -88,7 +88,7 @@ high-risk list from GitHub code scanning.
 ### 1. Query All Open Alerts
 
 ```bash
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open") | {number, rule: .rule.id, severity: .rule.security_severity_level, description: .rule.description, path: .most_recent_instance.location.path}]' \
   2>/dev/null | jq -s 'add'
 ```
@@ -96,7 +96,7 @@ gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
 For a quick summary by severity:
 
 ```bash
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open")] | group_by(.rule.security_severity_level) | map({severity: .[0].rule.security_severity_level, count: length}) | sort_by(.count) | reverse' \
   2>/dev/null | jq -s 'add | .[0]'
 ```
@@ -130,7 +130,7 @@ Common high-false-positive categories in this container:
 **Manual single-alert dismissal:**
 
 ```bash
-gh api -X PATCH repos/tryweb/Codeforge/code-scanning/alerts/{number} \
+gh api -X PATCH repos/tryweb/ai-engkit/code-scanning/alerts/{number} \
   -f state="dismissed" \
   -f dismissed_reason="won't fix" \
   -f dismissed_comment="Not exploitable in headless dev container — $REASON"
@@ -140,13 +140,13 @@ gh api -X PATCH repos/tryweb/Codeforge/code-scanning/alerts/{number} \
 
 ```bash
 # 1. Save all open alert numbers
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open") | .number]' \
   2>/dev/null | jq -s 'add' > /tmp/alerts.json
 
 # 2. Dismiss in parallel (xargs -P 8)
 jq -r '.[]' /tmp/alerts.json | xargs -P 8 -I {} sh -c '
-  gh api -X PATCH "repos/tryweb/Codeforge/code-scanning/alerts/{}" \
+  gh api -X PATCH "repos/tryweb/ai-engkit/code-scanning/alerts/{}" \
     -f state="dismissed" \
     -f dismissed_reason="won t fix" \
     -f dismissed_comment="Container image scan accepted risk" \
@@ -168,7 +168,7 @@ Always verify after any dismissal operation:
 Or manually:
 
 ```bash
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open") | .number]' \
   2>/dev/null | jq -s 'add | length'
 ```
@@ -178,7 +178,7 @@ Output should be `0`. If not, remaining alerts need individual review.
 ### 6. Compile High-Risk Report (for remaining alerts)
 
 ```bash
-gh api repos/tryweb/Codeforge/code-scanning/alerts --paginate \
+gh api repos/tryweb/ai-engkit/code-scanning/alerts --paginate \
   --jq '[.[] | select(.state == "open")] | group_by(.rule.security_severity_level) | map({severity: .[0].rule.security_severity_level, items: [.[] | {number, rule: .rule.id, path: .most_recent_instance.location.path}]}) | sort_by(.severity) | reverse' \
   2>/dev/null | jq -s 'add'
 ```
@@ -289,9 +289,9 @@ docker compose -f docker-compose.dev.yml build ai-dev
 Verify after build:
 
 ```bash
-docker run --rm codeforge-ai-dev docker --version
-docker run --rm codeforge-ai-dev docker compose version
-docker run --rm codeforge-ai-dev docker buildx version
+docker run --rm ai-engkit-ai-dev docker --version
+docker run --rm ai-engkit-ai-dev docker compose version
+docker run --rm ai-engkit-ai-dev docker buildx version
 ```
 
 ---

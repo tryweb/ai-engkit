@@ -2,7 +2,7 @@
 
 ## Context
 
-Codeforge ships `@playwright/mcp` so AI agents can drive a real browser. The
+ai-engkit ships `@playwright/mcp` so AI agents can drive a real browser. The
 Docker image is built on Ubuntu 24.04 and **has no system Google Chrome**
 installed — only Playwright's bundled Chromium under `/ms-playwright/`. When
 the MCP server starts, it must locate a browser executable.

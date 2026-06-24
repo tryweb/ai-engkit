@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${GH_REPO:-tryweb/Codeforge}"
+REPO="${GH_REPO:-tryweb/ai-engkit}"
 PARALLEL="${VULN_PARALLEL:-8}"
 MAX_RETRIES="${VULN_RETRY:-3}"
 
