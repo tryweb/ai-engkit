@@ -301,17 +301,29 @@ show_info() {
 # ──────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────
+verify_installed_environment() {
+    if [ -f "docker-compose.yml" ] && [ -f ".env" ]; then
+        return 0
+    fi
+
+    fail "找不到 ai-engkit 安裝環境（缺少 docker-compose.yml 或 .env）。
+
+upgrade.sh 僅供已安裝環境使用。首次安裝請改執行 install.sh：
+
+  curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/main/install.sh | bash
+
+若已透過 install.sh 安裝過，請確認你在正確的安裝目錄下執行此腳本。"
+}
+
 main() {
     cd "$(dirname "$0")"
+
+    verify_installed_environment
 
     echo
     echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
     echo -e "${BOLD}║   ai-engkit 升級腳本                ║${NC}"
     echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
-
-    if [ ! -f "docker-compose.yml" ] && [ ! -f ".env.example" ]; then
-        fail "請在 ai-engkit 安裝目錄執行此腳本（找不到 docker-compose.yml）"
-    fi
 
     check_system
     check_docker
