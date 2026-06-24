@@ -296,6 +296,68 @@ else
 fi
 
 # --------------------------------------------------
+# 8.2 LeanCTX (Context Runtime)
+# --------------------------------------------------
+echo ""
+echo "--- LeanCTX (Context Runtime) ---"
+
+assert_file_exists "lean-ctx config.toml exists" "/home/devuser/.config/lean-ctx/config.toml"
+assert_file_exists "lean-ctx env.sh exists" "/home/devuser/.config/lean-ctx/env.sh"
+assert_file_exists "lean-ctx shell hook exists" "/home/devuser/.config/lean-ctx/shell-hook.bash"
+assert_file_exists "~/.bashenv exists" "/home/devuser/.bashenv"
+
+LEAN_CTX_CONFIG=$(docker exec "$CONTAINER" sh -c 'cat /home/devuser/.config/lean-ctx/config.toml' 2>/dev/null || echo "")
+assert_contains "lean-ctx config enables permission inheritance" 'permission_inheritance = "on"' "$LEAN_CTX_CONFIG"
+assert_contains "lean-ctx config sets standard compression" 'compression_level = "standard"' "$LEAN_CTX_CONFIG"
+assert_contains "lean-ctx config caps graph index" 'graph_index_max_files = 5000' "$LEAN_CTX_CONFIG"
+
+BASHRC_CONTENT=$(docker exec "$CONTAINER" sh -c 'cat /home/devuser/.bashrc' 2>/dev/null || echo "")
+assert_contains "~/.bashrc contains lean-ctx shell hook" 'lean-ctx shell hook' "$BASHRC_CONTENT"
+assert_contains "~/.bashrc contains lean-ctx agent aliases" 'lean-ctx agent aliases' "$BASHRC_CONTENT"
+
+BASHENV_CONTENT=$(docker exec "$CONTAINER" sh -c 'cat /home/devuser/.bashenv' 2>/dev/null || echo "")
+assert_contains "~/.bashenv contains lean-ctx shell hook" 'lean-ctx shell hook' "$BASHENV_CONTENT"
+assert_contains "~/.bashenv defines _lc hook" '_lc()' "$BASHENV_CONTENT"
+
+BASH_ENV_VALUE=$(docker exec "$CONTAINER" sh -c 'printf "%s" "$BASH_ENV"' 2>/dev/null || echo "")
+assert_eq "BASH_ENV points to lean-ctx env.sh" "/home/devuser/.config/lean-ctx/env.sh" "$BASH_ENV_VALUE"
+
+CLAUDE_ENV_FILE_VALUE=$(docker exec "$CONTAINER" sh -c 'printf "%s" "$CLAUDE_ENV_FILE"' 2>/dev/null || echo "")
+assert_eq "CLAUDE_ENV_FILE points to lean-ctx env.sh" "/home/devuser/.config/lean-ctx/env.sh" "$CLAUDE_ENV_FILE_VALUE"
+
+NONINTERACTIVE_BASH_ENV=$(docker exec "$CONTAINER" sh -lc 'bash -c '\''printf "%s" "$BASH_ENV"'\''' 2>/dev/null || echo "")
+assert_eq "non-interactive bash inherits BASH_ENV" "/home/devuser/.config/lean-ctx/env.sh" "$NONINTERACTIVE_BASH_ENV"
+
+if docker exec "$CONTAINER" sh -c 'bash -c "test -f \"\$BASH_ENV\""' 2>/dev/null; then
+  pass "non-interactive bash can resolve env.sh from BASH_ENV"
+else
+  fail "non-interactive bash cannot resolve env.sh from BASH_ENV"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp[\"lean-ctx\"] | type == \"object\"" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "lean-ctx MCP configured in opencode.json"
+else
+  fail "lean-ctx MCP not configured in opencode.json"
+fi
+
+OPENCODE_MCP_LIST=$(docker exec "$CONTAINER" sh -c 'opencode mcp list' 2>/dev/null || echo "")
+assert_contains "opencode mcp list includes lean-ctx" 'lean-ctx' "$OPENCODE_MCP_LIST"
+assert_contains "opencode mcp list shows lean-ctx connected" 'connected' "$OPENCODE_MCP_LIST"
+
+if docker exec "$CONTAINER" sh -c 'lean-ctx config validate >/dev/null 2>&1'; then
+  pass "lean-ctx config validate passes"
+else
+  fail "lean-ctx config validate failed"
+fi
+
+LEAN_CTX_DOCTOR=$(docker exec "$CONTAINER" sh -c 'lean-ctx doctor' 2>/dev/null || echo "")
+assert_contains "lean-ctx doctor sees config.toml" 'config.toml' "$LEAN_CTX_DOCTOR"
+assert_contains "lean-ctx doctor reports permission inheritance on" 'Permission inheritance' "$LEAN_CTX_DOCTOR"
+assert_contains "lean-ctx doctor reports shell aliases" 'Shell aliases' "$LEAN_CTX_DOCTOR"
+assert_contains "lean-ctx doctor reports BASH_ENV set" 'BASH_ENV' "$LEAN_CTX_DOCTOR"
+assert_contains "lean-ctx doctor reports CLAUDE_ENV_FILE set" 'CLAUDE_ENV_FILE' "$LEAN_CTX_DOCTOR"
+
+# --------------------------------------------------
 # 8.2 Superpowers (Agentic Skills Framework)
 # --------------------------------------------------
 echo ""
