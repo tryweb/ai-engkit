@@ -1,3 +1,4 @@
 .env
 .opencode/package-lock.json
 .codegraph/
+.playwright-mcp/
