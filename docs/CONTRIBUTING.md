@@ -359,41 +359,41 @@ assert_dir_exists "描述" "/path/to/dir"
 
 ### 發布步驟
 
+本專案的發布流程已自動化，**不要**手動建立 tag 或編輯 Dockerfile 版本號。
+
 ```mermaid
 flowchart TD
-    A["確認所有測試通過"] --> B["更新 CHANGELOG"]
-    B --> C["更新版本號"]
-    C --> D["提交變更"]
-    D --> E["建立標籤"]
-    E --> F["推送標籤"]
-    F --> G["GitHub Actions<br/>自動發布"]
-    G --> H["驗證發布"]
+    A["本地開發完成"] --> B["提交 PR 合併至 main"]
+    B --> C{是否破壞性變更?}
+    C -->|是| D["人工 review<br/>(PR 流程)"]
+    C -->|否| E["CI auto-release<br/>(.github/workflows/ci.yml)"]
+    D --> F["合併後 CI 自動發布"]
+    E --> F
+    F --> G["GitHub Release<br/>+ GHCR image push"]
 
     style A fill:#e3f2fd
-    style H fill:#c8e6c9
+    style G fill:#c8e6c9
 ```
+
+#### 維護者發布指令
+
+日常發布透過 `/release` skill 互動執行（會自動跑測試、計算 semver、確認後 tag 並推送）：
 
 ```bash
-# 1. 確認測試通過
-./test/run-tests.sh
-
-# 2. 更新版本號（在 Dockerfile 中）
-# ARG OPENCODE_VERSION=x.y.z
-# ARG OPENCHAMBER_VERSION=x.y.z
-
-# 3. 更新 CHANGELOG
-# 記錄本次變更
-
-# 4. 提交
-git add -A
-git commit -m "chore: prepare release v1.2.3"
-
-# 5. 建立標籤
-git tag -a v1.2.3 -m "Release v1.2.3"
-
-# 6. 推送
-git push origin main --tags
+/release
 ```
+
+skill 會：
+1. 跑本地測試（包含 memory plugin E2E）
+2. 根據 commit 歷史自動計算 MAJOR / MINOR / PATCH bump
+3. 產生 release notes
+4. 提示確認後打 tag 並推送到 GitHub
+
+> GitHub Actions 接著會自動 build、test、推送到 `ghcr.io/{owner}/ai-engkit:{version}`、建立 GitHub Release。
+
+#### 例外：Dockerfile pinned 版本
+
+`Dockerfile` 中的 `OPENCODE_VERSION`、`OPENCHAMBER_VERSION` 等 ARG 升版**不需要**手動發布 tag — `.github/workflows/dependency-update.yml` 每日 20:00 UTC 自動偵測上游版本，自動跑 build / test / Grype scan，通過後自動開 PR（破壞性變更）或 auto-release（patch 安全更新）。
 
 ## 授權
 
