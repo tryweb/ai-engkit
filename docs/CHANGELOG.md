@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-24
+
+### 變更
+- 升級 OpenCode 1.17.9 → 1.17.10
+- 升級 OpenChamber 1.13.2 → 1.13.3
+- 更新 @colbymchenry/codegraph 最新追蹤版本 1.0.1 → 1.1.0
+- 更新 lean-ctx 最新追蹤版本 v3.8.11 → v3.8.12
+- 更新 Ubuntu 24.04 APT 套件快照（1 packages have updates: perl-base (5.38.2-3.2ubuntu0.2)）
+
 ### 修復
 - `vuln-scan.md` skill 內 docker 驗證範例的 `ai-engkit-ai-dev` typo 已修正為 `ai-engkit-dev`（改名前是 `codeforge-ai-dev`，改名時字面替換沒對齊 `docker-compose.dev.yml` 的真實 container name）。
 
@@ -551,7 +560,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v0.16.5...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.0.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -611,3 +620,7 @@
 [0.16.3]: https://github.com/tryweb/ai-engkit/compare/v0.16.2...v0.16.3
 [0.16.4]: https://github.com/tryweb/ai-engkit/compare/v0.16.3...v0.16.4
 [0.16.5]: https://github.com/tryweb/ai-engkit/compare/v0.16.4...v0.16.5
+[0.17.0]: https://github.com/tryweb/ai-engkit/compare/v0.16.5...v0.17.0
+[0.17.1]: https://github.com/tryweb/ai-engkit/compare/v0.17.0...v0.17.1
+[1.0.0]: https://github.com/tryweb/ai-engkit/compare/v0.17.1...v1.0.0
+[1.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.0.0...v1.0.1
