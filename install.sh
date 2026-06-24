@@ -227,6 +227,11 @@ download_files() {
     else
         echo "  ✅ .env 已存在"
     fi
+
+    echo "  下載最新 upgrade.sh..."
+    $DOWNLOAD_TOOL "$REPO_URL/upgrade.sh" -o upgrade.sh
+    chmod +x upgrade.sh
+    echo "  ✅ upgrade.sh 已就緒（後續執行 ./upgrade.sh 即可升級）"
 }
 
 setup_env() {
@@ -346,13 +351,50 @@ show_info() {
     echo "  其他服務:"
     echo "    - Ollama API: http://${HOST_IP:-localhost}:11434"
     echo
+    echo "  升級指令: ./upgrade.sh"
+    echo "    (從 upstream 拉新 compose / image，自動備份並合併 .env)"
+    echo
     echo "========================================"
     echo "  安裝完成!"
     echo "========================================"
 }
 
+delegate_to_upgrade_if_installed() {
+    if [ ! -f "docker-compose.yml" ]; then
+        return 0
+    fi
+
+    echo
+    echo "========================================"
+    echo "  偵測到已安裝環境"
+    echo "========================================"
+    echo "  - docker-compose.yml 已存在於 $(pwd)"
+    echo "  - install.sh 僅供首次安裝；改執行 ./upgrade.sh"
+    echo
+
+    if [ ! -f "upgrade.sh" ]; then
+        DOWNLOAD_TOOL="curl -fsSL"
+        if ! command -v curl &> /dev/null; then
+            DOWNLOAD_TOOL="wget -qO-"
+        fi
+        echo "  下載 upgrade.sh..."
+        if ! $DOWNLOAD_TOOL "$REPO_URL/upgrade.sh" -o upgrade.sh; then
+            echo "  ❌ 無法下載 upgrade.sh，請檢查網路連線"
+            exit 1
+        fi
+        chmod +x upgrade.sh
+        echo "  ✅ upgrade.sh 已就緒"
+    fi
+
+    echo "  委派給 ./upgrade.sh ..."
+    echo
+    exec ./upgrade.sh "$@"
+}
+
 main() {
     cd "$(dirname "$0")"
+
+    delegate_to_upgrade_if_installed "$@"
 
     [ -t 0 ] || exec < /dev/tty
 
