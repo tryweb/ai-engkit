@@ -159,6 +159,16 @@ OPCODE_CONFIG=$(jq -n \
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
+if command -v lean-ctx &>/dev/null; then
+  if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
+    lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true
+  fi
+
+  if [ ! -f "$OPCODE_CONFIG_DIR/skills/lean-ctx/SKILL.md" ]; then
+    lean-ctx init --agent opencode >/dev/null 2>&1 || true
+  fi
+fi
+
 merge_project_lsp_config
 
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"

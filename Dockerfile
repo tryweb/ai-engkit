@@ -133,6 +133,20 @@ RUN bun install -g @colbymchenry/codegraph && \
 # ── LeanCTX — AI 代理的認知上下文層 ──────────────────
 RUN curl -fsSL https://leanctx.com/install.sh | sh
 
+RUN mkdir -p /home/${USERNAME}/.config/lean-ctx && \
+    cat > /home/${USERNAME}/.config/lean-ctx/config.toml <<'EOF'
+# lean-ctx ai-engkit tuning — overrides conservative defaults
+permission_inheritance = "on"
+compression_level = "standard"
+shell_allowlist_extra = [
+  "gh", "glab",
+  "docker", "docker-compose", "docker compose",
+  "pw-mcp", "bun", "marksman", "lancedb-opencode-pro",
+]
+graph_index_max_files = 5000
+savings_footer = "auto"
+EOF
+
 # lean-ctx 3.8.5+ XDG shell env — 讓 ctx_shell / bash -c 自動載入 lean-ctx 環境
 ENV BASH_ENV="/home/${USERNAME}/.config/lean-ctx/env.sh"
 ENV CLAUDE_ENV_FILE="/home/${USERNAME}/.config/lean-ctx/env.sh"
