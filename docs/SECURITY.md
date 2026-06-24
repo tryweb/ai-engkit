@@ -1,6 +1,6 @@
 # 安全政策
 
-本文檔說明 OpenChamber 專案的安全考量、風險評估及最佳實踐。
+本文檔說明 ai-engkit 專案的安全考量、風險評估及最佳實踐。
 
 ## 目錄
 
@@ -224,7 +224,7 @@ sequenceDiagram
 
 1. **安全性漏洞**：請透過以下方式私密回報
    - Email: tryweb@ichiayi.com
-   - 主題：`[SECURITY] OpenChamber 漏洞回報`
+   - 主題：`[SECURITY] ai-engkit 漏洞回報`
 
 2. **一般問題**：使用 GitHub Issues
 
