@@ -8,7 +8,7 @@ set -uo pipefail
 # ============================================================
 
 CONTAINER="${1:-ai-dev}"
-CHAMBER_PORT="${CHAMBER_PORT:-8000}"
+CHAMBER_PORT="${CHAMBER_PORT:-8001}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -126,6 +126,13 @@ else
   fail "gh CLI not found"
 fi
 
+GLAB_VER=$(docker exec "$CONTAINER" glab --version 2>/dev/null | head -1 || echo "error")
+if echo "$GLAB_VER" | grep -qi "glab"; then
+  pass "glab CLI installed"
+else
+  fail "glab CLI not found"
+fi
+
 # --------------------------------------------------
 # 4. Config Files
 # --------------------------------------------------
@@ -176,8 +183,9 @@ elif [ "$HTTP_CODE" = "000" ]; then
     INTERNAL_CODE="000"
   fi
   if [ "$INTERNAL_CODE" = "200" ]; then
-    skip "Web UI responds 200 (internal only, network unavailable)"
-    skip "Web UI returns HTML (internal only, network unavailable)"
+    pass "Web UI responds 200 (internal fallback)"
+    HTML=$(timeout 10 docker exec "$CONTAINER" sh -c 'curl -sf http://localhost:3000/' 2>/dev/null || echo "")
+    assert_contains "Web UI returns HTML (internal fallback)" "<!doctype html>" "$HTML"
   else
     fail "Web UI not accessible (external: 000, internal: $INTERNAL_CODE)"
   fi
@@ -223,11 +231,11 @@ else
   INTERNAL_HEALTH=$(timeout 5 docker exec "$CONTAINER" sh -c 'curl -sf http://localhost:3000/health' 2>/dev/null || echo "{}")
   if [ "$INTERNAL_HEALTH" != "{}" ]; then
     HEALTH_STATUS=$(echo "$INTERNAL_HEALTH" | jq -r '.status' 2>/dev/null || echo "error")
+    assert_eq "Health API (internal fallback)" "ok" "$HEALTH_STATUS"
     OPCODE_RUNNING=$(echo "$INTERNAL_HEALTH" | jq -r '.openCodeRunning' 2>/dev/null || echo "false")
+    assert_eq "OpenCode running (internal fallback)" "true" "$OPCODE_RUNNING"
     OPCODE_READY=$(echo "$INTERNAL_HEALTH" | jq -r '.isOpenCodeReady' 2>/dev/null || echo "false")
-    skip "Health API (internal only, network unavailable)"
-    skip "OpenCode running (internal only, network unavailable)"
-    skip "OpenCode ready (internal only, network unavailable)"
+    assert_eq "OpenCode ready (internal fallback)" "true" "$OPCODE_READY"
   else
     fail "Health API not accessible (external or internal)"
   fi
@@ -247,6 +255,79 @@ for tool in $TOOLS; do
     fail "$tool missing"
   fi
 done
+
+if docker exec "$CONTAINER" docker --version >/dev/null 2>&1; then
+  pass "docker CLI works"
+else
+  fail "docker CLI not working"
+fi
+
+if docker exec "$CONTAINER" docker info >/dev/null 2>&1; then
+  pass "docker daemon reachable via socket"
+else
+  fail "docker daemon not reachable via socket"
+fi
+
+if docker exec "$CONTAINER" docker ps >/dev/null 2>&1; then
+  pass "docker CLI can query containers"
+else
+  fail "docker CLI cannot query containers"
+fi
+
+if docker exec "$CONTAINER" docker compose version >/dev/null 2>&1; then
+  pass "docker compose plugin works"
+else
+  fail "docker compose plugin not working"
+fi
+
+if docker exec "$CONTAINER" docker compose ls >/dev/null 2>&1; then
+  pass "docker compose can query daemon"
+else
+  fail "docker compose cannot query daemon"
+fi
+
+if docker exec "$CONTAINER" docker buildx version >/dev/null 2>&1; then
+  pass "docker buildx plugin works"
+else
+  fail "docker buildx plugin not working"
+fi
+
+if docker exec "$CONTAINER" docker buildx ls >/dev/null 2>&1; then
+  pass "docker buildx can list builders"
+else
+  fail "docker buildx cannot list builders"
+fi
+
+if docker exec "$CONTAINER" marksman --version >/dev/null 2>&1; then
+  pass "marksman CLI works"
+else
+  fail "marksman CLI not working"
+fi
+
+if docker exec "$CONTAINER" sh -c 'marksman server </dev/null >/tmp/marksman.out 2>/tmp/marksman.err || true; grep -q "Starting Marksman LSP server" /tmp/marksman.err; status=$?; rm -f /tmp/marksman.out /tmp/marksman.err; exit $status' 2>/dev/null; then
+  pass "marksman server mode initializes before EOF"
+else
+  fail "marksman server failed to start"
+fi
+
+if docker exec "$CONTAINER" brew --version >/dev/null 2>&1; then
+  pass "Homebrew works"
+else
+  fail "Homebrew not working"
+fi
+
+if docker exec "$CONTAINER" sh -c 'command -v comment-checker >/dev/null 2>&1 && comment-checker --help >/dev/null 2>&1' 2>/dev/null; then
+  pass "comment-checker CLI works"
+else
+  fail "comment-checker CLI not working"
+fi
+
+COMMENT_CHECKER_STATUS=$(docker exec "$CONTAINER" sh -c 'comment-checker </dev/null >/dev/null 2>&1; echo $?' 2>/dev/null || echo "1")
+if [ "$COMMENT_CHECKER_STATUS" = "0" ]; then
+  pass "comment-checker handles empty stdin gracefully"
+else
+  fail "comment-checker empty-stdin behavior failed (exit=$COMMENT_CHECKER_STATUS)"
+fi
 
 # --------------------------------------------------
 # 8.1 CodeGraph (Knowledge Graph Tool)
