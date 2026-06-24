@@ -226,6 +226,7 @@ graph TB
         VOL_GIT["git-config<br/>Git 設定"]
         VOL_SSH["ssh-keys<br/>SSH 金鑰"]
         VOL_GH["gh-config<br/>GitHub CLI 設定"]
+        VOL_GLAB["glab-config<br/>GitLab CLI 設定"]
         VOL_LC_DATA["lean-ctx-data<br/>向量索引/知識庫"]
         VOL_LC_STATE["lean-ctx-state<br/>事件日誌"]
     end
@@ -242,6 +243,7 @@ graph TB
         C_GIT["~/.config/git<br/>~/.gitconfig"]
         C_SSH["~/.ssh"]
         C_GH["~/.config/gh"]
+        C_GLAB["~/.config/glab-cli"]
     end
 
     VOL_WS --> C_WS
@@ -253,6 +255,7 @@ graph TB
     VOL_GIT --> C_GIT
     VOL_SSH --> C_SSH
     VOL_GH --> C_GH
+    VOL_GLAB --> C_GLAB
     VOL_LC_DATA --> C_LC_DATA
     VOL_LC_STATE --> C_LC_STATE
 
@@ -261,6 +264,7 @@ graph TB
     style VOL_GIT fill:#e8f5e9
     style VOL_SSH fill:#e8f5e9
     style VOL_GH fill:#e8f5e9
+    style VOL_GLAB fill:#e8f5e9
 ```
 
 ### 資料持久化策略
@@ -273,6 +277,7 @@ graph TB
 | Git 設定 | git-config | 重要 | 包含 .gitconfig, .git-credentials |
 | SSH 金鑰 | ssh-keys | 重要 | 包含 known_hosts |
 | GitHub CLI 設定 | gh-config | 重要 | 包含主機認證、快取 |
+| GitLab CLI 設定 | glab-config | 重要 | 包含主機認證、快取 |
 | 快取資料 | opencode-cache | 可重建 | 不需備份 |
 | UI 設定 | openchamber-data | 一般 | 不需備份 |
 | lean-ctx 向量索引/知識庫 | lean-ctx-data | 重要 | 包含 sessions, vectors, graphs, knowledge |
@@ -302,7 +307,11 @@ sequenceDiagram
     Note over I: 04-init-git-ssh.sh<br/>初始化 Git/SSH 設定 (named volumes)
     
     Note over I: 05-init-gh-cli.sh<br/>初始化 GitHub CLI 設定 (named volume)
-    
+
+    Note over I: 06-init-glab-cli.sh<br/>初始化 GitLab CLI 設定 (named volume)
+
+    Note over I: 06-setup-opencode-path.sh<br/>設定 opencode PATH
+
     I->>A: 初始化完成
     A->>A: 啟動 OpenCode Server
     A->>A: 啟動 OpenChamber Server
@@ -319,14 +328,18 @@ flowchart LR
     D --> E["03-fix-docker-gid.sh"]
     E --> F["04-init-git-ssh.sh"]
     F --> G["05-init-gh-cli.sh"]
-    G --> H["執行 CMD"]
-    
+    G --> GA["06-init-glab-cli.sh"]
+    GA --> GB["06-setup-opencode-path.sh"]
+    GB --> H["執行 CMD"]
+
     B -->|"修復"| PERMS["Volume 權限"]
     C -->|"安裝"| PKGS["apt/brew/bun 套件"]
     D -->|"建立"| CONFIGS["預設設定檔"]
     E -->|"修正"| DOCKER["Docker 群組"]
     F -->|"初始化"| GITSETUP["Git/SSH 設定"]
     G -->|"初始化"| GH_SETUP["GitHub CLI 設定"]
+    GA -->|"初始化"| GLAB_SETUP["GitLab CLI 設定"]
+    GB -->|"設定"| PATH_SETUP["opencode PATH"]
 
     style A fill:#fff3e0
     style G fill:#c8e6c9
