@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-25
+
+### 變更
+- 更新 @colbymchenry/codegraph 最新追蹤版本 1.1.0 → 1.1.1
+
 ## [1.0.1] - 2026-06-24
 
 ### 變更
@@ -560,7 +565,7 @@
 
 > 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.0.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -624,3 +629,4 @@
 [0.17.1]: https://github.com/tryweb/ai-engkit/compare/v0.17.0...v0.17.1
 [1.0.0]: https://github.com/tryweb/ai-engkit/compare/v0.17.1...v1.0.0
 [1.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.0.0...v1.0.1
+[1.0.2]: https://github.com/tryweb/ai-engkit/compare/v1.0.1...v1.0.2
