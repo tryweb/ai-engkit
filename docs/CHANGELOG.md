@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-25
+
+### Changed
+- Upgrade OpenCode from 1.17.10 to 1.17.11.
+- Update the Ubuntu 24.04 APT package snapshot (1 packages have updates: tar (1.35+dfsg-3build1)).
+
 ## [1.1.0] - 2026-06-25
 
 ### Added
@@ -576,7 +582,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -641,3 +647,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.0.0]: https://github.com/tryweb/ai-engkit/compare/v0.17.1...v1.0.0
 [1.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.0.0...v1.0.1
 [1.0.2]: https://github.com/tryweb/ai-engkit/compare/v1.0.1...v1.0.2
+[1.1.0]: https://github.com/tryweb/ai-engkit/compare/v1.0.2...v1.1.0
+[1.1.1]: https://github.com/tryweb/ai-engkit/compare/v1.1.0...v1.1.1
