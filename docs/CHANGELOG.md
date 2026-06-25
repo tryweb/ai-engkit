@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-25
+
+### Added
+- Add `--output-dir .playwright-mcp` to pw-mcp wrapper so screenshots default to `.playwright-mcp/` instead of CWD
+
+### Changed
+- Translate zh-TW docs to English, relocate CONTRIBUTING & SECURITY to root, add GitHub templates
+
+### Documentation
+- Add OpenChamber project data architecture & rename recovery guide
+
 ## [1.0.2] - 2026-06-25
 
 ### Changed
