@@ -172,7 +172,7 @@ Example:
 
 ## [0.5.5] - 2026-04-08
 
-### 新增
+### Added
 - add gh-config volume for persistent gh auth
 
 ## [0.5.4] - 2026-04-08

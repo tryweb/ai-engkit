@@ -837,27 +837,27 @@ jobs:
               current = item.get('current')
               latest = item.get('latest')
               if current and latest:
-                  bullets.append(f"- 升級 {normalize_name(item.get('name', '相依套件'))} {current} → {latest}")
+                  bullets.append(f"- Upgrade {normalize_name(item.get('name', 'dependency'))} from {current} to {latest}.")
 
           for item in latest_updates:
               current = item.get('current')
               previous = item.get('previous')
-              display = normalize_name(item.get('name', '追蹤版本'))
+              display = normalize_name(item.get('name', 'tracked package'))
               if current and previous and previous != 'missing':
-                  bullets.append(f"- 更新 {display} 最新追蹤版本 {previous} → {current}")
+                  bullets.append(f"- Update the tracked latest version for {display} from {previous} to {current}.")
               elif current:
-                  bullets.append(f"- 記錄 {display} 最新追蹤版本為 {current}")
+                  bullets.append(f"- Record the tracked latest version for {display} as {current}.")
 
           if apt_updates != 'All packages are up to date':
-              bullets.append(f"- 更新 Ubuntu 24.04 APT 套件快照（{apt_updates}）")
+              bullets.append(f"- Update the Ubuntu 24.04 APT package snapshot ({apt_updates}).")
 
           if not bullets:
-              bullets.append('- 維護相依套件版本與發行記錄')
+              bullets.append('- Maintain dependency versions and release documentation.')
 
           new_section = "\n".join([
               f"## [{version_no_v}] - {date}",
               '',
-              '### 變更',
+              '### Changed',
               *bullets,
               '',
           ])
@@ -865,7 +865,7 @@ jobs:
           with open(changelog_path, 'r', encoding='utf-8') as fh:
               content = fh.read()
 
-          footer_marker = '\n---\n\n## 版本格式說明'
+          footer_marker = '\n---\n\n## Format'
           if footer_marker in content:
               body, footer = content.split(footer_marker, 1)
               footer = footer_marker + footer

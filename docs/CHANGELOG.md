@@ -1,111 +1,111 @@
-# 變更日誌
+# Changelog
 
-本檔案記錄 ai-engkit 專案的所有重要變更。
+All notable changes to ai-engkit are documented in this file.
 
-格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，並且本專案遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
 ## [1.0.2] - 2026-06-25
 
-### 變更
-- 更新 @colbymchenry/codegraph 最新追蹤版本 1.1.0 → 1.1.1
+### Changed
+- Update @colbymchenry/codegraph to latest tracked version 1.1.0 → 1.1.1
 
 ## [1.0.1] - 2026-06-24
 
-### 變更
-- 升級 OpenCode 1.17.9 → 1.17.10
-- 升級 OpenChamber 1.13.2 → 1.13.3
-- 更新 @colbymchenry/codegraph 最新追蹤版本 1.0.1 → 1.1.0
-- 更新 lean-ctx 最新追蹤版本 v3.8.11 → v3.8.12
-- 更新 Ubuntu 24.04 APT 套件快照（1 packages have updates: perl-base (5.38.2-3.2ubuntu0.2)）
+### Changed
+- Upgrade OpenCode 1.17.9 → 1.17.10
+- Upgrade OpenChamber 1.13.2 → 1.13.3
+- Update @colbymchenry/codegraph to latest tracked version 1.0.1 → 1.1.0
+- Update lean-ctx to latest tracked version v3.8.11 → v3.8.12
+- Update Ubuntu 24.04 APT package snapshot (1 package has updates: perl-base (5.38.2-3.2ubuntu0.2))
 
-### 修復
-- `vuln-scan.md` skill 內 docker 驗證範例的 `ai-engkit-ai-dev` typo 已修正為 `ai-engkit-dev`（改名前是 `codeforge-ai-dev`，改名時字面替換沒對齊 `docker-compose.dev.yml` 的真實 container name）。
+### Fixed
+- Fix the `ai-engkit-ai-dev` typo in the `vuln-scan.md` skill Docker validation example to `ai-engkit-dev` (`codeforge-ai-dev` before the rename); the literal rename did not match the real container name in `docker-compose.dev.yml`.
 
 ## [1.0.0] - 2026-06-24
 
-### 變更
-- **專案改名**：`tryweb/Codeforge` → `tryweb/ai-engkit`。理由：「Codeforge」一詞在 AI 編碼工具市場上已被 10+ 個商業產品與開源專案佔用，搜尋噪音過高；新名 `ai-engkit` 直接點出「Self-hosted AI Engineering Kit for Dev & Ops」的本質，避開命名碰撞。Tagline：**Your Self-hosted AI Engineering Kit for Dev & Ops**。
-  - GitHub repo 已建立 301 永久重導向，舊 `tryweb/Codeforge` 連結繼續可用
-  - GHCR 映像重新命名為 `ghcr.io/tryweb/ai-engkit:*`（CI 內部 tag `codeforge:ci` → `ai-engkit:ci`）
-  - Docker compose 的 `container_name` 從 `codeforge` / `codeforge-dev` 改為 `ai-engkit` / `ai-engkit-dev`
-  - 安裝指令 `curl ... tryweb/Codeforge/refs/heads/main/install.sh` 更新為 `tryweb/ai-engkit`
-  - `.sisyphus/boulder.json` 與 `evidence/*.txt` 維持原樣（本地路徑與歷史紀錄不應偽造）
-- 已知遺留：`vuln-scan.md` skill 內 docker 範例仍使用 `ai-engkit-ai-dev`（原為 `codeforge-ai-dev`），這是改名前就存在的 typo，待後續修正
+### Changed
+- **Project rename**: `tryweb/Codeforge` → `tryweb/ai-engkit`. Rationale: the name "Codeforge" is already used by 10+ commercial products and open source projects in the AI coding tools market, creating too much search noise. The new name `ai-engkit` directly communicates the project's identity as **Your Self-hosted AI Engineering Kit for Dev & Ops** and avoids naming collisions.
+  - The GitHub repository now has a permanent 301 redirect, so existing `tryweb/Codeforge` links continue to work.
+  - The GHCR image was renamed to `ghcr.io/tryweb/ai-engkit:*` (CI internal tag `codeforge:ci` → `ai-engkit:ci`).
+  - Docker Compose `container_name` changed from `codeforge` / `codeforge-dev` to `ai-engkit` / `ai-engkit-dev`.
+  - The install command `curl ... tryweb/Codeforge/refs/heads/main/install.sh` was updated to `tryweb/ai-engkit`.
+  - `.sisyphus/boulder.json` and `evidence/*.txt` were intentionally left unchanged because local paths and historical records should not be rewritten.
+- Known leftover: the Docker example in `vuln-scan.md` still uses `ai-engkit-ai-dev` (originally `codeforge-ai-dev`). The typo predates the rename and remains for later cleanup.
 
 ## [0.17.1] - 2026-06-23
 
-### 變更
-- 升級 Docker Compose 5.1.4 → 5.2.0
-- 升級 Playwright 1.61.0 → 1.61.1
+### Changed
+- Upgrade Docker Compose from 5.1.4 to 5.2.0.
+- Upgrade Playwright from 1.61.0 to 1.61.1.
 
 ## [0.17.0] - 2026-06-23
 
-### 新增
-- 新增 `vuln-scan` skill：整合 GitHub code scanning alert triage + Dockerfile 版本更新
+### Added
+- Add the `vuln-scan` skill to combine GitHub code scanning alert triage with Dockerfile version updates.
 
-### 修復
-- 修復 Playwright MCP 找不到瀏覽器的問題：新增 `pw-mcp` wrapper 自動解析 `/ms-playwright` 內的 bundled Chromium 並以 `--executable-path` 傳遞給 `@playwright/mcp`，避免預設 `--browser` 走 system Chrome channel。Full Chromium 重新納入 image（先前 `--only-shell` 的改動已退回），headless shell 同時保留作為最小可行備援
+### Fixed
+- Fix Playwright MCP failing to find a browser by adding the `pw-mcp` wrapper. It resolves bundled Chromium under `/ms-playwright` and passes it to `@playwright/mcp` through `--executable-path`, avoiding the default system Chrome channel selected by `--browser`. Full Chromium is back in the image (the earlier `--only-shell` change was reverted), while the headless shell remains as the minimum fallback.
 
 ## [0.16.5] - 2026-06-22
 
-### 變更
-- 更新 oh-my-openagent 最新追蹤版本 4.12.1 → 4.13.0
+### Changed
+- Update the tracked latest version for oh-my-openagent from 4.12.1 to 4.13.0.
 
 ## [0.16.4] - 2026-06-21
 
-### 變更
-- 升級 OpenCode 1.17.8 → 1.17.9
+### Changed
+- Upgrade OpenCode from 1.17.8 to 1.17.9.
 
 ## [0.16.3] - 2026-06-20
 
-### 變更
-- 更新 oh-my-openagent 最新追蹤版本 4.12.0 → 4.12.1
-- 更新 lean-ctx 最新追蹤版本 v3.8.9 → v3.8.11
+### Changed
+- Update the tracked latest version for oh-my-openagent from 4.12.0 to 4.12.1.
+- Update the tracked latest version for lean-ctx from v3.8.9 to v3.8.11.
 
 ## [0.16.2] - 2026-06-20
 
-### 修復
-- 修復 CodeGraph MCP config key 測試不一致問題：同時檢查 `.mcp.codegraph`（entrypoint 格式）和 `.mcpServers.codegraph`（legacy 格式）
+### Fixed
+- Fix the CodeGraph MCP config key test mismatch by checking both `.mcp.codegraph` (entrypoint format) and `.mcpServers.codegraph` (legacy format).
 
-### 變更
-- 更新 oh-my-openagent 最新追蹤版本 4.12.0 → 4.12.1
-  - CodeGraph init guidance: 未初始化 workspace 時提供明確引導而非靜默失敗
-  - CodeGraph MCP bootstrap: LazyCodex 在 MCP serve 階段預先初始化 CodeGraph runtime
-  - Background task polling: 不再誤導使用者輪詢 background_output
-  - Ultraresearch: workers 傾向協作團隊 + 即時廣播發現
+### Changed
+- Update the tracked latest version for oh-my-openagent from 4.12.0 to 4.12.1.
+  - CodeGraph init guidance: provide explicit guidance instead of failing silently when the workspace is not initialized.
+  - CodeGraph MCP bootstrap: LazyCodex pre-initializes the CodeGraph runtime during the MCP serve phase.
+  - Background task polling: no longer misleads users into polling `background_output`.
+  - Ultraresearch: workers now prefer collaborative teams and real-time broadcast of findings.
 
 ## [0.16.1] - 2026-06-20
 
-### 其他
+### Other
 - Dockerfile image slimming (bun cache cleanup, remove libclang-dev), image 4.24GB → 3.70GB
 - update GitHub Actions to Node 24 native versions
 
 ## [0.16.0] - 2026-06-20
 
-### 新增
+### Added
 - add .dockerignore to reduce build context size
 - replace brew-installed gh and marksman with static binaries
   (saves ~2GB, image 6.27GB → 4.25GB)
 - upgrade gh from 2.67.0 to 2.95.0
 - add GH_VERSION and MARKSMAN_VERSION to dependency-update.yml
 
-### 其他
+### Other
 - add knowledge entry for test container name mismatch
 - add docker image slimming issue tracker link (#17)
 
 ## [0.15.1] - 2026-06-20
 
-### 變更
-- 更新 oh-my-openagent 最新追蹤版本 4.11.1 → 4.12.0
+### Changed
+- Update the tracked latest version for oh-my-openagent from 4.11.1 to 4.12.0.
 
 ## [0.15.0] - 2026-06-20
 
-### 新增
+### Added
 - add markdown LSP support for project-level `.md` navigation
 
-### 變更
+### Changed
 - expand tooling and authentication docs
 - add knowledge capture scaffold
 - add knowledge base placeholders
@@ -113,457 +113,457 @@
 
 ## [0.14.0] - 2026-06-20
 
-### 新增
-- add karpathy-guidelines as baked global skill（Karpathy 四項程式碼品質原則）
+### Added
+- Add `karpathy-guidelines` as a baked global skill (Karpathy's four code quality principles).
 
 ## [0.13.1] - 2026-06-19
 
-### 變更
-- 升級 Docker Engine 29.5.3 → 29.6.0
+### Changed
+- Upgrade Docker Engine from 29.5.3 to 29.6.0.
 
-### 修復
-- 修復 CHANGELOG comparison links for v0.12.6 and v0.13.0
+### Fixed
+- Fix CHANGELOG comparison links for v0.12.6 and v0.13.0.
 
 ## [0.13.0] - 2026-06-19
 
-### 新增
-- add baked skills mechanism: enable-project-knowledge 和 knowledge-capture 內建為全域 skill
-- add entrypoint 啟動時自動 symlink baked skills 到 ~/.config/opencode/skills/
-- add versioned bootstrap-knowledge.sh 腳本至 .opencode/scripts/
+### Added
+- Add the baked skills mechanism: `enable-project-knowledge` and `knowledge-capture` are built in as global skills.
+- Add automatic symlinking of baked skills into `~/.config/opencode/skills/` during entrypoint startup.
+- Add the versioned `bootstrap-knowledge.sh` script to `.opencode/scripts/`.
 
-### 變更
-- 更新 README OpenChamber badge: 1.13.1 → 1.13.2
+### Changed
+- Update the README OpenChamber badge from 1.13.1 to 1.13.2.
 
 ## [0.12.6] - 2026-06-18
 
-### 修復
+### Fixed
 - auto-start dev container and detect container name in release skill
 
-### 變更
+### Changed
 - install glab from official release binary
 
 ## [0.12.5] - 2026-06-18
 
-### 變更
-- 升級 Docker Buildx 0.34.1 → 0.35.0
-- 升級 OpenChamber 1.13.1 → 1.13.2
+### Changed
+- Upgrade Docker Buildx from 0.34.1 to 0.35.0.
+- Upgrade OpenChamber from 1.13.1 to 1.13.2.
 
 ## [0.12.4] - 2026-06-17
 
-### 變更
-- 升級 OpenCode 1.17.7 → 1.17.8
-- 更新 oh-my-openagent 最新追蹤版本 4.10.0 → 4.11.0
-- 更新 lean-ctx 最新追蹤版本 v3.8.7 → v3.8.8
+### Changed
+- Upgrade OpenCode from 1.17.7 to 1.17.8.
+- Update the tracked latest version for oh-my-openagent from 4.10.0 to 4.11.0.
+- Update the tracked latest version for lean-ctx from v3.8.7 to v3.8.8.
 
 ## [0.12.3] - 2026-06-17
 
-### 變更
-- 升級 OpenChamber 1.13.0 → 1.13.1
+### Changed
+- Upgrade OpenChamber from 1.13.0 to 1.13.1.
 
 ## [0.12.2] - 2026-06-16
 
-### 變更
-- 更新 lean-ctx 最新追蹤版本至 v3.8.7
+### Changed
+- Update the tracked latest version for lean-ctx to v3.8.7.
 
 ## [0.12.1] - 2026-06-16
 
-### 變更
-- 升級 OpenChamber 1.12.4 → 1.13.0
-- 升級 Playwright 1.60.0 → 1.61.0
+### Changed
+- Upgrade OpenChamber from 1.12.4 to 1.13.0.
+- Upgrade Playwright from 1.60.0 to 1.61.0.
 
 ## [0.12.0] - 2026-06-15
 
-### 新增
-- 新增 lean-ctx XDG Base Directory 支援（v3.8.5+）
-  - Dockerfile: 新增 `BASH_ENV` / `CLAUDE_ENV_FILE`，讓 bash 自動載入 lean-ctx 環境
-  - Dockerfile: 預建 `~/.local/share/lean-ctx`、`~/.local/state/lean-ctx`、`~/.cache/lean-ctx` 目錄
-  - Dockerfile: 新增 `lean-ctx-data` / `lean-ctx-state` volumes，確保持久化向量索引、知識庫與 sessions
-  - docker-compose.yml / docker-compose.dev.yml: 新增 `lean-ctx-data` / `lean-ctx-state` named volumes
-  - entrypoint.d/00-fix-perms.sh: 新增 lean-ctx 目錄權限修復
-  - entrypoint.d/02-init-config.sh: 自動偵測舊版 single-dir 佈局並執行 `lean-ctx doctor --fix` 遷移
-  - docs/ARCHITECTURE.md: 新增 lean-ctx volumes 至架構圖與持久化策略表
+### Added
+- Add lean-ctx XDG Base Directory support (v3.8.5+).
+  - Dockerfile: add `BASH_ENV` / `CLAUDE_ENV_FILE` so bash automatically loads the lean-ctx environment.
+  - Dockerfile: pre-create `~/.local/share/lean-ctx`, `~/.local/state/lean-ctx`, and `~/.cache/lean-ctx` directories.
+  - Dockerfile: add `lean-ctx-data` / `lean-ctx-state` volumes so vector indexes, the knowledge base, and sessions persist.
+  - `docker-compose.yml` / `docker-compose.dev.yml`: add `lean-ctx-data` / `lean-ctx-state` named volumes.
+  - `entrypoint.d/00-fix-perms.sh`: add lean-ctx directory permission repair.
+  - `entrypoint.d/02-init-config.sh`: detect the legacy single-dir layout automatically and run `lean-ctx doctor --fix` migration.
+  - `docs/ARCHITECTURE.md`: add lean-ctx volumes to the architecture diagram and persistence strategy table.
 
-### 移除
-- 移除 Ollama 本地 LLM 推論引擎（docker-compose、Dockerfile、entrypoint、docs、tests）
-- 移除 lancedb-opencode-pro OpenCode plugin（entrypoint、tests、docs）
+### Removed
+- Remove the Ollama local LLM inference engine from Docker Compose, the Dockerfile, entrypoint, docs, and tests.
+- Remove the `lancedb-opencode-pro` OpenCode plugin from the entrypoint, tests, and docs.
 
 ## [0.11.10] - 2026-06-14
 
-### 變更
-- 升級 OpenCode 1.17.6 → 1.17.7
+### Changed
+- Upgrade OpenCode from 1.17.6 to 1.17.7.
 
 ## [0.11.9] - 2026-06-14
 
-### 變更
-- 更新 APT 套件
+### Changed
+- Update APT packages.
 
 ## [0.11.8] - 2026-06-14
 
-### 變更
-- 更新 APT 套件
+### Changed
+- Update APT packages.
 
 ## [0.11.7] - 2026-06-14
 
-### 變更
-- 升級 OpenCode 1.17.4 → 1.17.6
+### Changed
+- Upgrade OpenCode from 1.17.4 to 1.17.6.
 
 ## [0.11.6] - 2026-06-13
 
-### 變更
-- 更新 lean-ctx 最新追蹤版本至 v3.8.4
-- 更新 APT 套件
+### Changed
+- Update the tracked latest version for lean-ctx to v3.8.4.
+- Update APT packages.
 
 ## [0.11.5] - 2026-06-13
 
-### 變更
-- 更新 lean-ctx 最新追蹤版本至 v3.8.3
-- 更新 APT 套件
+### Changed
+- Update the tracked latest version for lean-ctx to v3.8.3.
+- Update APT packages.
 
 ## [0.11.4] - 2026-06-11
 
-### 修復
-- 分離 Playwright core 與 `@playwright/mcp` 的版本管理
-  - 獨立管理 Playwright core（1.60.0）與 `@playwright/mcp`（0.0.76）版本，修正先前強制兩者版本必須一致的錯誤假設
+### Fixed
+- Separate version management for Playwright core and `@playwright/mcp`.
+  - Manage Playwright core (1.60.0) and `@playwright/mcp` (0.0.76) independently, fixing the previous incorrect assumption that they had to stay on the same version.
 
-### 變更
-- 調整 CI：映像只建置一次，並透過 artifact 在 jobs 間共享
+### Changed
+- Adjust CI so the image is built once and shared between jobs via artifacts.
 
 ## [0.11.3] - 2026-06-11
 
-### 變更
-- 鎖定 Playwright 版本為 1.60.0，並新增執行期 smoke tests
+### Changed
+- Pin Playwright to version 1.60.0 and add runtime smoke tests.
 
 ## [0.11.2] - 2026-06-11
 
-### 新增
-- 新增 `vuln-scan` skill，用於漏洞掃描與版本稽核
+### Added
+- Add the `vuln-scan` skill for vulnerability scanning and version auditing.
 
-### 變更
-- 升級 Docker 29.4.1 → 29.5.3、Compose 5.1.2 → 5.1.4、Buildx 0.33.0 → 0.34.1
+### Changed
+- Upgrade Docker from 29.4.1 to 29.5.3, Compose from 5.1.2 to 5.1.4, and Buildx from 0.33.0 to 0.34.1.
 
 ## [0.11.1] - 2026-06-11
 
-### 變更
-- 升級 OpenCode 1.16.2 → 1.17.3
-- 升級 OpenChamber 1.12.3 → 1.12.4
+### Changed
+- Upgrade OpenCode from 1.16.2 to 1.17.3.
+- Upgrade OpenChamber from 1.12.3 to 1.12.4.
 
 ## [0.11.0] - 2026-06-06
 
-### 新增
-- 將 Playwright 瀏覽器加入 Docker image，支援 MCP server 與測試流程
-  - 安裝 Chromium 瀏覽器（約 291 MB）與 97 個系統相依套件
-  - 同時支援 Playwright MCP 瀏覽器自動化與 Playwright 測試執行器
+### Added
+- Add Playwright browsers to the Docker image so MCP server workflows and tests are supported.
+  - Install Chromium (about 291 MB) and 97 system dependencies.
+  - Support both Playwright MCP browser automation and the Playwright test runner.
 
 ## [0.10.0] - 2026-06-06
 
-### 新增
-- 新增 lean-ctx MCP server，提供 context engineering 能力
-  - 在 Dockerfile 透過 universal installer 安裝 lean-ctx v3.7.5
-  - 在 entrypoint.d/02-init-config.sh 增加 lean-ctx MCP server 設定區塊
-  - 提供 69 個 MCP tools（如 `ctx_read`、`ctx_shell`、`ctx_search`、`ctx_tree`）
+### Added
+- Add the lean-ctx MCP server to provide context engineering capabilities.
+  - Install lean-ctx v3.7.5 in the Dockerfile via the universal installer.
+  - Add the lean-ctx MCP server config block to `entrypoint.d/02-init-config.sh`.
+  - Provide 69 MCP tools such as `ctx_read`, `ctx_shell`, `ctx_search`, and `ctx_tree`.
 
-### 變更
-- 升級 OpenCode 1.16.0 → 1.16.2
-- 升級 OpenChamber 1.12.1 → 1.12.3
+### Changed
+- Upgrade OpenCode from 1.16.0 to 1.16.2.
+- Upgrade OpenChamber from 1.12.1 to 1.12.3.
 
 ## [0.9.3] - 2026-06-05
 
-### 變更
-- 升級 OpenCode 1.15.13 → 1.16.0
+### Changed
+- Upgrade OpenCode from 1.15.13 to 1.16.0.
 
 ## [0.9.2] - 2026-06-05
 
-### 變更
-- 升級 `@openchamber/web` 1.11.7 → 1.12.1
+### Changed
+- Upgrade `@openchamber/web` from 1.11.7 to 1.12.1.
 
 ## [0.9.1] - 2026-06-02
 
-### 新增
-- 將 Playwright MCP 烘焙到 image，讓 AI 代理能原生驅動瀏覽器
-  - Dockerfile: 在 `/etc/opencode/opencode.json.default` 模板加入 Playwright MCP 設定
-  - entrypoint.d/02-init-config.sh: 重生成 `~/.config/opencode/opencode.json` 時也帶入 Playwright MCP，避免被覆蓋
-  - test/run-tests.sh: 新增兩個斷言，驗證 Playwright MCP 設定存在且使用 `bunx`
-  - 以原生 MCP 工具取代「AI 自行撰寫 Playwright 腳本 + bash 執行」的舊工作流
-  - 新開發者無需手動安裝 `@playwright/mcp`
+### Added
+- Bake Playwright MCP into the image so AI agents can drive browsers natively.
+  - Dockerfile: add Playwright MCP configuration to the `/etc/opencode/opencode.json.default` template.
+  - `entrypoint.d/02-init-config.sh`: include Playwright MCP when regenerating `~/.config/opencode/opencode.json` so it is not overwritten.
+  - `test/run-tests.sh`: add two assertions to verify that the Playwright MCP config exists and uses `bunx`.
+  - Replace the old workflow of AI-written Playwright scripts executed through bash with native MCP tooling.
+  - New developers no longer need to install `@playwright/mcp` manually.
 
-### 變更
-- 升級 `@openchamber/web` 1.10.4 → 1.11.7
-- 升級 OpenCode 1.14.48 → 1.15.13（[release notes](https://github.com/anomalyco/opencode/releases/tag/v1.15.13)）
-- 將 graphify（graphifyy）知識圖譜工具替換為 `@colbymchenry/codegraph`
-  - Dockerfile: `uv tool install graphifyy` → `bun install -g @colbymchenry/codegraph`
-  - README.md 與測試腳本同步更新
-- 新增 Git Authentication 章節給首次使用者
-- 修正文檔中的 credential volume 掛載說明
-- 補充 glab credential helper 版本化路徑問題說明（#4）
+### Changed
+- Upgrade `@openchamber/web` from 1.10.4 to 1.11.7.
+- Upgrade OpenCode from 1.14.48 to 1.15.13 ([release notes](https://github.com/anomalyco/opencode/releases/tag/v1.15.13)).
+- Replace the graph knowledge tool graphify (`graphifyy`) with `@colbymchenry/codegraph`.
+  - Dockerfile: `uv tool install graphifyy` → `bun install -g @colbymchenry/codegraph`.
+  - Update `README.md` and the test scripts together.
+- Add a Git Authentication section for first-time users.
+- Correct the credential volume mount explanation in the docs.
+- Add documentation for the versioned `glab` credential helper path issue (#4).
 
-### 修復
-- 釐清 host 與 container 驗證資訊隔離行為
+### Fixed
+- Clarify how host and container credentials are isolated.
 
 ## [0.8.3] - 2026-05-13
 
-### 修復
-- 移除阻塞式 OpenCode warm-up 步驟，並提高 CI job timeout
+### Fixed
+- Remove the blocking OpenCode warm-up step and increase the CI job timeout.
 
 ## [0.8.2] - 2026-05-13
 
-### 變更
-- 升級 OpenCode 1.14.33 → 1.14.48
-- 升級 OpenChamber 1.9.10 → 1.10.4
+### Changed
+- Upgrade OpenCode from 1.14.33 to 1.14.48.
+- Upgrade OpenChamber from 1.9.10 to 1.10.4.
 
 ## [0.8.1] - 2026-05-06
 
-### 修復
-- 讓 skills 直接從 baked image 建立 symlink，而非複製到 cache
-- 移除會與 named volumes 衝突的 tmpfs mounts
-- 將 superpowers 烘焙到 image 中，避免被 volume mounts 覆蓋
-- 保留 plugin cache 並提高 warm-up timeout
+### Fixed
+- Make skills create symlinks directly from the baked image instead of copying them into cache.
+- Remove tmpfs mounts that conflict with named volumes.
+- Bake Superpowers into the image so it is not masked by volume mounts.
+- Keep the plugin cache and increase the warm-up timeout.
 
 ## [0.8.0] - 2026-05-05
 
-### 新增
-- 將 Superpowers plugin（Agentic skills 框架）加入預設 plugins
-  - 提供 14 個 skills，如 brainstorming、systematic-debugging、test-driven-development 等
-- `docker-compose.yml` 預設值加入 superpowers，不設定 `.env` 即可使用
-- `entrypoint.d/02-init-config.sh` 自動建立 superpowers skills symlink
-  - 修復 OpenCode #20940：plugin `config()` hook 修改 `skills.paths` 對 skill discovery 不可見
-  - 讓所有既有專案都能自動發現 superpowers skills
+### Added
+- Add the Superpowers plugin (agentic skills framework) to the default plugins.
+  - Provide 14 skills such as `brainstorming`, `systematic-debugging`, and `test-driven-development`.
+- Add Superpowers to the default `docker-compose.yml` configuration so it works without setting `.env`.
+- Make `entrypoint.d/02-init-config.sh` automatically create the Superpowers skills symlink.
+  - Fix OpenCode #20940: changes to `skills.paths` from the plugin `config()` hook were not visible to skill discovery.
+  - Make all existing projects discover Superpowers skills automatically.
 
-### 變更
-- `.env.example` 預設 plugins 改為 `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git`
-- 移除舊版 release 測試（插件已不再使用）
+### Changed
+- Change the default plugins in `.env.example` to `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git`.
+- Remove the legacy release tests because the plugin is no longer used.
 
 ## [0.7.1] - 2026-05-04
 
-### 修復
-- 修正 CI integration tests 中 superpowers plugin 檢測失敗問題（使用 explicit shell 包裝 jq 命令）
-- 修正 docker-compose.dev.yml 中 `OPENCODE_PLUGINS` 環境變數配置
-- 修正 entrypoint.d/02-init-config.sh 一致性問題
+### Fixed
+- Fix Superpowers plugin detection failures in CI integration tests by wrapping the `jq` command in an explicit shell.
+- Fix the `OPENCODE_PLUGINS` environment variable configuration in `docker-compose.dev.yml`.
+- Fix consistency issues in `entrypoint.d/02-init-config.sh`.
 
 ## [0.7.0] - 2026-05-04
 
-### 新增
-- 透過 `uv tool install graphifyy` 安裝 graphify（知識圖譜工具）
-- 新增 superpowers plugin（Agentic skills 框架）
-- 新增 graphify 與 superpowers 驗證測試到 run-tests.sh
+### Added
+- Install graphify (the knowledge graph tool) through `uv tool install graphifyy`.
+- Add the Superpowers plugin (agentic skills framework).
+- Add graphify and Superpowers verification tests to `run-tests.sh`.
 
-### 變更
-- 移除舊版 plugin（曾導致 release test 失敗）
+### Changed
+- Remove the legacy plugin that had caused release test failures.
 
 ## [0.6.2] - 2026-04-25
 
-### 變更
-- 升級 OpenCode 至 1.14.33
-- 升級 OpenChamber 至 1.9.10
+### Changed
+- Upgrade OpenCode to 1.14.33.
+- Upgrade OpenChamber to 1.9.10.
 
 ## [0.6.1] - 2026-04-24
 
-### 修復
-- 修正 entrypoint.sh 重新執行 `exec sudo -E -u devuser -- env PATH="$PATH" "$@"` 時的群組繼承行為
-- 修正 OpenChamber Web UI 終端機執行 `docker ps` 出現 `permission denied` 的問題
+### Fixed
+- Fix group inheritance when `entrypoint.sh` re-executes `exec sudo -E -u devuser -- env PATH="$PATH" "$@"`.
+- Fix the `permission denied` error when running `docker ps` inside the OpenChamber Web UI terminal.
 
 ## [0.6.0] - 2026-04-23
 
-### 新增
-- 新增 Docker Buildx v0.32.1 安裝流程，支援 multi-platform builds
-- 啟動時新增 `git credential.helper store` 設定
+### Added
+- Add Docker Buildx v0.32.1 installation to support multi-platform builds.
+- Add `git credential.helper store` configuration during startup.
 
-### 修復
-- 修正 git credential helper 使用 `sudo -u devuser HOME=...`，避免寫入 `/root`
+### Fixed
+- Fix the git credential helper to use `sudo -u devuser HOME=...` so it does not write into `/root`.
 
 ## [0.5.16] - 2026-04-22
 
-### 變更
-- 升級 OpenCode 至 1.14.20
-- 升級 OpenChamber 至 1.9.7
+### Changed
+- Upgrade OpenCode to 1.14.20.
+- Upgrade OpenChamber to 1.9.7.
 
 ## [0.5.15] - 2026-04-17
 
-### 變更
-- 升級 OpenCode 至 1.4.7
+### Changed
+- Upgrade OpenCode to 1.4.7.
 
 ## [0.5.14] - 2026-04-15
 
-### 變更
-- 升級 OpenChamber 至 1.9.5
+### Changed
+- Upgrade OpenChamber to 1.9.5.
 
 ## [0.5.13] - 2026-04-12
 
-### 修復
-- 移除 `NAPI_RS_FORCE_WASI` 環境變數，修復 LanceDB 初始化問題（lancedb/lancedb#3267）
-- 修復 CI workflow 中的 Docker Compose 問題
+### Fixed
+- Remove the `NAPI_RS_FORCE_WASI` environment variable to fix the LanceDB initialization issue (`lancedb/lancedb#3267`).
+- Fix Docker Compose issues in the CI workflow.
 
 ## [0.5.12] - 2026-04-11
 
-### 新增
-- 新增 README.md 的 memory plugin 設定說明
+### Added
+- Add README.md documentation for configuring the memory plugin.
 
-### 修復
-- 移除 `entrypoint.sh` 中的 `sg docker` 包裝，解決環境變數繼承問題
-  - 此問題導致 `memory_stats` 等工具回報 embedding service 離線錯誤
-- 新增 `entrypoint.d/02-init-config.sh` 的 stale plugin cache 清理機制
-- 在 `docker-compose.dev.yml` hardcode plugins，避免 host shell 汙染環境變數
-- 修正 `.env.example` 中的 plugin 名稱（`oh-my-opencode` → `oh-my-openagent`）
-- 修復 `test/test-memory-e2e.sh` 測試腳本
+### Fixed
+- Remove the `sg docker` wrapper from `entrypoint.sh` to fix environment variable inheritance.
+  - This issue caused tools such as `memory_stats` to report the embedding service as offline.
+- Add stale plugin cache cleanup to `entrypoint.d/02-init-config.sh`.
+- Hardcode plugins in `docker-compose.dev.yml` to avoid host shell environment contamination.
+- Fix the plugin name in `.env.example` (`oh-my-opencode` → `oh-my-openagent`).
+- Fix the `test/test-memory-e2e.sh` script.
 
 ## [0.5.11] - 2026-04-10
 
-### 新增
-- 新增 glab-config volume，讓 glab（GitLab CLI）認證資料可以持久化
-- 新增 06-init-glab-cli.sh 初始化腳本，自動建立 `~/.config/glab-cli` 目錄
-- 更新 00-fix-perms.sh，加入 glab-cli、gh、ssh、git 的權限修復
+### Added
+- Add the `glab-config` volume so `glab` (GitLab CLI) auth state persists.
+- Add the `06-init-glab-cli.sh` initialization script to create `~/.config/glab-cli` automatically.
+- Update `00-fix-perms.sh` to repair permissions for `glab-cli`, `gh`, `ssh`, and `git`.
 
 ## [0.5.10] - 2026-04-10
 
-### 新增
-- 升級 OpenCode 至 1.4.3
+### Added
+- Upgrade OpenCode to 1.4.3.
 
 ## [0.5.9] - 2026-04-10
 
-### 安全性
-- 升級 Docker CLI：v25.0.4 → v29.4.0（消除約 20 個 CVE alerts）
-- 升級 Docker Compose：v2.24.5 → v5.1.2（消除約 68 個 CVE alerts，含 6 個 Critical）
-- 新增 docs/backlog.md 記錄安全技術債務
-- 新增 docs/SECURITY.md 版本追蹤章節
+### Security
+- Upgrade Docker CLI from v25.0.4 to v29.4.0 (eliminating about 20 CVE alerts).
+- Upgrade Docker Compose from v2.24.5 to v5.1.2 (eliminating about 68 CVE alerts, including 6 critical ones).
+- Add `docs/backlog.md` to track security technical debt.
+- Add a version tracking section to `docs/SECURITY.md`.
 
 ## [0.5.8] - 2026-04-10
 
-### 新增
-- 升級 OpenCode 至 1.3.12
+### Added
+- Upgrade OpenCode to 1.3.12.
 
-### 修復
-- 將 Docker Compose 改為 plugin 安裝（取代獨立的 `docker-compose` 二進位）
-- 更新 test-memory-e2e.sh，改用 hook-based 測試方法
-- 更新 release-memory-test.sh，改用 `docker compose` 命令
+### Fixed
+- Switch Docker Compose to the plugin installation model instead of a standalone `docker-compose` binary.
+- Update `test-memory-e2e.sh` to use the hook-based test approach.
+- Update `release-memory-test.sh` to use the `docker compose` command.
 
 ## [0.5.6] - 2026-04-08
 
-### 新增
-- 新增 05-init-gh-cli.sh 初始化腳本，自動建立 `~/.config/gh` 目錄
-- 新增 gh-config-dev volume 至 docker-compose.dev.yml
+### Added
+- Add the `05-init-gh-cli.sh` initialization script to create `~/.config/gh` automatically.
+- Add the `gh-config-dev` volume to `docker-compose.dev.yml`.
 
-### 變更
-- entrypoint.sh 新增以 sudo 執行 05-init-gh-cli.sh
-- 更新 docs/ARCHITECTURE.md，加上 gh-config volume 說明
-- 更新 docs/TROUBLESHOOTING.md，加上 GitHub CLI 權限故障排除內容
+### Changed
+- Update `entrypoint.sh` to run `05-init-gh-cli.sh` through `sudo`.
+- Update `docs/ARCHITECTURE.md` with `gh-config` volume documentation.
+- Update `docs/TROUBLESHOOTING.md` with GitHub CLI permission troubleshooting.
 
 ## [0.5.5] - 2026-04-08
 
-### 新增
-- 新增 gh-config named volume，讓 gh auth 資料可以持久化
+### Added
+- Add the `gh-config` named volume so `gh` auth data persists.
 
 ## [0.5.4] - 2026-04-08
 
-### 新增
-- 新增完整 Memory E2E 測試腳本（test-memory-e2e.sh）
-- 新增 Memory plugin 重試機制（最多 3 次）
-- 新增 release skill 的版本資訊提取步驟
-- README.md 新增版本徽章
+### Added
+- Add the full Memory E2E test script (`test-memory-e2e.sh`).
+- Add a retry mechanism for the Memory plugin (up to 3 tries).
+- Add the version extraction step to the release skill.
+- Add version badges to `README.md`.
 
-### 變更
-- 將 OpenCode 降級至 1.3.7
-- 將 OpenChamber 升級至 1.9.4
-- 修正 Docker Compose 命令相容性問題
-- 修正 release-memory-test.sh 容器名稱
+### Changed
+- Downgrade OpenCode to 1.3.7.
+- Upgrade OpenChamber to 1.9.4.
+- Fix Docker Compose command compatibility.
+- Fix the container name in `release-memory-test.sh`.
 
-### 修復
-- 修正 Memory plugin 在 OpenCode 1.3.7 下的初始化問題
-- 修正 release-memory-test.sh 測試失敗時應停止的邏輯
+### Fixed
+- Fix Memory plugin initialization on OpenCode 1.3.7.
+- Fix the logic so `release-memory-test.sh` stops when tests fail.
 
 ## [0.5.2] - 2026-04-07
 
-### 修復
-- 修正 CI workflow 中的 `sed` 命令，正確替換 container name
+### Fixed
+- Fix the `sed` command in the CI workflow so it replaces the container name correctly.
 
 ## [0.5.1] - 2026-04-07
 
-### 新增
-- release skill 新增檢查文檔更新步驟
+### Added
+- Add a documentation update check step to the release skill.
 
-### 變更
-- 重新排序 release 步驟，先檢查文檔再 commit
+### Changed
+- Reorder the release steps so docs are checked before committing.
 
-### 修復
-- 修正 dev 環境 `OLLAMA_BASE_URL` 被主機環境覆蓋的問題
+### Fixed
+- Fix `OLLAMA_BASE_URL` being overridden by the host environment in the dev setup.
 
 ## [0.5.0] - 2026-04-07
 
-### 新增
-- 新增多模型切換功能
-- 新增 named volume 作為預設 workspace
-- 新增 glab（GitLab CLI）
+### Added
+- Add multi-model switching.
+- Add a named volume as the default workspace.
+- Add `glab` (GitLab CLI).
 
-### 變更
-- 使用 named volumes 作為預設儲存策略
-- 更新 install.sh 與 .env.example
-- 改善 entrypoint 腳本結構
+### Changed
+- Use named volumes as the default persistence strategy.
+- Update `install.sh` and `.env.example`.
+- Improve the entrypoint script structure.
 
 ## [0.3.3] - 2026-04-02
 
-### 新增
-- 初始版本發布
-- 基於 Ubuntu 24.04 的 Docker 開發環境
-- 整合 OpenCode AI 程式碼助手（v1.3.13）
-- 整合 OpenChamber Web UI（v1.9.3）
-- 整合本地 LLM 推論引擎（後續已移除）
-- 支援 LanceDB 向量搜尋插件
-- 內建 GitHub CLI
-- 提供完整開發工具鏈（git、python、tmux、jq 等）
-- 建立自動化 CI/CD 流程
-- 建立漏洞掃描（Grype）
-- 建立整合測試套件（39 個測試項目）
+### Added
+- Initial release.
+- Ubuntu 24.04-based Docker development environment.
+- Integrate the OpenCode AI coding assistant (v1.3.13).
+- Integrate the OpenChamber web UI (v1.9.3).
+- Integrate a local LLM inference engine (later removed).
+- Support the LanceDB vector search plugin.
+- Include GitHub CLI.
+- Provide a full developer toolchain (`git`, `python`, `tmux`, `jq`, and more).
+- Establish automated CI/CD workflows.
+- Add vulnerability scanning with Grype.
+- Create an integration test suite (39 test cases).
 
-### 變更
-- 採用雙容器設計（ai-dev + LLM 推論容器，後續已移除）
-- 採用 Docker named volumes 資料持久化策略
-- 支援 bind mount 本地開發模式
-- 加入健康檢查與自動重啟
-- 支援動態套件安裝
+### Changed
+- Use a two-container design (`ai-dev` + LLM inference container, later removed).
+- Use Docker named volumes for persistence.
+- Support bind mount local development mode.
+- Add health checks and automatic restarts.
+- Support dynamic package installation.
 
 ## [0.3.0] - 2026-04-02
 
-### 新增
-- 新增 `docs/SECURITY.md` 安全政策文件
-- 新增 `docs/TROUBLESHOOTING.md` 故障排除指南
-- 新增 `docs/ARCHITECTURE.md` 架構說明文件
-- 新增 `docs/CONTRIBUTING.md` 貢獻指南
+### Added
+- Add the `docs/SECURITY.md` security policy.
+- Add the `docs/TROUBLESHOOTING.md` troubleshooting guide.
+- Add the `docs/ARCHITECTURE.md` architecture guide.
+- Add the `docs/CONTRIBUTING.md` contributor guide.
 
-### 變更
-- 改善 README.md 文件結構
+### Changed
+- Improve the `README.md` document structure.
 
 
 ---
 
-## 版本格式說明
+## Format
 
-### 類型
+### Types
 
-- `新增` - 新功能
-- `變更` - 現有功能的變更
-- `棄用` - 即將移除的功能
-- `移除` - 已移除的功能
-- `修復` - Bug 修復
-- `安全性` - 安全相關變更
+- `Added` - new features
+- `Changed` - changes to existing functionality
+- `Deprecated` - soon-to-be removed features
+- `Removed` - removed features
+- `Fixed` - bug fixes
+- `Security` - security-related changes
 
-### 範例
+### Example
 
 ```markdown
 ## [1.1.0] - 2026-04-15
 
-### 新增
-- 新增 GPU 支援
-- 新增多模型切換功能
+### Added
+- Add GPU support.
+- Add multi-model switching.
 
-### 變更
-- 升級 Ollama 至最新版本
+### Changed
+- Upgrade Ollama to the latest version.
 
-### 修復
-- 修正容器重啟問題
-- 修正權限錯誤
+### Fixed
+- Fix container restart issues.
+- Fix permission errors.
 ```
 
 ---
 
-> 📖 本日誌格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/) 規範。
+> 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
 [Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.0.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0

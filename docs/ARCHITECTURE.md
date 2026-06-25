@@ -1,49 +1,49 @@
-# 架構說明
+# Architecture Guide
 
-本文檔說明 ai-engkit 專案的系統架構、元件間的關係及資料流程。
+This document explains the ai-engkit system architecture, the relationships between components, and the main data flows.
 
-## 目錄
+## Table of Contents
 
-- [系統概覽](#系統概覽)
-- [服務架構](#服務架構)
-- [容器架構](#容器架構)
-- [資料流](#資料流)
-- [網路架構](#網路架構)
-- [儲存架構](#儲存架構)
-- [啟動流程](#啟動流程)
-- [元件說明](#元件說明)
+- [System Overview](#system-overview)
+- [Service Architecture](#service-architecture)
+- [Container Architecture](#container-architecture)
+- [Data Flow](#data-flow)
+- [Network Architecture](#network-architecture)
+- [Storage Architecture](#storage-architecture)
+- [Startup Flow](#startup-flow)
+- [Component Reference](#component-reference)
 
-## 系統概覽
+## System Overview
 
-ai-engkit 是一個基於 Docker 的 AI 開發環境，整合了 OpenCode AI 助手（後端）、OpenChamber Web UI（前端的 Web 介面）以及預先安裝好的常用開發工具。
+ai-engkit is a Docker-based AI development environment that combines the OpenCode AI assistant (backend), the OpenChamber web UI (frontend), and a preinstalled day-to-day developer toolchain.
 
 ```mermaid
 graph TB
-    subgraph "使用者端"
-        BROWSER["🌐 瀏覽器<br/>OpenChamber Web UI"]
-        TERMINAL["💻 終端機<br/>OpenCode CLI"]
+    subgraph "User Side"
+        BROWSER["🌐 Browser<br/>OpenChamber Web UI"]
+        TERMINAL["💻 Terminal<br/>OpenCode CLI"]
     end
 
-    subgraph "Docker 環境"
-        subgraph "ai-dev 容器"
-            OC["OpenCode<br/>AI 助手 (後端)"]
-            CH["OpenChamber<br/>Web 伺服器 (前端)"]
+    subgraph "Docker Environment"
+        subgraph "ai-dev Container"
+            OC["OpenCode<br/>AI Assistant (Backend)"]
+            CH["OpenChamber<br/>Web Server (Frontend)"]
             API["API :4095"]
-            TOOLS["開發工具<br/>git, python, tmux..."]
+            TOOLS["Developer Tools<br/>git, python, tmux..."]
         end
     end
-    
-    subgraph "主機資源"
+
+    subgraph "Host Resources"
         HOST_DOCKER["Docker Socket"]
     end
 
     BROWSER -->|"HTTP/WS :3000"| CH
     CH -->|"WebSocket :4095"| API
-    TERMINAL -->|"命令列"| OC
+    TERMINAL -->|"CLI"| OC
     OC -->|"API :4095"| API
-    
-    OC -.->|"透過 named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
-    OC -.->|"讀寫"| HOST_DOCKER
+
+    OC -.->|"via named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
+    OC -.->|"read/write"| HOST_DOCKER
 
     style BROWSER fill:#e1f5fe
     style TERMINAL fill:#e8f5e9
@@ -53,18 +53,18 @@ graph TB
     style GIT_VOLS fill:#e8f5e9
 ```
 
-## 服務架構
+## Service Architecture
 
-### 主要服務
+### Primary Services
 
 ```mermaid
 graph LR
-    subgraph "ai-dev 服務"
+    subgraph "ai-dev Service"
         direction TB
         PORT3000[":3000 OpenChamber<br/>Web UI"]
         OC_API[":4095 OpenCode<br/>API Server"]
         ENTRYPOINT["entrypoint.sh"]
-        INIT_SCRIPTS["初始化腳本"]
+        INIT_SCRIPTS["Initialization Scripts"]
     end
 
     PORT3000 -->|"WebSocket"| OC_API
@@ -78,17 +78,17 @@ graph LR
     style PORT11434 fill:#fce4ec
 ```
 
-### 服務依賴關係
+### Service Dependencies
 
 ```mermaid
 graph TD
-    A["ai-dev 啟動"] --> D["OpenCode API :4095 就緒"]
-    D --> E["OpenChamber Web :3000 啟動"]
-    E --> F["開啟 Web UI"]
+    A["ai-dev starts"] --> D["OpenCode API :4095 ready"]
+    D --> E["OpenChamber Web :3000 starts"]
+    E --> F["Open the Web UI"]
 
-    G["使用者訪問 :8000"] --> H["OpenChamber :3000"]
+    G["User accesses :8000"] --> H["OpenChamber :3000"]
     H -->|"WebSocket/SSE"| I["OpenCode :4095"]
-    
+
     style A fill:#fff3e0
     style D fill:#e3f2fd
     style E fill:#f3e5f5
@@ -96,28 +96,28 @@ graph TD
     style I fill:#e3f2fd
 ```
 
-## 容器架構
+## Container Architecture
 
-### ai-dev 容器內部結構
+### ai-dev Internal Layout
 
 ```mermaid
 graph TB
-    subgraph "ai-dev 容器 (Ubuntu 24.04)"
+    subgraph "ai-dev Container (Ubuntu 24.04)"
         USER["devuser (UID 1000)"]
-        
-        subgraph "應用層"
+
+        subgraph "Application Layer"
             OC_SERVER["OpenCode Server"]
-            OC_PLUGINS["插件系統<br/>oh-my-openagent"]
+            OC_PLUGINS["Plugin System<br/>oh-my-openagent"]
             CH_SERVER["OpenChamber Server"]
         end
 
-        subgraph "執行時"
+        subgraph "Runtime"
             BUN["Bun Runtime"]
             HOMEBREW["Homebrew"]
             NODE_SHIM["Node Shim"]
         end
 
-        subgraph "目錄結構"
+        subgraph "Directory Layout"
             WORKSPACE["~/workspace"]
             CONFIG["~/.config/"]
             DATA["~/.local/share/"]
@@ -149,36 +149,36 @@ graph TB
     style CH_SERVER fill:#f3e5f5
 ```
 
-## 資料流
+## Data Flow
 
-### AI 對話流程
+### AI Conversation Flow
 
 ```mermaid
 sequenceDiagram
-    participant U as 使用者
+    participant U as User
     participant UI as OpenChamber Web UI
     participant API as OpenCode API
     participant OC as OpenCode Engine
-    participant DB as 資料庫
-    participant OL as LLM-Model
+    participant DB as Database
+    participant OL as LLM Model
 
-    U->>UI: 輸入提示詞
-    UI->>API: WebSocket/SSE 請求
-    API->>OC: 轉發請求
-    OC->>DB: 儲存對話記錄
-    OC->>OL: 生成請求 (嵌入)
-    OL-->>OC: 向量結果
-    OC->>OL: 生成請求 (LLM)
-    OL-->>OC: 生成回應
-    OC->>DB: 儲存回應
-    OC-->>API: SSE 回應
-    API-->>UI: SSE 回應
-    UI-->>U: 顯示結果
+    U->>UI: Enter a prompt
+    UI->>API: WebSocket/SSE request
+    API->>OC: Forward request
+    OC->>DB: Store conversation record
+    OC->>OL: Generate request (embedding)
+    OL-->>OC: Vector result
+    OC->>OL: Generate request (LLM)
+    OL-->>OC: Generated response
+    OC->>DB: Store response
+    OC-->>API: SSE response
+    API-->>UI: SSE response
+    UI-->>U: Display result
 ```
 
-## 網路架構
+## Network Architecture
 
-### 容器網路拓樸
+### Container Network Topology
 
 ```mermaid
 graph TB
@@ -193,8 +193,8 @@ graph TB
         end
     end
 
-    HOST_PORT_8000 -->|"映射"| CONTAINER_3000
-    
+    HOST_PORT_8000 -->|"mapped to"| CONTAINER_3000
+
     CONTAINER_3000 -->|"WebSocket/SSE"| CONTAINER_4095
 
     style HOST_PORT_8000 fill:#f3e5f5
@@ -202,36 +202,36 @@ graph TB
     style CONTAINER_4095 fill:#e3f2fd
 ```
 
-### 環境變數配置
+### Environment Variables
 
-| 變數 | 用途 | 預設值 | 範圍 |
+| Variable | Purpose | Default | Scope |
 |------|------|--------|------|
-| `CHAMBER_PORT` | Web UI 埠號 | 8000 | 主機 |
-| `OPENCODE_SERVER_PASSWORD` | API 認證 | `devonly` | 應用層 |
-| `OPENCHAMBER_UI_PASSWORD` | Web UI 認證 | `chamber` | 應用層 |
+| `CHAMBER_PORT` | Web UI port | 8000 | Host |
+| `OPENCODE_SERVER_PASSWORD` | API authentication | `devonly` | Application |
+| `OPENCHAMBER_UI_PASSWORD` | Web UI authentication | `chamber` | Application |
 
-## 儲存架構
+## Storage Architecture
 
-### Volume 配置
+### Volume Configuration
 
 ```mermaid
 graph TB
     subgraph "Docker Volumes"
-        VOL_WS["workspace<br/>專案檔案"]
-        VOL_DATA["opencode-data<br/>資料庫"]
-        VOL_CONFIG["opencode-config<br/>設定"]
-        VOL_CACHE["opencode-cache<br/>快取"]
-        VOL_OHMY["ohmyopencode-cache<br/>插件快取"]
-        VOL_CHAMBER["openchamber-data<br/>UI 設定"]
-        VOL_GIT["git-config<br/>Git 設定"]
-        VOL_SSH["ssh-keys<br/>SSH 金鑰"]
-        VOL_GH["gh-config<br/>GitHub CLI 設定"]
-        VOL_GLAB["glab-config<br/>GitLab CLI 設定"]
-        VOL_LC_DATA["lean-ctx-data<br/>向量索引/知識庫"]
-        VOL_LC_STATE["lean-ctx-state<br/>事件日誌"]
+        VOL_WS["workspace<br/>Project files"]
+        VOL_DATA["opencode-data<br/>Database"]
+        VOL_CONFIG["opencode-config<br/>Configuration"]
+        VOL_CACHE["opencode-cache<br/>Cache"]
+        VOL_OHMY["ohmyopencode-cache<br/>Plugin cache"]
+        VOL_CHAMBER["openchamber-data<br/>UI settings"]
+        VOL_GIT["git-config<br/>Git settings"]
+        VOL_SSH["ssh-keys<br/>SSH keys"]
+        VOL_GH["gh-config<br/>GitHub CLI settings"]
+        VOL_GLAB["glab-config<br/>GitLab CLI settings"]
+        VOL_LC_DATA["lean-ctx-data<br/>Vector index / knowledge base"]
+        VOL_LC_STATE["lean-ctx-state<br/>Event logs"]
     end
 
-    subgraph "容器路徑"
+    subgraph "Container Paths"
         C_WS["~/workspace"]
         C_DATA["~/.local/share/opencode"]
         C_LC_DATA["~/.local/share/lean-ctx"]
@@ -267,25 +267,25 @@ graph TB
     style VOL_GLAB fill:#e8f5e9
 ```
 
-### 資料持久化策略
+### Persistence Strategy
 
-| 資料類型 | 儲存位置 | 保留策略 | 備份建議 |
+| Data Type | Storage Location | Retention | Backup Recommendation |
 |---------|---------|---------|---------|
-| 專案檔案 | workspace | 重要 | 定期備份到 Git |
-| 對話記錄 | opencode-data | 重要 | 定期匯出 |
-| 使用者設定 | opencode-config | 重要 | 納入版本控制 |
-| Git 設定 | git-config | 重要 | 包含 .gitconfig, .git-credentials |
-| SSH 金鑰 | ssh-keys | 重要 | 包含 known_hosts |
-| GitHub CLI 設定 | gh-config | 重要 | 包含主機認證、快取 |
-| GitLab CLI 設定 | glab-config | 重要 | 包含主機認證、快取 |
-| 快取資料 | opencode-cache | 可重建 | 不需備份 |
-| UI 設定 | openchamber-data | 一般 | 不需備份 |
-| lean-ctx 向量索引/知識庫 | lean-ctx-data | 重要 | 包含 sessions, vectors, graphs, knowledge |
-| lean-ctx 事件日誌/狀態 | lean-ctx-state | 一般 | 包含 events, journal, agent keys |
+| Project files | workspace | Critical | Back up regularly to Git |
+| Conversation history | opencode-data | Critical | Export regularly |
+| User configuration | opencode-config | Critical | Keep under version control |
+| Git settings | git-config | Critical | Includes `.gitconfig`, `.git-credentials` |
+| SSH keys | ssh-keys | Critical | Includes `known_hosts` |
+| GitHub CLI settings | gh-config | Critical | Includes host auth and cache |
+| GitLab CLI settings | glab-config | Critical | Includes host auth and cache |
+| Cache data | opencode-cache | Rebuildable | No backup needed |
+| UI settings | openchamber-data | Normal | No backup needed |
+| lean-ctx vector index / knowledge base | lean-ctx-data | Critical | Includes sessions, vectors, graphs, knowledge |
+| lean-ctx event logs / state | lean-ctx-state | Normal | Includes events, journal, agent keys |
 
-## 啟動流程
+## Startup Flow
 
-### 容器啟動順序
+### Container Startup Order
 
 ```mermaid
 sequenceDiagram
@@ -293,32 +293,32 @@ sequenceDiagram
     participant I as init scripts
     participant A as ai-dev
 
-    D->>A: 啟動 ai-dev 容器
-    A->>I: 執行 entrypoint.d 腳本
-    
-    Note over I: 00-fix-perms.sh<br/>修復權限
-    
-    Note over I: 01-install-packages.sh<br/>安裝額外套件
-    
-    Note over I: 02-init-config.sh<br/>初始化設定檔
-    
-    Note over I: 03-fix-docker-gid.sh<br/>修復 Docker GID (需要 sudo)
+    D->>A: Start the ai-dev container
+    A->>I: Run entrypoint.d scripts
 
-    Note over I: 04-init-git-ssh.sh<br/>初始化 Git/SSH 設定 (named volumes)
-    
-    Note over I: 05-init-gh-cli.sh<br/>初始化 GitHub CLI 設定 (named volume)
+    Note over I: 00-fix-perms.sh<br/>Fix permissions
 
-    Note over I: 06-init-glab-cli.sh<br/>初始化 GitLab CLI 設定 (named volume)
+    Note over I: 01-install-packages.sh<br/>Install extra packages
 
-    Note over I: 06-setup-opencode-path.sh<br/>設定 opencode PATH
+    Note over I: 02-init-config.sh<br/>Initialize config files
 
-    I->>A: 初始化完成
-    A->>A: 啟動 OpenCode Server
-    A->>A: 啟動 OpenChamber Server
-    A->>D: 服務就緒
+    Note over I: 03-fix-docker-gid.sh<br/>Fix Docker GID (requires sudo)
+
+    Note over I: 04-init-git-ssh.sh<br/>Initialize Git/SSH settings (named volumes)
+
+    Note over I: 05-init-gh-cli.sh<br/>Initialize GitHub CLI settings (named volume)
+
+    Note over I: 06-init-glab-cli.sh<br/>Initialize GitLab CLI settings (named volume)
+
+    Note over I: 06-setup-opencode-path.sh<br/>Set up opencode PATH
+
+    I->>A: Initialization complete
+    A->>A: Start OpenCode Server
+    A->>A: Start OpenChamber Server
+    A->>D: Services ready
 ```
 
-### 初始化腳本執行順序
+### Initialization Script Order
 
 ```mermaid
 flowchart LR
@@ -330,79 +330,79 @@ flowchart LR
     F --> G["05-init-gh-cli.sh"]
     G --> GA["06-init-glab-cli.sh"]
     GA --> GB["06-setup-opencode-path.sh"]
-    GB --> H["執行 CMD"]
+    GB --> H["Run CMD"]
 
-    B -->|"修復"| PERMS["Volume 權限"]
-    C -->|"安裝"| PKGS["apt/brew/bun 套件"]
-    D -->|"建立"| CONFIGS["預設設定檔"]
-    E -->|"修正"| DOCKER["Docker 群組"]
-    F -->|"初始化"| GITSETUP["Git/SSH 設定"]
-    G -->|"初始化"| GH_SETUP["GitHub CLI 設定"]
-    GA -->|"初始化"| GLAB_SETUP["GitLab CLI 設定"]
-    GB -->|"設定"| PATH_SETUP["opencode PATH"]
+    B -->|"fix"| PERMS["Volume permissions"]
+    C -->|"install"| PKGS["apt/brew/bun packages"]
+    D -->|"create"| CONFIGS["Default config files"]
+    E -->|"fix"| DOCKER["Docker group"]
+    F -->|"initialize"| GITSETUP["Git/SSH settings"]
+    G -->|"initialize"| GH_SETUP["GitHub CLI settings"]
+    GA -->|"initialize"| GLAB_SETUP["GitLab CLI settings"]
+    GB -->|"configure"| PATH_SETUP["opencode PATH"]
 
     style A fill:#fff3e0
     style G fill:#c8e6c9
 ```
 
-## 元件說明
+## Component Reference
 
 ### OpenCode
 
-| 屬性 | 說明 |
+| Attribute | Description |
 |------|------|
-| 功能 | AI 程式碼助手（後端引擎） |
-| 版本 | 見 `Dockerfile` `ARG OPENCODE_VERSION` |
-| 設定檔 | `~/.config/opencode/opencode.json` |
-| 資料庫 | `~/.local/share/opencode/opencode.db` |
-| API 埠號 | 4095 |
-| 通訊協定 | HTTP + SSE (Server-Sent Events) |
+| Purpose | AI coding assistant (backend engine) |
+| Version | See `ARG OPENCODE_VERSION` in `Dockerfile` |
+| Config file | `~/.config/opencode/opencode.json` |
+| Database | `~/.local/share/opencode/opencode.db` |
+| API port | 4095 |
+| Protocol | HTTP + SSE (Server-Sent Events) |
 | SDK | `@opencode-ai/sdk` |
 
 ### OpenChamber
 
-| 屬性 | 說明 |
+| Attribute | Description |
 |------|------|
-| 功能 | OpenCode 的 Web/Desktop UI（前端的 GUI） |
-| 版本 | 見 `Dockerfile` `ARG OPENCHAMBER_VERSION` |
-| 與 OpenCode 關係 | 獨立專案，透過 API 連線至 OpenCode |
-| 服務埠號 | 3000 (映射至主機 8000) |
-| 通訊方式 | WebSocket (terminal) + SSE (chat) |
-| 前端框架 | React (Tauri for desktop) |
+| Purpose | Web/Desktop UI for OpenCode (frontend GUI) |
+| Version | See `ARG OPENCHAMBER_VERSION` in `Dockerfile` |
+| Relationship to OpenCode | Separate project that connects to OpenCode over API |
+| Service port | 3000 (mapped to host port 8000) |
+| Transport | WebSocket (terminal) + SSE (chat) |
+| Frontend framework | React (Tauri for desktop) |
 
-> 📝 **架構說明**：OpenChamber 並非 OpenCode 的一部分，而是獨立的專案（[openchamber/openchamber](https://github.com/openchamber/openchamber)）。它作為客戶端，透過 `@opencode-ai/sdk/v2` 連線至 OpenCode 伺服器，可選擇本地自動啟動或連線至遠端伺服器。
+> 📝 **Architecture note**: OpenChamber is not part of OpenCode. It is a separate project ([openchamber/openchamber](https://github.com/openchamber/openchamber)) that acts as a client and connects to the OpenCode server through `@opencode-ai/sdk/v2`, either by starting a local server automatically or by connecting to a remote one.
 
-### 開發工具鏈
+### Developer Toolchain
 
 ```mermaid
 graph LR
-    subgraph "版本控制"
+    subgraph "Version Control"
         GIT["git"]
         GH["gh (GitHub CLI)"]
         GLAB["glab (GitLab CLI)"]
     end
 
-    subgraph "執行環境"
+    subgraph "Runtime"
         PYTHON["python3"]
         BUN["bun"]
         NODE["node (shim)"]
     end
 
-    subgraph "終端工具"
+    subgraph "Terminal Tools"
         TMUX["tmux"]
         NEOVIM["nvim"]
         VIM["vim"]
         NANO["nano"]
     end
 
-    subgraph "實用工具"
+    subgraph "Utility Tools"
         JQ["jq"]
         TREE["tree"]
         CURL["curl"]
         WGET["wget"]
     end
 
-    subgraph "容器工具"
+    subgraph "Container Tools"
         DOCKER["docker CLI"]
         COMPOSE["docker compose"]
     end
@@ -414,30 +414,29 @@ graph LR
     style DOCKER fill:#e3f2fd
 ```
 
-### 插件系統
+### Plugin System
 
-| 插件 | 功能 | 說明 | 版本管理 |
-|------|------|------|----------|
-| `oh-my-openagent` | 核心框架 | OpenCode 基礎功能擴展 | 支援 build 時指定版本 |
+| Plugin | Purpose | Description | Version Management |
+| `oh-my-openagent` | Core framework | Extends baseline OpenCode functionality | Supports build-time version pinning |
 
-### Plugin 版本管理（開發用）
+### Plugin Version Management (Development)
 
-在建構 image 時可指定插件版本：
+You can specify plugin versions when building the image:
 
 ```bash
-# 使用最新版本（預設）
+# Use the latest version (default)
 docker compose -f docker-compose.dev.yml build
 
-# 指定特定版本
+# Pin a specific version
 OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
   docker compose -f docker-compose.dev.yml build
 ```
 
-## 配置選項
+## Configuration Options
 
-### 動態安裝套件
+### Dynamic Package Installation
 
-透過環境變數可在容器啟動時安裝額外套件：
+Install extra packages at container startup through environment variables:
 
 ```bash
 # .env
@@ -446,14 +445,14 @@ BREW_PACKAGES="ghq"
 BUN_PACKAGES="typescript"
 ```
 
-### Workspace 選項
+### Workspace Options
 
-| 模式 | 設定 | 優點 | 缺點 |
+| Mode | Setting | Advantages | Drawbacks |
 |------|------|------|------|
-| Named Volume | 不設定 `WORKSPACE_PATH` (v0.5.0 預設) | 容器管理，自動初始化 git/SSH 設定 | 需要 `docker cp` 存取 |
-| Bind Mount | `WORKSPACE_PATH=./workspace` | 可直接用本機 IDE 編輯 | 權限問題較常見 |
-| 主機路徑 | `WORKSPACE_PATH=/home/user/projects` | 存取現有專案 | 需注意權限 |
+| Named Volume | Leave `WORKSPACE_PATH` unset (default since v0.5.0) | Managed by Docker, auto-initializes Git/SSH settings | Requires `docker cp` for direct host access |
+| Bind Mount | `WORKSPACE_PATH=./workspace` | Editable directly with a local IDE | Permission issues are more common |
+| Host Path | `WORKSPACE_PATH=/home/user/projects` | Reuses an existing project directory | Requires careful permission management |
 
 ---
 
-> 📖 **延伸閱讀**：詳見 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) 了解常見問題。
+> 📖 **Further reading**: See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for common issues.

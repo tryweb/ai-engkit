@@ -61,7 +61,7 @@ docker exec -it ai-dev vi ~/.git-credentials
 - `credential.helper = store` saves credentials in **plaintext** in `~/.git-credentials`. Prefer HTTPS Personal Access Tokens (PATs) with minimum required scopes over passwords.
 - For higher security, prefer SSH keys.
 - The container's credential volumes are **not shared** with the host — a compromised container cannot read host credentials, and host credentials are never exposed to the container.
-- If you set up glab/gh as a credential helper on the **host**, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#glab-作為-git-credential-helper-的版本化路徑問題) for the versioned-path breakage issue.
+- If you set up glab/gh as a credential helper on the **host**, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#glab-as-a-git-credential-helper-with-a-versioned-path) for the versioned-path breakage issue.
 
 ## Credential Volumes
 

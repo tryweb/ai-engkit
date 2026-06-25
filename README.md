@@ -61,6 +61,11 @@ docker compose up -d
 
 ## Documentation Map
 
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — contributor guide (English)
+- [docs/CONTRIBUTING_zh-TW.md](./docs/CONTRIBUTING_zh-TW.md) — contributor guide (繁體中文)
+- [docs/CHANGELOG.md](./docs/CHANGELOG.md) — changelog
+- [SECURITY.md](./SECURITY.md) — security policy (English)
+- [docs/SECURITY_zh-TW.md](./docs/SECURITY_zh-TW.md) — security policy (繁體中文)
 - [docs/TOOLING.md](./docs/TOOLING.md) — built-in MCP servers, CLI tools, package managers, and extension points
 - [docs/GIT_AUTHENTICATION.md](./docs/GIT_AUTHENTICATION.md) — HTTPS / SSH / `gh` / `glab` setup inside the container
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — runtime architecture, data flow, storage, and startup behavior
@@ -159,7 +164,8 @@ Git credentials are stored inside dedicated container volumes and do not reuse h
 For HTTPS, SSH, `gh`, `glab`, multiple accounts, and security notes, see:
 
 - [docs/GIT_AUTHENTICATION.md](./docs/GIT_AUTHENTICATION.md)
-- [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md#glab-作為-git-credential-helper-的版本化路徑問題)
+- [SECURITY.md](./SECURITY.md)
+- [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md#glab-as-a-git-credential-helper-with-a-versioned-path)
 
 ## Ports
 
@@ -240,9 +246,9 @@ GitHub Actions will automatically:
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── CHANGELOG.md
-│   ├── CONTRIBUTING.md
+│   ├── CONTRIBUTING_zh-TW.md
 │   ├── GIT_AUTHENTICATION.md
-│   ├── SECURITY.md
+│   ├── SECURITY_zh-TW.md
 │   ├── TOOLING.md
 │   ├── TROUBLESHOOTING.md
 │   └── knowledge/               # Git-backed knowledge base (manual, human-readable)
@@ -258,6 +264,10 @@ GitHub Actions will automatically:
     ├── test-full.sh             # Full build-test pipeline
     └── test-memory-e2e.sh       # Memory plugin E2E test
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the English contributor guide, or [docs/CONTRIBUTING_zh-TW.md](./docs/CONTRIBUTING_zh-TW.md) for the Traditional Chinese version.
 
 ## License
 
