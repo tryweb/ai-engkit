@@ -31,6 +31,6 @@ export PLAYWRIGHT_BROWSERS_PATH
 
 exec bunx -y "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
     --executable-path="${CHROME_BIN}" \
-    --no-sandbox \
-    --headless \
+    --no-sandbox --headless \
+    --output-dir .playwright-mcp \
     "$@"
