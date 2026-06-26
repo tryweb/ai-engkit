@@ -32,8 +32,7 @@ jobs:
 
           LATEST=$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=20" \
-            --jq --arg cp ".github/workflows/ci.yml" \
-              '[.workflow_runs[] | select(.path == $cp)] | sort_by(.created_at) | last // {}')
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | sort_by(.created_at) | last // {}')
 
           RUN_ID=$(echo "$LATEST"     | jq -r '.id // ""')
           STATUS=$(echo "$LATEST"     | jq -r '.status // ""')
