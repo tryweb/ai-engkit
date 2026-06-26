@@ -1,0 +1,97 @@
+name: Dependency CI Supervisor
+
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  verify-and-rerun:
+    name: Verify CI and rerun if stuck
+    if: contains(github.event.pull_request.labels.*.name, 'dependencies')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for CI to dispatch naturally
+        run: sleep 60
+
+      - name: Inspect latest CI run for this branch
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          echo "Inspecting CI for branch: ${BRANCH}"
+
+          LATEST=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?branch=${BRANCH}&event=pull_request&per_page=1" \
+            --jq '.workflow_runs[0] // {}')
+
+          RUN_ID=$(echo "$LATEST"     | jq -r '.id // ""')
+          STATUS=$(echo "$LATEST"     | jq -r '.status // ""')
+          CONCLUSION=$(echo "$LATEST" | jq -r '.conclusion // ""')
+
+          if [[ -z "$RUN_ID" ]]; then
+            echo "::warning::No CI run found yet for ${BRANCH}; assuming healthy"
+            echo "needs-rerun=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          JOB_COUNT=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs" \
+            --jq '.jobs // [] | length' 2>/dev/null || echo "0")
+
+          echo "Run ${RUN_ID}: status=${STATUS} conclusion=${CONCLUSION} jobs=${JOB_COUNT}"
+
+          NEEDS_RERUN="false"
+          case "${STATUS}:${CONCLUSION}:${JOB_COUNT}" in
+            in_progress:*|queued:*|completed:success:*)
+              echo "CI is healthy"
+              ;;
+            completed:action_required:0|completed:action_required:*|completed:failure:0|completed:cancelled:0|completed:timed_out:0)
+              echo "::warning::CI run ${RUN_ID} appears stuck — will rerun"
+              NEEDS_RERUN="true"
+              ;;
+            *)
+              echo "::notice::Unexpected CI state — skipping (status=${STATUS}, conclusion=${CONCLUSION}, jobs=${JOB_COUNT})"
+              ;;
+          esac
+
+          {
+            echo "needs-rerun=${NEEDS_RERUN}"
+            echo "run-id=${RUN_ID}"
+            echo "run-status=${STATUS}"
+            echo "run-conclusion=${CONCLUSION}"
+            echo "job-count=${JOB_COUNT}"
+          } >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Rerun stuck CI
+        if: steps.check.outputs.needs-rerun == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ steps.check.outputs.run-id }}"
+          echo "Triggering rerun for run ${RUN_ID}..."
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/rerun"
+          echo "::notice::CI rerun triggered for run ${RUN_ID}"
+
+      - name: Sticky comment on PR
+        if: steps.check.outputs.needs-rerun == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ci-supervisor
+          message: |
+            🤖 **Dependency CI Supervisor** detected a stuck CI run
+            ([`${{ steps.check.outputs.run-id }}`](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${{ steps.check.outputs.run-id }}))
+            with status=`${{ steps.check.outputs.run-status }}`,
+            conclusion=`${{ steps.check.outputs.run-conclusion }}`,
+            job-count=`${{ steps.check.outputs.job-count }}`.
+
+            Auto-triggered a rerun. If this keeps happening, the GitHub Actions
+            dispatch issue may be recurring — please file an issue.
