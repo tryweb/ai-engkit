@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-06-26
+
+### Changed
+- Upgrade Docker Engine from 29.6.0 to 29.6.1.
+- Update the tracked latest version for lean-ctx from v3.8.12 to v3.8.13.
+
 ## [1.1.1] - 2026-06-25
 
 ### Changed
@@ -582,7 +588,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -649,3 +655,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.0.2]: https://github.com/tryweb/ai-engkit/compare/v1.0.1...v1.0.2
 [1.1.0]: https://github.com/tryweb/ai-engkit/compare/v1.0.2...v1.1.0
 [1.1.1]: https://github.com/tryweb/ai-engkit/compare/v1.1.0...v1.1.1
+[1.1.2]: https://github.com/tryweb/ai-engkit/compare/v1.1.1...v1.1.2
