@@ -14,7 +14,7 @@
 
 --- Versions ---
   [0;32mPASS[0m opencode version (1.17.11)
-  [0;32mPASS[0m openchamber version (1.13.3)
+  [0;32mPASS[0m openchamber version (1.13.5)
   [0;32mPASS[0m openspec installed (1.4.1)
   [0;32mPASS[0m gh CLI installed
   [0;32mPASS[0m glab CLI installed
