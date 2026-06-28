@@ -1,0 +1,23 @@
+<!-- @ai-engkit -->
+
+## ai-engkit DooD Network Awareness
+
+ai-engkit uses **Docker-out-of-Docker (DooD)** mode: the `/var/run/docker.sock`
+passthrough means `docker` commands inside this container operate the **host's**
+Docker daemon. Sibling containers started via `docker compose up` live on a
+separate bridge network — they are **not** reachable via `localhost` from here.
+
+| Target location | `localhost` works? | Correct access |
+|---|---|---|
+| Process started **in this container** (directly) | ✅ Yes | `http://localhost:<port>` |
+| OpenChamber Web UI (port 3000) | ✅ Yes | `http://localhost:3000` |
+| **Sibling container** via `docker compose up` | ❌ No | `http://<bridge_gateway>:<mapped_port>` |
+| **Host machine** service | ❌ No | `http://host.docker.internal:<port>` |
+
+To reach a sibling container:
+```bash
+GATEWAY=$(docker network inspect <network-name> \
+  --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
+# Then access via http://${GATEWAY}:<mapped_port>
+```
+<!-- /@ai-engkit -->

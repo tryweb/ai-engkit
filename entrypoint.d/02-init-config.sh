@@ -281,4 +281,24 @@ if [ -d "$BAKED_SKILLS_DIR" ]; then
   done < <(find "$BAKED_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
 fi
 
+# --- ai-engkit environment knowledge (AGENTS.md) ---
+# Append ai-engkit-specific sections to user's AGENTS.md if not already present.
+# Uses HTML-comment sentinel markers for idempotent dedup: each section identified
+# by <!-- @ai-engkit --> is appended exactly once, surviving container restarts.
+AI_ENGKIT_AGENTS_DEFAULT="/etc/opencode/AGENTS.md.default"
+USER_AGENTS_MD="$OPCODE_CONFIG_DIR/AGENTS.md"
+
+if [ -f "$AI_ENGKIT_AGENTS_DEFAULT" ]; then
+  if [ -f "$USER_AGENTS_MD" ]; then
+    if ! grep -q '<!-- @ai-engkit -->' "$USER_AGENTS_MD" 2>/dev/null; then
+      echo "" >> "$USER_AGENTS_MD"
+      cat "$AI_ENGKIT_AGENTS_DEFAULT" >> "$USER_AGENTS_MD"
+      echo "Appended ai-engkit environment knowledge to AGENTS.md"
+    fi
+  else
+    cp "$AI_ENGKIT_AGENTS_DEFAULT" "$USER_AGENTS_MD"
+    echo "Created AGENTS.md with ai-engkit environment knowledge"
+  fi
+fi
+
 echo "Default configs initialized"
