@@ -121,6 +121,19 @@ jobs:
 
           strip_v() { printf '%s\n' "${1#v}"; }
 
+          get_gitlab_tag() {
+            local project="$1" raw="" encoded=""
+            encoded="$(printf '%s' "$project" | sed 's/\//%2F/g')"
+            raw="$(curl -sL --max-time 10 "https://gitlab.com/api/v4/projects/${encoded}/releases/permalink/latest" 2>/dev/null | jq -r '.tag_name // ""' 2>/dev/null || true)"
+            if [[ -z "$raw" ]]; then printf 'unknown\n'; return 0; fi
+            raw="${raw#v}"
+            if [[ "$raw" =~ ^[0-9]+([.][0-9]+)*([-.][0-9A-Za-z]+)*$ ]]; then
+              printf '%s\n' "$raw"
+            else
+              printf 'unknown\n'
+            fi
+          }
+
           previous_latest_value() {
             local key="$1"
             if [[ ! -f "version-snapshot.json" ]]; then printf '\n'; return 0; fi
@@ -188,15 +201,15 @@ jobs:
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
             esac
           done < <(grep -oP '^ARG \K\w+=[0-9][0-9.-]*' Dockerfile | sed 's/=/ /' | awk '{print $1"="$2}')
 
-          if [[ "${#PINNED_NAMES[@]}" -ne 9 ]]; then
-            echo "::error::Expected 9 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+          if [[ "${#PINNED_NAMES[@]}" -ne 10 ]]; then
+            echo "::error::Expected 10 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
             exit 1
           fi
 
@@ -222,6 +235,7 @@ jobs:
               PLAYWRIGHT_VERSION)  source='playwright';    latest="$(get_npm_version "$source")" ;;
               PLAYWRIGHT_MCP_VERSION) source='@playwright/mcp'; latest="$(get_npm_version "$source")" ;;
               GH_VERSION)       source='cli/cli';          latest="$(get_github_tag "$source")" ;;
+              GLAB_VERSION)     source='gitlab-org/cli';   latest="$(get_gitlab_tag "$source")" ;;
               MARKSMAN_VERSION) source='artempyanykh/marksman'; latest="$(get_github_tag "$source")" ;;
             esac
 
@@ -241,7 +255,7 @@ jobs:
           done
 
           # --- Check latest-tracked packages ---
-          for name in OH_MY_OPENAGENT_VERSION CODEGRAPH_VERSION LEANCTX_VERSION; do
+          for name in OH_MY_OPENAGENT_VERSION CODEGRAPH_VERSION LEANCTX_VERSION OPENSPEC_VERSION; do
             current="unknown"
             previous=""
             source=""
@@ -255,6 +269,9 @@ jobs:
                 previous="$(previous_latest_value "$name")" ;;
               LEANCTX_VERSION)
                 source='github'; current="$(get_github_tag_raw 'yvgude/lean-ctx')"
+                previous="$(previous_latest_value "$name")" ;;
+              OPENSPEC_VERSION)
+                source='npm'; current="$(get_npm_version '@fission-ai/openspec')"
                 previous="$(previous_latest_value "$name")" ;;
             esac
 
@@ -355,15 +372,17 @@ jobs:
               "BUILDX_VERSION": $(json_quote "${PINNED_VERSIONS[2]}"),
               "OPENCODE_VERSION": $(json_quote "${PINNED_VERSIONS[3]}"),
               "OPENCHAMBER_VERSION": $(json_quote "${PINNED_VERSIONS[4]}"),
-              "PLAYWRIGHT_VERSION": $(json_quote "${PINNED_VERSIONS[5]}"),
-              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[6]}"),
-              "GH_VERSION": $(json_quote "${PINNED_VERSIONS[7]}"),
-              "MARKSMAN_VERSION": $(json_quote "${PINNED_VERSIONS[8]}")
+              "GLAB_VERSION": $(json_quote "${PINNED_VERSIONS[5]}"),
+              "PLAYWRIGHT_VERSION": $(json_quote "${PINNED_VERSIONS[6]}"),
+              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[7]}"),
+              "GH_VERSION": $(json_quote "${PINNED_VERSIONS[8]}"),
+              "MARKSMAN_VERSION": $(json_quote "${PINNED_VERSIONS[9]}")
             },
             "latest": {
               "OH_MY_OPENAGENT_VERSION": $(json_quote "$(get_npm_version 'oh-my-openagent')"),
               "CODEGRAPH_VERSION": $(json_quote "$(get_npm_version '@colbymchenry/codegraph')"),
-              "LEANCTX_VERSION": $(json_quote "$(get_github_tag_raw 'yvgude/lean-ctx')")
+              "LEANCTX_VERSION": $(json_quote "$(get_github_tag_raw 'yvgude/lean-ctx')"),
+              "OPENSPEC_VERSION": $(json_quote "$(get_npm_version '@fission-ai/openspec')")
             },
             "apt_upgradable": {
               "snapshot_time": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
@@ -822,10 +841,12 @@ jobs:
                   'PLAYWRIGHT_VERSION': 'Playwright',
                   'PLAYWRIGHT_MCP_VERSION': '@playwright/mcp',
                   'GH_VERSION': 'GitHub CLI',
+                  'GLAB_VERSION': 'GitLab CLI',
                   'MARKSMAN_VERSION': 'Marksman',
                   'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
                   'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
                   'LEANCTX_VERSION': 'lean-ctx',
+                  'OPENSPEC_VERSION': '@fission-ai/openspec',
               }
               return mapping.get(name, name)
 
