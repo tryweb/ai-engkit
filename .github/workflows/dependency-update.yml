@@ -2,7 +2,7 @@ name: Dependency Update Check
 
 on:
   schedule:
-    - cron: '0 20 * * *'
+    - cron: '30 23 * * *'
   workflow_dispatch:
 
 concurrency:
