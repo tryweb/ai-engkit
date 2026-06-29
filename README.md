@@ -76,10 +76,19 @@ docker compose up -d
 Developers who want to build locally should use `docker-compose.dev.yml`:
 
 ```bash
-# Build both images (engine + UI) and start
+# 1. Create .env from template (REQUIRED — docker compose reads .env from the project root)
+cp .env.example .env
+# Edit .env to set OPENCHAMBER_UI_PASSWORD, OPENCODE_SERVER_PASSWORD, etc.
+
+# 2. Build both images (engine + UI) and start
 docker compose -f docker-compose.dev.yml build --no-cache
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+> **Why `.env` matters**: `docker compose` automatically loads `.env` from the project
+> root and substitutes `${OPENCHAMBER_UI_PASSWORD:-default}` etc. Without `.env`, your
+> custom password edits will be silently ignored — the compose falls back to the shell
+> environment, which usually has the wrong (or no) value.
 
 To build only the engine or UI image individually:
 
