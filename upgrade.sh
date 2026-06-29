@@ -184,25 +184,34 @@ merge_env() {
 pull_image() {
     header "6. 拉取最新 Docker 映像"
 
-    local old_id
-    old_id=$(docker images ghcr.io/tryweb/ai-engkit:latest -q 2>/dev/null || true)
-    if [ -n "$old_id" ]; then
-        echo "  當前映像 ID: ${old_id:0:12}"
-    else
+    local old_engine_id old_ui_id
+    old_engine_id=$(docker images ghcr.io/tryweb/ai-engkit:latest -q 2>/dev/null || true)
+    old_ui_id=$(docker images ghcr.io/tryweb/ai-engkit-ui:latest -q 2>/dev/null || true)
+    if [ -n "$old_engine_id" ]; then
+        echo "  當前 engine 映像 ID: ${old_engine_id:0:12}"
+    fi
+    if [ -n "$old_ui_id" ]; then
+        echo "  當前 UI 映像 ID: ${old_ui_id:0:12}"
+    fi
+    if [ -z "$old_engine_id" ] && [ -z "$old_ui_id" ]; then
         info "本地尚無 ai-engkit 映像"
     fi
 
-    echo "  正在拉取 ghcr.io/tryweb/ai-engkit:latest..."
+    echo "  正在拉取最新映像..."
     if docker compose pull 2>&1; then
         ok "映像已更新至最新版"
     else
         ok "映像已檢查完畢"
     fi
 
-    local new_id
-    new_id=$(docker images ghcr.io/tryweb/ai-engkit:latest -q 2>/dev/null || true)
-    if [ -n "$new_id" ] && [ "$new_id" != "$old_id" ] && [ -n "$old_id" ]; then
-        echo "  新映像 ID: ${new_id:0:12}"
+    local new_engine_id new_ui_id
+    new_engine_id=$(docker images ghcr.io/tryweb/ai-engkit:latest -q 2>/dev/null || true)
+    new_ui_id=$(docker images ghcr.io/tryweb/ai-engkit-ui:latest -q 2>/dev/null || true)
+    if [ -n "$new_engine_id" ] && [ "$new_engine_id" != "$old_engine_id" ] && [ -n "$old_engine_id" ]; then
+        echo "  新 engine 映像 ID: ${new_engine_id:0:12}"
+    fi
+    if [ -n "$new_ui_id" ] && [ "$new_ui_id" != "$old_ui_id" ] && [ -n "$old_ui_id" ]; then
+        echo "  新 UI 映像 ID: ${new_ui_id:0:12}"
     fi
 }
 

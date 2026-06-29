@@ -109,10 +109,16 @@ jobs:
               volumes:
                 - workspace-dev:/home/devuser/workspace
                 - opencode-data-dev:/home/devuser/.local/share/opencode
+                - lean-ctx-data-dev:/home/devuser/.local/share/lean-ctx
+                - lean-ctx-state-dev:/home/devuser/.local/state/lean-ctx
                 - opencode-config-dev:/home/devuser/.config/opencode
+                - opencode-cache-dev:/home/devuser/.cache/opencode
+                - ohmyopencode-cache-dev:/home/devuser/.cache/oh-my-opencode
                 - openchamber-data-dev:/home/devuser/.config/openchamber
                 - ssh-keys-dev:/home/devuser/.ssh
                 - git-config-dev:/home/devuser/.config/git
+                - gh-config-dev:/home/devuser/.config/gh
+                - glab-config-dev:/home/devuser/.config/glab-cli
                 - /var/run/docker.sock:/var/run/docker.sock
             ai-ui:
               image: ai-engkit-ui:ci
