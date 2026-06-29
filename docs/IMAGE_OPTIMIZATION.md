@@ -9,7 +9,7 @@
 
 ## 1. Current Image Size Breakdown
 
-Measured via `docker history` + per-layer `du` inspection of the ai-dev image:
+Measured via `docker history` + per-layer `du` inspection of the ai-engine image:
 
 | Rank | Component | Size | % | Notes |
 |------|-----------|------|----|-------|
@@ -85,7 +85,9 @@ Changing the default to `false` would mainly affect local builds, not release im
 
 ## 3. Multi-Container Architecture (Phase 2)
 
-### 3.1 Scenario A: Split OpenChamber UI (Recommended for Discussion)
+> **Status**: ✅ Implemented on `feat/multi-container` branch
+
+### 3.1 Scenario A: Split OpenChamber UI (Implemented)
 
 ```
 Container 1: ai-engine (OpenCode + tools + MCP + Docker socket)

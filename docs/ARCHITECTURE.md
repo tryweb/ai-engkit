@@ -15,7 +15,7 @@ This document explains the ai-engkit system architecture, the relationships betw
 
 ## System Overview
 
-ai-engkit is a Docker-based AI development environment that combines the OpenCode AI assistant (backend), the OpenChamber web UI (frontend), and a preinstalled day-to-day developer toolchain.
+ai-engkit is a Docker-based AI development environment that splits the workload across two containers: **ai-engine** (OpenCode API, MCP servers, CLI tools) and **ai-ui** (OpenChamber web UI). The two containers communicate over a shared Docker bridge network.
 
 ```mermaid
 graph TB
@@ -25,11 +25,15 @@ graph TB
     end
 
     subgraph "Docker Environment"
-        subgraph "ai-dev Container"
-            OC["OpenCode<br/>AI Assistant (Backend)"]
-            CH["OpenChamber<br/>Web Server (Frontend)"]
+        subgraph "ai-engine Container"
+            OC["OpenCode<br/>API Server"]
             API["API :4095"]
             TOOLS["Developer Tools<br/>git, python, tmux..."]
+            MCP["MCP Servers<br/>CodeGraph, lean-ctx, Playwright"]
+        end
+
+        subgraph "ai-ui Container"
+            CH["OpenChamber<br/>Web Server"]
         end
     end
 
@@ -38,9 +42,8 @@ graph TB
     end
 
     BROWSER -->|"HTTP/WS :3000"| CH
-    CH -->|"WebSocket :4095"| API
+    CH -->|"ws://ai-engine:4095"| API
     TERMINAL -->|"CLI"| OC
-    OC -->|"API :4095"| API
 
     OC -.->|"via named volumes"| GIT_VOLS["git-config<br/>ssh-keys volumes"]
     OC -.->|"read/write"| HOST_DOCKER
@@ -51,6 +54,7 @@ graph TB
     style CH fill:#f3e5f5
     style API fill:#e3f2fd
     style GIT_VOLS fill:#e8f5e9
+    style MCP fill:#ffcc80
 ```
 
 ## Service Architecture
@@ -59,37 +63,42 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "ai-dev Service"
+    subgraph "ai-engine Service"
         direction TB
-        PORT3000[":3000 OpenChamber<br/>Web UI"]
         OC_API[":4095 OpenCode<br/>API Server"]
         ENTRYPOINT["entrypoint.sh"]
         INIT_SCRIPTS["Initialization Scripts"]
     end
 
+    subgraph "ai-ui Service"
+        direction TB
+        PORT3000[":3000 OpenChamber<br/>Web UI"]
+    end
+
     PORT3000 -->|"WebSocket"| OC_API
-    OC_API -->|"API :11434"| PORT11434
     ENTRYPOINT --> INIT_SCRIPTS
-    PORT11434 --> HEALTHCHECK
-    HEALTHCHECK --> PULL_MODEL
 
     style PORT3000 fill:#f3e5f5
     style OC_API fill:#e3f2fd
-    style PORT11434 fill:#fce4ec
 ```
 
 ### Service Dependencies
 
 ```mermaid
 graph TD
-    A["ai-dev starts"] --> D["OpenCode API :4095 ready"]
-    D --> E["OpenChamber Web :3000 starts"]
+    A["docker compose up -d"] --> B["ai-engine starts"]
+    A --> C["ai-ui starts (depends_on ai-engine)"]
+    B --> D["OpenCode API :4095 ready"]
+    C --> E["OpenChamber Web :3000 starts"]
+    D -->|"connected via"| E
     E --> F["Open the Web UI"]
 
     G["User accesses :8000"] --> H["OpenChamber :3000"]
-    H -->|"WebSocket/SSE"| I["OpenCode :4095"]
+    H -->|"ws://ai-engine:4095"| I["OpenCode :4095"]
 
     style A fill:#fff3e0
+    style B fill:#e3f2fd
+    style C fill:#f3e5f5
     style D fill:#e3f2fd
     style E fill:#f3e5f5
     style H fill:#f3e5f5
@@ -98,55 +107,71 @@ graph TD
 
 ## Container Architecture
 
-### ai-dev Internal Layout
+### Container Layout
 
 ```mermaid
 graph TB
-    subgraph "ai-dev Container (Ubuntu 24.04)"
-        USER["devuser (UID 1000)"]
+    subgraph "ai-engine Container (Ubuntu 24.04)"
+        ENGINE_USER["devuser (UID 1000)"]
 
-        subgraph "Application Layer"
-            OC_SERVER["OpenCode Server"]
+        subgraph "Engine Application Layer"
+            OC_SERVER["OpenCode Server<br/>(API :4095)"]
             OC_PLUGINS["Plugin System<br/>oh-my-openagent"]
-            CH_SERVER["OpenChamber Server"]
+            MCP_SERVERS["MCP Servers<br/>CodeGraph / lean-ctx / Playwright"]
         end
 
-        subgraph "Runtime"
+        subgraph "Engine Runtime"
             BUN["Bun Runtime"]
             HOMEBREW["Homebrew"]
-            NODE_SHIM["Node Shim"]
+            DOCKER_CLI["Docker CLI"]
         end
 
-        subgraph "Directory Layout"
-            WORKSPACE["~/workspace"]
-            CONFIG["~/.config/"]
-            DATA["~/.local/share/"]
-            CACHE["~/.cache/"]
-            SSH["~/.ssh/ (named volume)"]
-            GIT["~/.config/git/ (named volume)"]
+        subgraph "Engine Volumes"
+            E_WORKSPACE["~/workspace"]
+            E_CONFIG["~/.config/"]
+            E_DATA["~/.local/share/"]
+            E_CACHE["~/.cache/"]
+            E_SSH["~/.ssh/"]
+            E_GIT["~/.config/git/"]
+            E_GH["~/.config/gh/"]
+            E_GLAB["~/.config/glab-cli/"]
         end
     end
 
-    USER --> OC_SERVER
-    USER --> CH_SERVER
+    subgraph "ai-ui Container (Ubuntu 24.04)"
+        UI_USER["devuser (UID 1000)"]
+        CH_SERVER["OpenChamber Server<br/>(Web :3000)"]
+        UI_BUN["Bun Runtime"]
+        UI_VOL["~/.config/openchamber/"]
+    end
+
+    ENGINE_USER --> OC_SERVER
     OC_SERVER --> OC_PLUGINS
+    OC_SERVER --> MCP_SERVERS
     OC_SERVER --> BUN
-    CH_SERVER --> BUN
-    BUN --> NODE_SHIM
-    HOMEBREW --> CH_SERVER
+    BUN --> DOCKER_CLI
+    HOMEBREW --> OC_SERVER
 
-    OC_SERVER --> CONFIG
-    OC_SERVER --> DATA
-    OC_SERVER --> GIT
-    OC_SERVER --> SSH
-    OC_SERVER --> CACHE
-    CH_SERVER --> CONFIG
-    OC_SERVER --> SSH
-    OC_SERVER --> WORKSPACE
+    OC_SERVER --> E_CONFIG
+    OC_SERVER --> E_DATA
+    OC_SERVER --> E_GIT
+    OC_SERVER --> E_SSH
+    OC_SERVER --> E_CACHE
+    OC_SERVER --> E_WORKSPACE
+    OC_SERVER --> E_GH
+    OC_SERVER --> E_GLAB
 
-    style USER fill:#fff9c4
+    UI_USER --> CH_SERVER
+    CH_SERVER --> UI_BUN
+    CH_SERVER --> UI_VOL
+
+    CH_SERVER -->|"ws://ai-engine:4095"| OC_SERVER
+
+    style ENGINE_USER fill:#fff9c4
+    style UI_USER fill:#fff9c4
     style OC_SERVER fill:#fff3e0
     style CH_SERVER fill:#f3e5f5
+    style MCP_SERVERS fill:#ffcc80
 ```
 
 ## Data Flow
@@ -183,32 +208,36 @@ sequenceDiagram
 ```mermaid
 graph TB
     subgraph "Host Network"
-        HOST_PORT_8000[":8000 OpenChamber UI"]
+        HOST_PORT_8000[":${CHAMBER_PORT:-8000} OpenChamber UI"]
     end
 
-    subgraph "Docker Bridge Network"
-        subgraph "ai-dev"
-            CONTAINER_3000["3000 OpenChamber<br/>Web Server"]
-            CONTAINER_4095["4095 OpenCode<br/>API Server"]
+    subgraph "Docker ai-net Bridge Network"
+        subgraph "ai-engine Container"
+            ENGINE_API["4095 OpenCode<br/>API Server"]
+        end
+
+        subgraph "ai-ui Container"
+            UI_WEB["3000 OpenChamber<br/>Web Server"]
         end
     end
 
-    HOST_PORT_8000 -->|"mapped to"| CONTAINER_3000
-
-    CONTAINER_3000 -->|"WebSocket/SSE"| CONTAINER_4095
+    HOST_PORT_8000 -->|"mapped to :3000"| UI_WEB
+    UI_WEB -->|"ws://ai-engine:4095"| ENGINE_API
 
     style HOST_PORT_8000 fill:#f3e5f5
-    style CONTAINER_3000 fill:#f3e5f5
-    style CONTAINER_4095 fill:#e3f2fd
+    style UI_WEB fill:#f3e5f5
+    style ENGINE_API fill:#e3f2fd
 ```
 
 ### Environment Variables
 
-| Variable | Purpose | Default | Scope |
-|------|------|--------|------|
-| `CHAMBER_PORT` | Web UI port | 8000 | Host |
-| `OPENCODE_SERVER_PASSWORD` | API authentication | `devonly` | Application |
-| `OPENCHAMBER_UI_PASSWORD` | Web UI authentication | `chamber` | Application |
+| Variable | Purpose | Default | Scope | Container |
+|------|------|--------|------|----------|
+| `CHAMBER_PORT` | Web UI host port | 8000 | Host | `ai-ui` |
+| `OPENCODE_SERVER_PASSWORD` | API authentication | `devonly` | Application | `ai-engine` |
+| `OPENCHAMBER_UI_PASSWORD` | Web UI authentication | `chamber` | Application | `ai-ui` |
+| `OPENCODE_HOST` | OpenCode API URL (for remote connect) | `http://ai-engine:4095` | Service link | `ai-ui` |
+| `OPENCODE_SKIP_START` | Skip auto-starting OpenCode locally | `true` | Service link | `ai-ui` |
 
 ## Storage Architecture
 
@@ -231,33 +260,38 @@ graph TB
         VOL_LC_STATE["lean-ctx-state<br/>Event logs"]
     end
 
-    subgraph "Container Paths"
-        C_WS["~/workspace"]
-        C_DATA["~/.local/share/opencode"]
-        C_LC_DATA["~/.local/share/lean-ctx"]
-        C_LC_STATE["~/.local/state/lean-ctx"]
-        C_CONFIG["~/.config/opencode"]
-        C_CACHE["~/.cache/opencode"]
-        C_OHMY["~/.cache/oh-my-opencode"]
-        C_CHAMBER["~/.config/openchamber"]
-        C_GIT["~/.config/git<br/>~/.gitconfig"]
-        C_SSH["~/.ssh"]
-        C_GH["~/.config/gh"]
-        C_GLAB["~/.config/glab-cli"]
+    subgraph "ai-engine Paths"
+        E_WS["~/workspace"]
+        E_DATA["~/.local/share/opencode"]
+        E_LC_DATA["~/.local/share/lean-ctx"]
+        E_LC_STATE["~/.local/state/lean-ctx"]
+        E_CONFIG["~/.config/opencode"]
+        E_CACHE["~/.cache/opencode"]
+        E_OHMY["~/.cache/oh-my-opencode"]
+        E_CHAMBER["~/.config/openchamber"]
+        E_GIT["~/.config/git<br/>~/.gitconfig"]
+        E_SSH["~/.ssh"]
+        E_GH["~/.config/gh"]
+        E_GLAB["~/.config/glab-cli"]
     end
 
-    VOL_WS --> C_WS
-    VOL_DATA --> C_DATA
-    VOL_CONFIG --> C_CONFIG
-    VOL_CACHE --> C_CACHE
-    VOL_OHMY --> C_OHMY
-    VOL_CHAMBER --> C_CHAMBER
-    VOL_GIT --> C_GIT
-    VOL_SSH --> C_SSH
-    VOL_GH --> C_GH
-    VOL_GLAB --> C_GLAB
-    VOL_LC_DATA --> C_LC_DATA
-    VOL_LC_STATE --> C_LC_STATE
+    subgraph "ai-ui Paths"
+        U_CHAMBER["~/.config/openchamber"]
+    end
+
+    VOL_WS --> E_WS
+    VOL_DATA --> E_DATA
+    VOL_CONFIG --> E_CONFIG
+    VOL_CACHE --> E_CACHE
+    VOL_OHMY --> E_OHMY
+    VOL_CHAMBER --> E_CHAMBER
+    VOL_CHAMBER --> U_CHAMBER
+    VOL_GIT --> E_GIT
+    VOL_SSH --> E_SSH
+    VOL_GH --> E_GH
+    VOL_GLAB --> E_GLAB
+    VOL_LC_DATA --> E_LC_DATA
+    VOL_LC_STATE --> E_LC_STATE
 
     style VOL_WS fill:#fff3e0
     style VOL_DATA fill:#e3f2fd
@@ -290,47 +324,55 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant D as Docker Compose
-    participant I as init scripts
-    participant A as ai-dev
+    participant EI as engine init scripts
+    participant E as ai-engine
+    participant U as ai-ui
 
-    D->>A: Start the ai-dev container
-    A->>I: Run entrypoint.d scripts
+    D->>E: Start ai-engine container
+    E->>EI: Run entrypoint.d scripts
 
-    Note over I: 00-fix-perms.sh<br/>Fix permissions
+    Note over EI: 00-fix-perms.sh<br/>Fix permissions
 
-    Note over I: 01-install-packages.sh<br/>Install extra packages
+    Note over EI: 01-install-packages.sh<br/>Install extra packages
 
-    Note over I: 02-init-config.sh<br/>Initialize config files
+    Note over EI: 02-init-config.sh<br/>Initialize config files
 
-    Note over I: 03-fix-docker-gid.sh<br/>Fix Docker GID (requires sudo)
+    Note over EI: 03-fix-docker-gid.sh<br/>Fix Docker GID
 
-    Note over I: 04-init-git-ssh.sh<br/>Initialize Git/SSH settings (named volumes)
+    Note over EI: 04-init-git-ssh.sh<br/>Git/SSH settings
 
-    Note over I: 05-init-gh-cli.sh<br/>Initialize GitHub CLI settings (named volume)
+    Note over EI: 05-init-gh-cli.sh<br/>GitHub CLI settings
 
-    Note over I: 06-init-glab-cli.sh<br/>Initialize GitLab CLI settings (named volume)
+    Note over EI: 06-init-glab-cli.sh<br/>GitLab CLI settings
 
-    Note over I: 06-setup-opencode-path.sh<br/>Set up opencode PATH
+    Note over EI: 06-setup-opencode-path.sh<br/>Set up PATH
 
-    I->>A: Initialization complete
-    A->>A: Start OpenCode Server
-    A->>A: Start OpenChamber Server
-    A->>D: Services ready
+    EI->>E: Initialization complete
+    E->>E: Start OpenCode API server (:4095)
+
+    D->>U: Start ai-ui (depends_on ai-engine)
+    U->>U: Start OpenChamber Web (:3000)
+    U->>E: Connect to ws://ai-engine:4095
+
+    E->>D: Engine ready
+    U->>D: UI ready
 ```
 
 ### Initialization Script Order
 
 ```mermaid
 flowchart LR
-    A["entrypoint.sh"] --> B["00-fix-perms.sh"]
-    B --> C["01-install-packages.sh"]
-    C --> D["02-init-config.sh"]
-    D --> E["03-fix-docker-gid.sh"]
-    E --> F["04-init-git-ssh.sh"]
-    F --> G["05-init-gh-cli.sh"]
-    G --> GA["06-init-glab-cli.sh"]
-    GA --> GB["06-setup-opencode-path.sh"]
-    GB --> H["Run CMD"]
+    subgraph "ai-engine Startup"
+        A["entrypoint.sh"] --> B["00-fix-perms.sh"]
+        B --> C["01-install-packages.sh"]
+        C --> D["02-init-config.sh"]
+        D --> E["03-fix-docker-gid.sh"]
+        E --> F["04-init-git-ssh.sh"]
+        F --> G["05-init-gh-cli.sh"]
+        G --> GA["06-init-glab-cli.sh"]
+        GA --> GB["06-setup-opencode-path.sh"]
+        GB --> H["opencode serve --hostname 0.0.0.0"]
+    end
 
     B -->|"fix"| PERMS["Volume permissions"]
     C -->|"install"| PKGS["apt/brew/bun packages"]

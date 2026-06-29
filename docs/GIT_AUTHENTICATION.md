@@ -19,9 +19,9 @@ git clone https://github.com/your-org/private-repo.git
 
 ```bash
 # From the host, copy your key into the container
-docker cp ~/.ssh/id_ed25519 ai-dev:/home/devuser/.ssh/
-docker exec ai-dev chmod 600 /home/devuser/.ssh/id_ed25519
-docker exec ai-dev ssh-add ~/.ssh/id_ed25519   # optional, for ssh-agent
+docker cp ~/.ssh/id_ed25519 ai-engkit-engine:/home/devuser/.ssh/
+docker exec ai-engkit-engine chmod 600 /home/devuser/.ssh/id_ed25519
+docker exec ai-engkit-engine ssh-add ~/.ssh/id_ed25519   # optional, for ssh-agent
 ```
 
 ### `gh` / `glab` CLI
@@ -50,10 +50,10 @@ For SSH, use `~/.ssh/config` Host aliases with different keys.
 
 ```bash
 # Erase a stored credential (interactive)
-docker exec -it ai-dev bash -c 'git credential-store erase'
+docker exec -it ai-engkit-engine bash -c 'git credential-store erase'
 
 # Or edit the file directly
-docker exec -it ai-dev vi ~/.git-credentials
+docker exec -it ai-engkit-engine vi ~/.git-credentials
 ```
 
 ## Security Notes

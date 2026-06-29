@@ -121,10 +121,10 @@ git rebase upstream/main
 ./test/run-tests.sh
 
 # 查看容器日誌
-docker compose -f docker-compose.dev.yml logs -f ai-dev
+docker compose -f docker-compose.dev.yml logs -f ai-engkit-engine
 
 # 進入容器調試
-docker compose -f docker-compose.dev.yml exec ai-dev bash
+docker compose -f docker-compose.dev.yml exec ai-engkit-engine bash
 ```
 
 ## 提交 Issue

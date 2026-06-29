@@ -150,11 +150,10 @@ EOF
 ```yaml
 # docker-compose.yml 建議修改
 services:
-  ai-dev:
+  ai-ui:
     # 移除不必要的埠號對外暴露
     ports:
       - "127.0.0.1:${CHAMBER_PORT:-8000}:3000"  # 僅本機存取
-      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"  # 僅本機存取
 ```
 
 ### 3. SSH 金鑰管理
@@ -184,11 +183,11 @@ flowchart LR
 
 ```bash
 # 檢查容器權限
-docker inspect ai-dev --format '{{.HostConfig.Privileged}}'
+docker inspect ai-engkit-engine --format '{{.HostConfig.Privileged}}'
 # 應該輸出 false
 
 # 檢查能力設定
-docker inspect ai-dev --format '{{.HostConfig.CapAdd}}'
+docker inspect ai-engkit-engine --format '{{.HostConfig.CapAdd}}'
 # 應該是空的或最小化
 ```
 

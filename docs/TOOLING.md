@@ -4,7 +4,7 @@ This document summarizes the tools that ship with ai-engkit and where to extend 
 
 ## Overview
 
-ai-engkit combines four layers of tooling in one container:
+ai-engkit combines four layers of tooling across two containers: `ai-engine` (AI workspace, MCP, CLI tools) and `ai-ui` (Web UI):
 
 1. **AI workspace** — OpenCode, OpenChamber, OpenSpec, plugins, and baked skills
 2. **MCP integrations** — CodeGraph, lean-ctx, and Playwright

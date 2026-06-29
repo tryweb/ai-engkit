@@ -94,8 +94,8 @@ graph LR
 
 ```bash
 # Check restart reason
-docker inspect ai-dev --format '{{.RestartCount}}'
-docker logs --tail 100 ai-dev
+docker inspect ai-engkit-engine --format '{{.RestartCount}}'
+docker logs --tail 100 ai-engkit-engine
 
 # Reset and restart
 docker compose down
@@ -129,14 +129,14 @@ flowchart LR
 # 1. Confirm the container is running
 docker compose ps
 
-# 2. Test connectivity inside the container
-docker exec ai-dev curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+# 2. Test connectivity from inside the UI container (port 3000 lives there)
+docker exec ai-engkit-ui curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 
 # 3. Test host connectivity
 curl -s -o /dev/null -w "%{http_code}" http://localhost:${CHAMBER_PORT:-8000}
 
 # 4. Check port mapping
-docker port ai-dev
+docker port ai-engkit-engine
 ```
 
 **Common fixes**:
@@ -247,11 +247,11 @@ graph TD
 
 ```bash
 # Diagnose permissions
-docker exec ai-dev ls -la /home/devuser/workspace
-docker exec ai-dev id
+docker exec ai-engkit-engine ls -la /home/devuser/workspace
+docker exec ai-engkit-engine id
 
 # Repair permissions
-docker exec ai-dev sudo chown -R devuser:devuser /home/devuser/workspace
+docker exec ai-engkit-engine sudo chown -R devuser:devuser /home/devuser/workspace
 
 # Or recreate the container
 docker compose down
@@ -265,13 +265,13 @@ docker compose up -d
 
 ```bash
 # Check key permissions inside the container
-docker exec ai-dev ls -la /home/devuser/.ssh/
+docker exec ai-engkit-engine ls -la /home/devuser/.ssh/
 # Expected:
 # -rw-r--r-- (644) public key
 
 # Fix permissions if needed
-docker exec ai-dev chmod 600 /home/devuser/.ssh/id_*
-docker exec ai-dev chmod 644 /home/devuser/.ssh/*.pub
+docker exec ai-engkit-engine chmod 600 /home/devuser/.ssh/id_*
+docker exec ai-engkit-engine chmod 644 /home/devuser/.ssh/*.pub
 ```
 
 ### GitHub CLI Permissions
@@ -280,10 +280,10 @@ docker exec ai-dev chmod 644 /home/devuser/.ssh/*.pub
 
 ```bash
 # Check GitHub CLI config permissions inside the container
-docker exec ai-dev ls -la /home/devuser/.config/gh/
+docker exec ai-engkit-engine ls -la /home/devuser/.config/gh/
 
 # Fix permissions if needed
-docker exec ai-dev sudo chown -R devuser:devuser /home/devuser/.config/gh/
+docker exec ai-engkit-engine sudo chown -R devuser:devuser /home/devuser/.config/gh/
 ```
 
 ### glab as a Git Credential Helper with a Versioned Path
@@ -320,11 +320,11 @@ git config --global --replace-all \
 ls -la /var/run/docker.sock
 
 # Verify access from inside the container
-docker exec ai-dev docker ps
+docker exec ai-engkit-engine docker ps
 
 # If access is denied, add devuser to the docker group
-docker exec -u root ai-dev usermod -aG docker devuser
-docker compose restart ai-dev
+docker exec -u root ai-engkit-engine usermod -aG docker devuser
+docker compose restart ai-engkit-engine
 ```
 
 ## Web UI Issues
@@ -333,11 +333,11 @@ docker compose restart ai-dev
 
 ```bash
 # Confirm password settings
-docker exec ai-dev env | grep OPENCHAMBER_UI_PASSWORD
+docker exec ai-engkit-engine env | grep OPENCHAMBER_UI_PASSWORD
 
 # Reset password
 echo "OPENCHAMBER_UI_PASSWORD=[REDACTED:API key param]" >> .env
-docker compose restart ai-dev
+docker compose restart ai-engkit-engine
 ```
 
 ### Page Load Failure
@@ -369,7 +369,7 @@ graph LR
 curl http://localhost:${CHAMBER_PORT:-8000}/health | jq .
 
 # View container logs
-docker compose logs --tail 50 ai-dev
+docker compose logs --tail 50 ai-engkit-engine
 ```
 
 ## Performance Issues
@@ -406,8 +406,8 @@ docker stats
 docker system df
 
 # Check container limits
-docker inspect ai-dev --format '{{.HostConfig.Memory}}'
-docker inspect ai-dev --format '{{.HostConfig.NanoCpus}}'
+docker inspect ai-engkit-engine --format '{{.HostConfig.Memory}}'
+docker inspect ai-engkit-engine --format '{{.HostConfig.NanoCpus}}'
 ```
 
 ### Increase Resource Limits
@@ -415,7 +415,7 @@ docker inspect ai-dev --format '{{.HostConfig.NanoCpus}}'
 ```yaml
 # docker-compose.yml
 services:
-  ai-dev:
+  ai-engkit-engine:
     deploy:
       resources:
         limits:
@@ -462,14 +462,14 @@ docker volume inspect opencode-data
 docker run --rm -v opencode-data:/data alpine ls -la /data
 
 # Copy files back to the host
-docker cp ai-dev:/home/devuser/workspace/important-file ./backup/
+docker cp ai-engkit-engine:/home/devuser/workspace/important-file ./backup/
 ```
 
 ### Database Corruption
 
 ```bash
 # Back up the database
-docker cp ai-dev:/home/devuser/.local/share/opencode/opencode.db ./opencode.db.backup
+docker cp ai-engkit-engine:/home/devuser/.local/share/opencode/opencode.db ./opencode.db.backup
 
 # If corruption is confirmed, you may need to rebuild it
 docker compose down
@@ -506,7 +506,7 @@ graph LR
 docker compose logs -f
 
 # View logs for a specific service
-docker compose logs ai-dev
+docker compose logs ai-engkit-engine
 
 # View recent logs
 docker compose logs --tail 100
@@ -519,7 +519,7 @@ docker compose logs > debug.log 2>&1
 
 ```bash
 # Open a shell in the container
-docker exec -it ai-dev bash
+docker exec -it ai-engkit-engine bash
 
 # Check running processes
 ps aux

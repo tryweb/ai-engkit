@@ -57,7 +57,7 @@ Example:
 
 ```yaml
 services:
-  ai-dev:
+  ai-ui:
     ports:
       - "127.0.0.1:${CHAMBER_PORT:-8000}:3000"
 ```

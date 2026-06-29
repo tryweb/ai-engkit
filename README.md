@@ -2,7 +2,7 @@
 
 > **Your Self-hosted AI Engineering Kit for Dev & Ops**
 
-ai-engkit is a self-hosted AI development environment that packages [OpenCode](https://opencode.ai), [OpenChamber](https://openchamber.dev/), browser automation, code navigation, and everyday developer tooling into a single Ubuntu 24.04 container.
+ai-engkit is a self-hosted AI development environment that packages [OpenCode](https://opencode.ai) (AI engine), [OpenChamber](https://openchamber.dev/) (web UI), browser automation, code navigation, and everyday developer tooling across two Ubuntu 24.04 containers.
 
 It is designed for teams and individuals who want a reproducible AI coding workspace without rebuilding their toolchain from scratch.
 
@@ -12,7 +12,7 @@ It is designed for teams and individuals who want a reproducible AI coding works
  
 ## Features
 
-- **OpenCode + OpenChamber** — Terminal agent and browser UI in one container
+- **OpenCode + OpenChamber** — Two-container architecture: `ai-engine` (OpenCode API, MCP, CLI tools) + `ai-ui` (web UI)
 - **Preconfigured MCP stack** — Built-in CodeGraph, lean-ctx, and Playwright integrations
 - **Agent plugins and skills** — OpenSpec, Superpowers, baked skills, and OpenCode plugin support
 - **Docker-ready development** — Docker CLI, `docker compose`, and Buildx with Docker socket passthrough
@@ -76,8 +76,16 @@ docker compose up -d
 Developers who want to build locally should use `docker-compose.dev.yml`:
 
 ```bash
+# Build both images (engine + UI) and start
 docker compose -f docker-compose.dev.yml build --no-cache
 docker compose -f docker-compose.dev.yml up -d
+```
+
+To build only the engine or UI image individually:
+
+```bash
+docker compose -f docker-compose.dev.yml build ai-engine
+docker compose -f docker-compose.dev.yml build ai-ui
 ```
 
 ## Configuration
@@ -169,10 +177,10 @@ For HTTPS, SSH, `gh`, `glab`, multiple accounts, and security notes, see:
 
 ## Ports
 
-| Container Port | Default Host Mapping | Purpose |
-|----------------|----------------------|---------|
-| `3000` | `${CHAMBER_PORT:-8000}` | OpenChamber Web UI |
-| `4095` | *(internal)* | OpenCode service port used inside the container stack |
+| Container (Service) | Port | Host Mapping | Purpose |
+|---------------------|------|--------------|---------|
+| `ai-ui` | `3000` | `${CHAMBER_PORT:-8000}` | OpenChamber Web UI |
+| `ai-engine` | `4095` | *(internal)* | OpenCode API server (ai-ui → ai-engine) |
 
 ## When to Use ai-engkit
 
@@ -229,10 +237,11 @@ GitHub Actions will automatically:
 │       ├── knowledge-capture.md
 │       ├── release.md
 │       └── vuln-scan.md
-├── docker-compose.yml          # User-facing (uses pre-built image)
-├── docker-compose.dev.yml      # Developer (builds from Dockerfile)
+├── docker-compose.yml          # User-facing (uses pre-built images)
+├── docker-compose.dev.yml      # Developer (builds from Dockerfiles)
 ├── upgrade.sh                  # One-liner upgrade from existing installation
-├── Dockerfile                  # Ubuntu 24.04 based image
+├── Dockerfile                  # ai-engine image (OpenCode + CLI tools + MCP)
+├── Dockerfile.ui               # ai-ui image (OpenChamber web UI, lightweight)
 ├── entrypoint.sh               # Main entrypoint
 ├── entrypoint.d/               # Initialization scripts
 │   ├── 00-fix-perms.sh         # Fix volume permissions
