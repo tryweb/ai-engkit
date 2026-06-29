@@ -10,6 +10,10 @@ set -uo pipefail
 ENGINE_CONTAINER="${1:-ai-engkit-engine}"
 UI_CONTAINER="${2:-ai-engkit-ui}"
 CHAMBER_PORT="${CHAMBER_PORT:-8001}"
+# Override the host used for external checks. Default is localhost;
+# in DooD (Docker-out-of-Docker) test environments set this to
+# host.docker.internal so curl can reach the mapped host port.
+CHAMBER_HOST="${CHAMBER_HOST:-localhost}"
 
 # Backward-compat alias: most tests below use $CONTAINER for engine tool checks
 CONTAINER="${ENGINE_CONTAINER}"
@@ -173,13 +177,13 @@ echo ""
 echo "--- Web UI & Auth ---"
 
 # Try external access first, fallback to internal container test
-HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "http://localhost:${CHAMBER_PORT}/" 2>/dev/null)
+HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "http://${CHAMBER_HOST}:${CHAMBER_PORT}/" 2>/dev/null)
 if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ]; then
   HTTP_CODE="000"
 fi
 if [ "$HTTP_CODE" = "200" ]; then
   assert_eq "Web UI responds 200" "200" "$HTTP_CODE"
-  HTML=$(curl -sf "http://localhost:${CHAMBER_PORT}/" 2>/dev/null || echo "")
+  HTML=$(curl -sf "http://${CHAMBER_HOST}:${CHAMBER_PORT}/" 2>/dev/null || echo "")
   assert_contains "Web UI returns HTML" "<!doctype html>" "$HTML"
 elif [ "$HTTP_CODE" = "000" ]; then
   # Fallback: test from inside the UI container (port 3000 lives there)
@@ -221,7 +225,7 @@ echo ""
 echo "--- Health API ---"
 
 # Try external access first, fallback to internal container test
-HEALTH=$(curl -sf "http://localhost:${CHAMBER_PORT}/health" 2>/dev/null || echo "{}")
+HEALTH=$(curl -sf "http://${CHAMBER_HOST}:${CHAMBER_PORT}/health" 2>/dev/null || echo "{}")
 if [ "$HEALTH" != "{}" ]; then
   HEALTH_STATUS=$(echo "$HEALTH" | jq -r '.status' 2>/dev/null || echo "error")
   assert_eq "Health status is ok" "ok" "$HEALTH_STATUS"

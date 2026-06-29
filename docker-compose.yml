@@ -37,6 +37,7 @@ services:
     environment:
       - OPENCODE_HOST=http://ai-engine:4095
       - OPENCODE_SKIP_START=true
+      - OPENCODE_BINARY=/bin/true
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
     restart: unless-stopped
     networks:

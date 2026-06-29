@@ -34,7 +34,7 @@ services:
       context: .
       dockerfile: Dockerfile.ui
       args:
-        - OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-1.13.7}
+        - OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-1.13.8}
     container_name: ai-engkit-ui-dev
     depends_on:
       - ai-engine
@@ -45,6 +45,7 @@ services:
     environment:
       - OPENCODE_HOST=http://ai-engine:4095
       - OPENCODE_SKIP_START=true
+      - OPENCODE_BINARY=/bin/true
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
     restart: unless-stopped
     networks:

@@ -12,10 +12,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    unzip \
     tini \
+    python3 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -s /bin/bash -u ${USER_UID} ${USERNAME} && \
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd -m -s /bin/bash -u ${USER_UID} ${USERNAME} && \
     mkdir -p /home/${USERNAME}/.config/openchamber && \
     chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/openchamber
 
@@ -25,6 +29,7 @@ ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
 
 RUN curl -fsSL https://bun.sh/install | bash && \
     bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
+    ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
     rm -rf ~/.bun/install/cache
 
 EXPOSE 3000
