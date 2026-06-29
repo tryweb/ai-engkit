@@ -161,7 +161,7 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @code-yeongyu/comment-checker --trust && \
     # Remove cross-platform opencode binaries shipped as optional dependencies.
     # The container runs linux/amd64 with glibc; baseline/musl stubs are never used.
-    rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-{baseline,musl,baseline-musl} && \
+    rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-* && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
     rm -rf ~/.bun/install/cache
 
