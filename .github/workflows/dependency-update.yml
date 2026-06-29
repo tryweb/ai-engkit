@@ -975,6 +975,17 @@ jobs:
             dependencies
             automated
 
+      - name: Rebase PR branch onto latest main
+        if: steps.decision.outputs.action == 'create-pr'
+        run: |
+          set -euo pipefail
+          BRANCH="chore/update-dockerfile-versions-${{ steps.branch-date.outputs.date }}"
+          git fetch origin main
+          git checkout "${BRANCH}"
+          git rebase origin/main
+          git push --force-with-lease origin "${BRANCH}"
+          echo "::notice::Rebased ${BRANCH} onto origin/main"
+
       - name: Dispatch CI for the new PR
         if: steps.decision.outputs.action == 'create-pr'
         env:
