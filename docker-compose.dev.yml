@@ -1,13 +1,11 @@
 services:
-  ai-dev:
+  ai-engine:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         - OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION:-latest}
-    container_name: ai-engkit-dev
-    ports:
-      - "${CHAMBER_DEV_PORT:-8001}:3000"
+    container_name: ai-engkit-engine-dev
     volumes:
       - workspace-dev:/home/devuser/workspace
       - opencode-data-dev:/home/devuser/.local/share/opencode
@@ -25,12 +23,36 @@ services:
     environment:
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-devonly}
       - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
-      - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
-      - OPENCHAMBER_HOST=0.0.0.0
-
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    networks:
+      - ai-net-dev
+
+  ai-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+      args:
+        - OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-1.13.7}
+    container_name: ai-engkit-ui-dev
+    depends_on:
+      - ai-engine
+    ports:
+      - "${CHAMBER_DEV_PORT:-8001}:3000"
+    volumes:
+      - openchamber-data-dev:/home/devuser/.config/openchamber
+    environment:
+      - OPENCODE_HOST=http://ai-engine:4095
+      - OPENCODE_SKIP_START=true
+      - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
+    restart: unless-stopped
+    networks:
+      - ai-net-dev
+
+networks:
+  ai-net-dev:
+    driver: bridge
 
 volumes:
   workspace-dev:
