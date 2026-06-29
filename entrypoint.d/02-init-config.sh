@@ -131,7 +131,12 @@ OPCODE_CONFIG=$(jq -n \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
   '{
     "$schema": "https://opencode.ai/config.json",
+    autoupdate: false,
     plugin: $plugins,
+    server: {
+      port: 4095,
+      hostname: "0.0.0.0"
+    },
     lsp: {
       marksman: {
         command: ["marksman", "server"],
