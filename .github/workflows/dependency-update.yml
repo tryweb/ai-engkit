@@ -975,6 +975,23 @@ jobs:
             dependencies
             automated
 
+      - name: Dispatch CI for the new PR
+        if: steps.decision.outputs.action == 'create-pr'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/update-dockerfile-versions-${{ steps.branch-date.outputs.date }}"
+          HEAD_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" --jq '.object.sha // ""')
+          if [[ -z "$HEAD_SHA" ]]; then
+            echo "::warning::Could not resolve head SHA for ${BRANCH}; CI not dispatched"
+            exit 0
+          fi
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" \
+            -f "ref=${BRANCH}" \
+            -f "inputs[head_sha]=${HEAD_SHA}"
+          echo "::notice::Dispatched CI for ${BRANCH} @ ${HEAD_SHA}"
+
       - name: Commit release changes
         if: steps.decision.outputs.action == 'auto-release'
         id: commit
