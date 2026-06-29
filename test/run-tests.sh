@@ -7,8 +7,12 @@ set -uo pipefail
 # Note: Using set -u instead of -e because curl failures are expected
 # ============================================================
 
-CONTAINER="${1:-ai-dev}"
+ENGINE_CONTAINER="${1:-ai-engkit-engine}"
+UI_CONTAINER="${2:-ai-engkit-ui}"
 CHAMBER_PORT="${CHAMBER_PORT:-8001}"
+
+# Backward-compat alias: most tests below use $CONTAINER for engine tool checks
+CONTAINER="${ENGINE_CONTAINER}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -59,9 +63,10 @@ assert_dir_exists() {
 }
 
 echo "============================================"
-echo " OpenChamber Test Suite"
-echo " Container: $CONTAINER"
-echo " Port: $CHAMBER_PORT"
+echo " OpenChamber Test Suite (Multi-Container)"
+echo " Engine: $ENGINE_CONTAINER"
+echo " UI:     $UI_CONTAINER"
+echo " Port:   $CHAMBER_PORT"
 echo "============================================"
 echo ""
 
@@ -105,11 +110,11 @@ else
   fail "opencode not found"
 fi
 
-OCHAMBER_VER=$(docker exec "$CONTAINER" openchamber --version 2>/dev/null || echo "error")
+OCHAMBER_VER=$(docker exec "$UI_CONTAINER" openchamber --version 2>/dev/null || echo "error")
 if [ "$OCHAMBER_VER" != "error" ]; then
   pass "openchamber version ($OCHAMBER_VER)"
 else
-  fail "openchamber not found"
+  fail "openchamber not found in $UI_CONTAINER"
 fi
 
 OSPEC_VER=$(docker exec "$CONTAINER" openspec --version 2>/dev/null || docker exec "$CONTAINER" openspec version 2>/dev/null || echo "error")
@@ -177,14 +182,14 @@ if [ "$HTTP_CODE" = "200" ]; then
   HTML=$(curl -sf "http://localhost:${CHAMBER_PORT}/" 2>/dev/null || echo "")
   assert_contains "Web UI returns HTML" "<!doctype html>" "$HTML"
 elif [ "$HTTP_CODE" = "000" ]; then
-  # Fallback: test from inside container
-  INTERNAL_CODE=$(timeout 10 docker exec "$CONTAINER" sh -c 'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000/' 2>/dev/null)
+  # Fallback: test from inside the UI container (port 3000 lives there)
+  INTERNAL_CODE=$(timeout 10 docker exec "$UI_CONTAINER" sh -c 'curl -sf -o /dev/null -w "%{http_code}" http://localhost:3000/' 2>/dev/null)
   if [ -z "$INTERNAL_CODE" ]; then
     INTERNAL_CODE="000"
   fi
   if [ "$INTERNAL_CODE" = "200" ]; then
-    pass "Web UI responds 200 (internal fallback)"
-    HTML=$(timeout 10 docker exec "$CONTAINER" sh -c 'curl -sf http://localhost:3000/' 2>/dev/null || echo "")
+    pass "Web UI responds 200 (internal fallback via $UI_CONTAINER)"
+    HTML=$(timeout 10 docker exec "$UI_CONTAINER" sh -c 'curl -sf http://localhost:3000/' 2>/dev/null || echo "")
     assert_contains "Web UI returns HTML (internal fallback)" "<!doctype html>" "$HTML"
   else
     fail "Web UI not accessible (external: 000, internal: $INTERNAL_CODE)"
@@ -193,20 +198,20 @@ else
   fail "Web UI returned HTTP $HTTP_CODE (expected 200)"
 fi
 
-# Check OPENCHAMBER_UI_PASSWORD env var is set
-UI_PASSWD_ENV=$(docker exec "$CONTAINER" sh -c 'echo $OPENCHAMBER_UI_PASSWORD' 2>/dev/null || echo "")
+# Check OPENCHAMBER_UI_PASSWORD env var is set in the UI container
+UI_PASSWD_ENV=$(docker exec "$UI_CONTAINER" sh -c 'echo $OPENCHAMBER_UI_PASSWORD' 2>/dev/null || echo "")
 if [ -n "$UI_PASSWD_ENV" ]; then
-  pass "OPENCHAMBER_UI_PASSWORD env var is set"
+  pass "OPENCHAMBER_UI_PASSWORD env var is set (in $UI_CONTAINER)"
 else
-  fail "OPENCHAMBER_UI_PASSWORD env var is not set"
+  fail "OPENCHAMBER_UI_PASSWORD env var is not set (in $UI_CONTAINER)"
 fi
 
 # Check that openchamber logs do NOT show "unsecured" warning
-LOGS=$(timeout 5 docker logs "$CONTAINER" 2>/dev/null | tail -50 || echo "NO_LOGS")
+LOGS=$(timeout 5 docker logs "$UI_CONTAINER" 2>/dev/null | tail -50 || echo "NO_LOGS")
 if echo "$LOGS" | grep -q "browser UI is unsecured"; then
-  fail "UI password not applied (openchamber reports unsecured)"
+  fail "UI password not applied (openchamber reports unsecured in $UI_CONTAINER)"
 else
-  pass "UI password applied (no unsecured warning)"
+  pass "UI password applied (no unsecured warning in $UI_CONTAINER)"
 fi
 
 # --------------------------------------------------
@@ -227,8 +232,8 @@ if [ "$HEALTH" != "{}" ]; then
   OPCODE_READY=$(echo "$HEALTH" | jq -r '.isOpenCodeReady' 2>/dev/null || echo "false")
   assert_eq "OpenCode ready" "true" "$OPCODE_READY"
 else
-  # Fallback: test from inside container
-  INTERNAL_HEALTH=$(timeout 5 docker exec "$CONTAINER" sh -c 'curl -sf http://localhost:3000/health' 2>/dev/null || echo "{}")
+  # Fallback: test from inside the UI container (health endpoint lives on :3000)
+  INTERNAL_HEALTH=$(timeout 5 docker exec "$UI_CONTAINER" sh -c 'curl -sf http://localhost:3000/health' 2>/dev/null || echo "{}")
   if [ "$INTERNAL_HEALTH" != "{}" ]; then
     HEALTH_STATUS=$(echo "$INTERNAL_HEALTH" | jq -r '.status' 2>/dev/null || echo "error")
     assert_eq "Health API (internal fallback)" "ok" "$HEALTH_STATUS"
