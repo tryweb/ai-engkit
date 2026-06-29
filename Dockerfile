@@ -201,6 +201,10 @@ jq -n \
   '{
     autoupdate: false,
     plugin: [$agent_plugin, $superpowers_plugin],
+    server: {
+      port: 4095,
+      hostname: "0.0.0.0"
+    },
     lsp: {
       marksman: {
         command: ["marksman", "server"],
@@ -288,11 +292,12 @@ VOLUME [ \
     "/home/${USERNAME}/.config/git" \
 ]
 
-EXPOSE 3000 4095
+EXPOSE 4095
 
 # tini 用絕對路徑，避免 PATH 未初始化時找不到
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 
-# openchamber serve（daemon 模式）後接 logs follow
-# 若要前景執行改為：openchamber serve --foreground
-CMD ["/bin/bash", "-c", "openchamber serve && openchamber logs"]
+# Multi-container: ai-engine only runs the OpenCode API server (headless);
+# OpenChamber UI is provided by a separate ai-ui container (see Dockerfile.ui).
+# --hostname 0.0.0.0 allows cross-container connection (ai-ui -> ai-engine).
+CMD ["/bin/bash", "-c", "opencode serve --hostname 0.0.0.0"]

@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+# ai-engkit OpenChamber UI image
+# Connects to a remote ai-engine container via OPENCODE_HOST.
+FROM ubuntu:24.04
+
+ARG OPENCHAMBER_VERSION=1.13.7
+ARG USERNAME=devuser
+ARG USER_UID=1000
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash -u ${USER_UID} ${USERNAME} && \
+    mkdir -p /home/${USERNAME}/.config/openchamber && \
+    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/openchamber
+
+USER ${USERNAME}
+
+ENV PATH=/home/${USERNAME}/.bun/bin:${PATH}
+
+RUN curl -fsSL https://bun.sh/install | bash && \
+    bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
+    rm -rf ~/.bun/install/cache
+
+EXPOSE 3000
+
+# openchamber reads OPENCHAMBER_UI_PASSWORD / OPENCODE_HOST /
+# OPENCODE_SKIP_START from the environment (set in docker-compose).
+# tini ensures proper signal handling for `docker stop`.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/bin/bash", "-c", "openchamber serve --host 0.0.0.0 --port 3000 --foreground"]
