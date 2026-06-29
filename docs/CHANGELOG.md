@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.7] - 2026-06-29
+
+### Changed
+- Upgrade OpenChamber from 1.13.7 to 1.13.8.
+- Upgrade GitLab CLI from 1.103.0 to 1.105.0.
+- Record the tracked latest version for @fission-ai/openspec as 1.5.0.
+
 ## [1.1.6] - 2026-06-28
 
 ### Changed
@@ -609,7 +616,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.6...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.7...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -681,3 +688,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.4]: https://github.com/tryweb/ai-engkit/compare/v1.1.3...v1.1.4
 [1.1.5]: https://github.com/tryweb/ai-engkit/compare/v1.1.4...v1.1.5
 [1.1.6]: https://github.com/tryweb/ai-engkit/compare/v1.1.5...v1.1.6
+[1.1.7]: https://github.com/tryweb/ai-engkit/compare/v1.1.6...v1.1.7
