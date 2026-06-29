@@ -33,6 +33,7 @@ services:
     ports:
       - "${CHAMBER_PORT:-8000}:3000"
     volumes:
+      - workspace:/home/devuser/workspace
       - openchamber-data:/home/devuser/.config/openchamber
     environment:
       - OPENCODE_HOST=http://ai-engine:4095

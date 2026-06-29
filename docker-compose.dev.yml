@@ -41,6 +41,7 @@ services:
     ports:
       - "${CHAMBER_DEV_PORT:-8001}:3000"
     volumes:
+      - workspace-dev:/home/devuser/workspace
       - openchamber-data-dev:/home/devuser/.config/openchamber
     environment:
       - OPENCODE_HOST=http://ai-engine:4095
