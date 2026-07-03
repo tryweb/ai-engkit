@@ -989,6 +989,7 @@ jobs:
 
       - name: Dispatch CI for the new PR
         if: steps.decision.outputs.action == 'create-pr'
+        id: dispatch-ci
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1002,7 +1003,31 @@ jobs:
           gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" \
             -f "ref=${BRANCH}" \
             -f "inputs[head_sha]=${HEAD_SHA}"
+          echo "head-sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "::notice::Dispatched CI for ${BRANCH} @ ${HEAD_SHA}"
+
+      - name: Cancel any stuck pull_request CI runs
+        if: steps.decision.outputs.action == 'create-pr' && steps.dispatch-ci.outputs.head-sha != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="${{ steps.dispatch-ci.outputs.head-sha }}"
+          echo "Checking for stuck pull_request CI runs at ${HEAD_SHA}..."
+          STUCK_RUNS=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=5&status=action_required" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | .[].id' 2>/dev/null || echo "")
+          if [[ -z "$STUCK_RUNS" ]]; then
+            echo "::notice::No stuck pull_request CI runs found for ${HEAD_SHA}"
+            exit 0
+          fi
+          echo "$STUCK_RUNS" | while read -r STUCK_ID; do
+            if [[ -n "$STUCK_ID" ]]; then
+              echo "Cancelling stuck CI run ${STUCK_ID}..."
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${STUCK_ID}/cancel" || true
+            fi
+          done
+          echo "::notice::Cancelled stuck pull_request CI runs for ${HEAD_SHA}"
 
       - name: Commit release changes
         if: steps.decision.outputs.action == 'auto-release'

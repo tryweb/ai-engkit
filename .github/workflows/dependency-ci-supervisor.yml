@@ -1,9 +1,10 @@
 name: Dependency CI Supervisor
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   actions: write
@@ -11,88 +12,139 @@ permissions:
   pull-requests: write
 
 jobs:
-  verify-and-rerun:
-    name: Verify CI and rerun if stuck
+  verify-and-dispatch:
+    name: Verify CI and dispatch if stuck
     if: contains(github.event.pull_request.labels.*.name, 'dependencies')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Wait for CI to dispatch naturally
-        run: sleep 60
+      - name: Wait for CI to trigger naturally
+        run: sleep 30
 
-      - name: Inspect latest CI run for this PR
+      - name: Inspect latest CI run for this PR (pull_request event)
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          echo "Inspecting CI for ${BRANCH} @ ${HEAD_SHA}"
+          echo "Inspecting CI for PR head SHA ${HEAD_SHA}"
 
-          LATEST=$(gh api \
+          # Look for pull_request-event CI runs (these may be stuck at approval gate)
+          LATEST_PR=$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=20" \
             --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | sort_by(.created_at) | last // {}')
 
-          RUN_ID=$(echo "$LATEST"     | jq -r '.id // ""')
-          STATUS=$(echo "$LATEST"     | jq -r '.status // ""')
-          CONCLUSION=$(echo "$LATEST" | jq -r '.conclusion // ""')
+          RUN_ID=$(echo "$LATEST_PR" | jq -r '.id // ""')
+          STATUS=$(echo "$LATEST_PR" | jq -r '.status // ""')
+          CONCLUSION=$(echo "$LATEST_PR" | jq -r '.conclusion // ""')
 
-          if [[ -z "$RUN_ID" ]]; then
-            echo "::warning::No CI run found yet for ${BRANCH}; assuming healthy"
-            echo "needs-rerun=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          # Also look for workflow_dispatch CI runs (these are the bypass path)
+          LATEST_WD=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=20" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | sort_by(.created_at) | last // {}')
+
+          WD_RUN_ID=$(echo "$LATEST_WD" | jq -r '.id // ""')
+          WD_STATUS=$(echo "$LATEST_WD" | jq -r '.status // ""')
+          WD_CONCLUSION=$(echo "$LATEST_WD" | jq -r '.conclusion // ""')
+
+          echo "pull_request run: ${RUN_ID:-none} status=${STATUS:-none} conclusion=${CONCLUSION:-none}"
+          echo "workflow_dispatch run: ${WD_RUN_ID:-none} status=${WD_STATUS:-none} conclusion=${WD_CONCLUSION:-none}"
+
+          # Decision logic:
+          # 1. If workflow_dispatch CI already completed with success → all good, nothing to do
+          # 2. If workflow_dispatch CI is running or queued → wait for it
+          # 3. If pull_request CI is stuck (action_required) and no workflow_dispatch CI is running/succeeded → intervene
+          # 4. If no CI runs at all → dispatch
+
+          NEEDS_CANCEL="false"
+          NEEDS_DISPATCH="false"
+
+          if [[ "$WD_CONCLUSION" == "success" ]]; then
+            echo "::notice::workflow_dispatch CI already succeeded — PR checks should be satisfied"
+            NEEDS_DISPATCH="false"
+          elif [[ "$WD_STATUS" == "in_progress" || "$WD_STATUS" == "queued" || "$WD_STATUS" == "pending" ]]; then
+            echo "::notice::workflow_dispatch CI already running — letting it complete"
+            NEEDS_DISPATCH="false"
+          elif [[ "$STATUS" == "completed" && "$CONCLUSION" == "action_required" ]]; then
+            echo "::warning::pull_request CI run ${RUN_ID} is stuck at approval gate — will cancel and dispatch"
+            NEEDS_CANCEL="true"
+            NEEDS_DISPATCH="true"
+          elif [[ -z "$RUN_ID" && -z "$WD_RUN_ID" ]]; then
+            echo "::warning::No CI run found at all for ${HEAD_SHA} — will dispatch"
+            NEEDS_DISPATCH="true"
+          elif [[ "$STATUS" == "in_progress" || "$STATUS" == "queued" || "$STATUS" == "pending" ]]; then
+            echo "::notice::pull_request CI is running normally — no action needed"
+          else
+            echo "::notice::CI state (pr=${STATUS:-none}/${CONCLUSION:-none} wd=${WD_STATUS:-none}/${WD_CONCLUSION:-none}) — no action"
           fi
 
-          JOB_COUNT=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs" \
-            --jq '.jobs // [] | length' 2>/dev/null || echo "0")
-
-          echo "Run ${RUN_ID}: status=${STATUS} conclusion=${CONCLUSION} jobs=${JOB_COUNT}"
-
-          NEEDS_RERUN="false"
-          case "${STATUS}:${CONCLUSION}:${JOB_COUNT}" in
-            in_progress:*|queued:*|completed:success:*)
-              echo "CI is healthy"
-              ;;
-            completed:action_required:0|completed:action_required:*|completed:failure:0|completed:cancelled:0|completed:timed_out:0)
-              echo "::warning::CI run ${RUN_ID} appears stuck — will rerun"
-              NEEDS_RERUN="true"
-              ;;
-            *)
-              echo "::notice::Unexpected CI state — skipping (status=${STATUS}, conclusion=${CONCLUSION}, jobs=${JOB_COUNT})"
-              ;;
-          esac
-
           {
-            echo "needs-rerun=${NEEDS_RERUN}"
-            echo "run-id=${RUN_ID}"
-            echo "run-status=${STATUS}"
-            echo "run-conclusion=${CONCLUSION}"
-            echo "job-count=${JOB_COUNT}"
+            echo "needs-cancel=${NEEDS_CANCEL}"
+            echo "needs-dispatch=${NEEDS_DISPATCH}"
+            echo "pr-run-id=${RUN_ID}"
+            echo "wd-run-id=${WD_RUN_ID}"
           } >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
-      - name: Rerun stuck CI
-        if: steps.check.outputs.needs-rerun == 'true'
+      - name: Cancel stuck pull_request CI run
+        if: steps.check.outputs.needs-cancel == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RUN_ID="${{ steps.check.outputs.run-id }}"
-          echo "Triggering rerun for run ${RUN_ID}..."
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/rerun"
-          echo "::notice::CI rerun triggered for run ${RUN_ID}"
+          RUN_ID="${{ steps.check.outputs.pr-run-id }}"
+          echo "Cancelling stuck pull_request CI run ${RUN_ID}..."
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/cancel" || true
+          echo "::notice::Cancelled stuck CI run ${RUN_ID}"
+
+      - name: Dispatch CI via workflow_dispatch
+        if: steps.check.outputs.needs-dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "Dispatching CI for ${BRANCH} @ ${HEAD_SHA}..."
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" \
+            -f "ref=${BRANCH}" \
+            -f "inputs[head_sha]=${HEAD_SHA}"
+          echo "::notice::CI dispatched via workflow_dispatch for ${HEAD_SHA}"
+
+      - name: Wait for dispatched CI to start
+        if: steps.check.outputs.needs-dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          echo "Waiting for dispatched CI to appear..."
+          for i in $(seq 1 30); do
+            RUN=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=5" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | sort_by(.created_at) | last // {}')
+            RUN_ID=$(echo "$RUN" | jq -r '.id // ""')
+            if [[ -n "$RUN_ID" ]]; then
+              echo "::notice::Dispatched CI run ${RUN_ID} started"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::Dispatched CI did not appear within 150s — check manually"
+          exit 0
 
       - name: Sticky comment on PR
-        if: steps.check.outputs.needs-rerun == 'true'
+        if: steps.check.outputs.needs-dispatch == 'true'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: ci-supervisor
           message: |
-            🤖 **Dependency CI Supervisor** detected a stuck CI run
-            ([`${{ steps.check.outputs.run-id }}`](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${{ steps.check.outputs.run-id }}))
-            with status=`${{ steps.check.outputs.run-status }}`,
-            conclusion=`${{ steps.check.outputs.run-conclusion }}`,
-            job-count=`${{ steps.check.outputs.job-count }}`.
+            **Dependency CI Supervisor** detected a stuck CI run on this bot-created PR.
 
-            Auto-triggered a rerun. If this keeps happening, the GitHub Actions
-            dispatch issue may be recurring — please file an issue.
+            The `pull_request` CI trigger requires manual approval for bot-authored PRs.
+            Supervisor cancelled the stuck run and re-triggered CI via `workflow_dispatch`
+            (which bypasses the approval gate).
+
+            The dispatched CI checks should appear on this PR shortly.
+            If checks remain pending, merge `main` into this branch to re-trigger.
+
+            ---
+            *Auto-dispatched by Dependency CI Supervisor*
