@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.12] - 2026-07-03
+
+### Changed
+- Upgrade Docker Compose from 5.2.0 to 5.3.0.
+- Upgrade OpenChamber from 1.13.8 to 1.13.9.
+- Upgrade GitHub CLI from 2.95.0 to 2.96.0.
+- Update the tracked latest version for @colbymchenry/codegraph from 1.1.6 to 1.2.0.
+- Update the Ubuntu 24.04 APT package snapshot (4 packages have updates: ncurses-bin (6.4+20240113-1ubuntu2),ncurses-base (6.4+20240113-1ubuntu2),libncursesw6 (6.4+20240113-1ubuntu2),libtinfo6 (6.4+20240113-1ubuntu2)).
+
 ## [1.1.11] - 2026-07-02
 
 ### Changed
@@ -643,7 +652,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.11...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.12...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -720,3 +729,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.9]: https://github.com/tryweb/ai-engkit/compare/v1.1.8...v1.1.9
 [1.1.10]: https://github.com/tryweb/ai-engkit/compare/v1.1.9...v1.1.10
 [1.1.11]: https://github.com/tryweb/ai-engkit/compare/v1.1.10...v1.1.11
+[1.1.12]: https://github.com/tryweb/ai-engkit/compare/v1.1.11...v1.1.12
