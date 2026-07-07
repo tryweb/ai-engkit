@@ -108,7 +108,7 @@ backup_files() {
 
     # ── Prune old backups per retention setting ──
     local retention
-    retention=$(grep -E "^BACKUP_RETENTION=" .env 2>/dev/null | head -1 | cut -d= -f2)
+    retention=$(grep -E "^BACKUP_RETENTION=" .env 2>/dev/null | head -1 | cut -d= -f2 || true)
     retention="${retention:-5}"
 
     if ! [[ "$retention" =~ ^[0-9]+$ ]] || [ "$retention" -lt 1 ]; then
@@ -237,9 +237,9 @@ recreate_containers() {
 
     if [ -f ".env" ]; then
         local ws_path
-        ws_path=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | head -1 | cut -d= -f2-)
+        ws_path=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | head -1 | cut -d= -f2- || true)
         if [ -n "$ws_path" ]; then
-            ws_path=$(eval echo "$ws_path")
+            ws_path=$(eval echo "$ws_path" 2>/dev/null || true)
             if [ ! -d "$ws_path" ]; then
                 warn "WORKSPACE_PATH=${ws_path} 目錄不存在，將自動建立"
                 mkdir -p "$ws_path"
@@ -294,7 +294,7 @@ show_info() {
     fi
 
     local chamber_port
-    chamber_port=$(grep -E "^CHAMBER_PORT=" .env 2>/dev/null | cut -d= -f2)
+    chamber_port=$(grep -E "^CHAMBER_PORT=" .env 2>/dev/null | cut -d= -f2 || true)
     chamber_port="${chamber_port:-8000}"
 
     echo
