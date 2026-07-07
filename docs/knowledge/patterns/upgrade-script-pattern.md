@@ -18,6 +18,7 @@ A separate `upgrade.sh` with these design properties:
 | **Backup-first** | `cp docker-compose.yml backup_<ts>/` and `cp .env backup_<ts>/` before any write. |
 | **Merge-only env** | Parse `.env.example` for new keys; only append keys missing from `.env`. |
 | **Explicit pull** | `docker compose pull` before `docker compose up -d --force-recreate`. |
+ | **Self-update** | Downloads and replaces itself before any other operation (skipped when piped to shell). Guarded by `UPGRADE_SELF_UPDATED` env var to prevent re-exec loops. |
 | **Idempotent** | Safe to rerun; skipped operations produce no-ops. |
 | **Rollback display** | Prints the exact `cp` commands to restore from backup. |
 

@@ -322,6 +322,36 @@ show_info() {
 }
 
 # ──────────────────────────────────────────────────────────
+# Self-update
+# ──────────────────────────────────────────────────────────
+self_update() {
+    [ -n "${UPGRADE_SELF_UPDATED:-}" ] && return 0
+
+    # Only self-update when running from a regular file on disk
+    [ ! -f "$0" ] && return 0
+
+    local DOWNLOAD_TOOL tmp_file
+    DOWNLOAD_TOOL="curl -fsSL"
+    command -v curl &>/dev/null || DOWNLOAD_TOOL="wget -qO-"
+
+    tmp_file=$(mktemp)
+
+    if $DOWNLOAD_TOOL "$REPO_URL/upgrade.sh" -o "$tmp_file" 2>/dev/null && [ -s "$tmp_file" ]; then
+        if bash -n "$tmp_file" 2>/dev/null; then
+            if ! cmp -s "$0" "$tmp_file"; then
+                info "發現新版 upgrade.sh，正在更新..."
+                chmod +x "$tmp_file"
+                mv "$tmp_file" "$0"
+                ok "upgrade.sh 已更新至最新版"
+                export UPGRADE_SELF_UPDATED=1
+                exec bash "$0" "$@"
+            fi
+        fi
+    fi
+    rm -f "$tmp_file"
+}
+
+# ──────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────
 verify_installed_environment() {
@@ -342,6 +372,9 @@ main() {
     cd "$(dirname "$0")"
 
     verify_installed_environment
+
+    # Self-update before any operations (skipped when piped to shell)
+    self_update "$@"
 
     echo
     echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
