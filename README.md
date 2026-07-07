@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/up
 
 The upgrade script will:
 
-1. **Back up** your current `docker-compose.yml` and `.env` to a timestamped directory (`backup_<timestamp>/`)
+1. **Back up** your current `docker-compose.yml` and `.env` to a timestamped directory (`backup_<timestamp>/`), keeping only the most recent backup copies (default: 5, configurable via `BACKUP_RETENTION` in `.env`)
 2. **Download** the latest `docker-compose.yml` from upstream
 3. **Merge** any new environment variables into your `.env` (preserving your custom values)
 4. **Pull** the latest container image
@@ -93,6 +93,7 @@ Copy `.env.example` to `.env` and customize:
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
 | `OPENCODE_PLUGINS` | `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git` | Comma-separated plugin list |
 | `WORKSPACE_PATH` | *(unset → named volume `workspace`)* | Host path for workspace bind mount |
+| `BACKUP_RETENTION` | `5` | Number of backup copies to retain during `./upgrade.sh` |
 | `APT_PACKAGES` | *(empty)* | Extra apt packages installed at container startup |
 | `BREW_PACKAGES` | *(empty)* | Extra Homebrew packages installed at container startup |
 | `BUN_PACKAGES` | *(empty)* | Extra global bun packages installed at container startup |
