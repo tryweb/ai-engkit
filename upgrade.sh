@@ -105,6 +105,29 @@ backup_files() {
             info "${f} 不存在，跳過備份"
         fi
     done
+
+    # ── Prune old backups per retention setting ──
+    local retention
+    retention=$(grep -E "^BACKUP_RETENTION=" .env 2>/dev/null | head -1 | cut -d= -f2)
+    retention="${retention:-5}"
+
+    if ! [[ "$retention" =~ ^[0-9]+$ ]] || [ "$retention" -lt 1 ]; then
+        retention=5
+    fi
+
+    local backups=()
+    while IFS= read -r -d '' d; do
+        backups+=("$d")
+    done < <(find . -maxdepth 1 -type d -name 'backup_*' -print0 2>/dev/null | sort -z)
+
+    if [ "${#backups[@]}" -gt "$retention" ]; then
+        local to_remove=$(( ${#backups[@]} - retention ))
+        info "保留最近 ${retention} 份備份，將刪除 ${to_remove} 份舊備份"
+        for ((i=0; i<to_remove; i++)); do
+            rm -rf "${backups[$i]}"
+            ok "已刪除舊備份: ${backups[$i]}"
+        done
+    fi
 }
 
 # ──────────────────────────────────────────────────────────
