@@ -393,19 +393,17 @@ delegate_to_upgrade_if_installed() {
     echo "  - install.sh 僅供首次安裝；改執行 ./upgrade.sh"
     echo
 
-    if [ ! -f "upgrade.sh" ]; then
-        DOWNLOAD_TOOL="curl -fsSL"
-        if ! command -v curl &> /dev/null; then
-            DOWNLOAD_TOOL="wget -qO-"
-        fi
-        echo "  下載 upgrade.sh..."
-        if ! $DOWNLOAD_TOOL "$REPO_URL/upgrade.sh" -o upgrade.sh; then
-            echo "  ❌ 無法下載 upgrade.sh，請檢查網路連線"
-            exit 1
-        fi
-        chmod +x upgrade.sh
-        echo "  ✅ upgrade.sh 已就緒"
+    DOWNLOAD_TOOL="curl -fsSL"
+    if ! command -v curl &> /dev/null; then
+        DOWNLOAD_TOOL="wget -qO-"
     fi
+    echo "  下載最新 upgrade.sh..."
+    if ! $DOWNLOAD_TOOL "$REPO_URL/upgrade.sh" -o upgrade.sh; then
+        echo "  ❌ 無法下載 upgrade.sh，請檢查網路連線"
+        exit 1
+    fi
+    chmod +x upgrade.sh
+    echo "  ✅ upgrade.sh 已更新至最新版"
 
     echo "  委派給 ./upgrade.sh ..."
     echo
