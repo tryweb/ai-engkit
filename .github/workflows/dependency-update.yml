@@ -196,20 +196,34 @@ jobs:
           print(json.dumps(items,separators=(",",":")))'
           }
 
+          resolve_leanctx_sha256() {
+            local version="$1" asset="$2" digest=""
+            if command -v gh >/dev/null 2>&1; then
+              digest="$(gh api "repos/yvgude/lean-ctx/releases/tags/v${version}" --jq ".assets[] | select(.name == \"${asset}\") | .digest // \"\"" 2>/dev/null || true)"
+            fi
+            digest="$(printf '%s' "$digest" | tr -d '\r' | awk 'NF{print; exit}')"
+            digest="${digest#sha256:}"
+            if [[ "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              printf '%s\n' "$digest"
+            else
+              printf 'unknown\n'
+            fi
+          }
+
           # --- Parse Dockerfile pinned ARGs ---
           declare -a PINNED_NAMES=()
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|LEANCTX_SHA256)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
             esac
-          done < <(grep -oP '^ARG \K\w+=[0-9][0-9.-]*' Dockerfile | sed 's/=/ /' | awk '{print $1"="$2}')
+          done < <(awk '/^ARG [A-Z0-9_]+=/{sub(/^ARG /, ""); print}' Dockerfile)
 
-          if [[ "${#PINNED_NAMES[@]}" -ne 10 ]]; then
-            echo "::error::Expected 10 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+          if [[ "${#PINNED_NAMES[@]}" -ne 12 ]]; then
+            echo "::error::Expected 12 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
             exit 1
           fi
 
@@ -237,6 +251,8 @@ jobs:
               GH_VERSION)       source='cli/cli';          latest="$(get_github_tag "$source")" ;;
               GLAB_VERSION)     source='gitlab-org/cli';   latest="$(get_gitlab_tag "$source")" ;;
               MARKSMAN_VERSION) source='artempyanykh/marksman'; latest="$(get_github_tag "$source")" ;;
+              LEANCTX_VERSION)  source='yvgude/lean-ctx';  latest="$(get_github_tag "$source")" ;;
+              LEANCTX_SHA256)   source='yvgude/lean-ctx';  latest="$(resolve_leanctx_sha256 "${PINNED_VERSIONS[$((i-1))]}" 'lean-ctx-x86_64-unknown-linux-musl.tar.gz')" ;;
             esac
 
             if [[ "$latest" == "unknown" ]]; then
@@ -255,7 +271,7 @@ jobs:
           done
 
           # --- Check latest-tracked packages ---
-          for name in OH_MY_OPENAGENT_VERSION CODEGRAPH_VERSION LEANCTX_VERSION OPENSPEC_VERSION; do
+          for name in OH_MY_OPENAGENT_VERSION CODEGRAPH_VERSION OPENSPEC_VERSION; do
             current="unknown"
             previous=""
             source=""
@@ -266,9 +282,6 @@ jobs:
                 previous="$(previous_latest_value "$name")" ;;
               CODEGRAPH_VERSION)
                 source='npm'; current="$(get_npm_version '@colbymchenry/codegraph')"
-                previous="$(previous_latest_value "$name")" ;;
-              LEANCTX_VERSION)
-                source='github'; current="$(get_github_tag_raw 'yvgude/lean-ctx')"
                 previous="$(previous_latest_value "$name")" ;;
               OPENSPEC_VERSION)
                 source='npm'; current="$(get_npm_version '@fission-ai/openspec')"
@@ -288,17 +301,9 @@ jobs:
               continue
             fi
 
-            # Compare with previous snapshot
-            if [[ "$name" == "LEANCTX_VERSION" ]]; then
-              if [[ "$(strip_v "$current")" != "$(strip_v "$previous")" ]]; then
-                latest_changes_detected=true
-                latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$previous" "$source" "changed")")
-              fi
-            else
-              if [[ "$current" != "$previous" ]]; then
-                latest_changes_detected=true
-                latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$previous" "$source" "changed")")
-              fi
+            if [[ "$current" != "$previous" ]]; then
+              latest_changes_detected=true
+              latest_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$previous" "$source" "changed")")
             fi
           done
 
@@ -363,25 +368,26 @@ jobs:
           latest_updates_json="$(printf '%s\n' "${latest_updates_lines[@]:-}" | build_latest_json)"
 
           # --- Write version snapshot ---
+          pinned_snapshot_json="$({
+            for i in "${!PINNED_NAMES[@]}"; do
+              printf '%s\t%s\n' "${PINNED_NAMES[$i]}" "${PINNED_VERSIONS[$i]}"
+            done
+          } | python3 -c 'import json,sys
+          data={}
+          for line in sys.stdin:
+              line=line.rstrip("\n")
+              if not line: continue
+              name,val=line.split("\t",1)
+              data[name]=val
+          print(json.dumps(data,separators=(",",":")))')"
+
           cat > version-snapshot.json <<SNAPSHOT
           {
             "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "pinned": {
-              "DOCKER_VERSION": $(json_quote "${PINNED_VERSIONS[0]}"),
-              "COMPOSE_VERSION": $(json_quote "${PINNED_VERSIONS[1]}"),
-              "BUILDX_VERSION": $(json_quote "${PINNED_VERSIONS[2]}"),
-              "OPENCODE_VERSION": $(json_quote "${PINNED_VERSIONS[3]}"),
-              "OPENCHAMBER_VERSION": $(json_quote "${PINNED_VERSIONS[4]}"),
-              "GLAB_VERSION": $(json_quote "${PINNED_VERSIONS[5]}"),
-              "PLAYWRIGHT_VERSION": $(json_quote "${PINNED_VERSIONS[6]}"),
-              "PLAYWRIGHT_MCP_VERSION": $(json_quote "${PINNED_VERSIONS[7]}"),
-              "GH_VERSION": $(json_quote "${PINNED_VERSIONS[8]}"),
-              "MARKSMAN_VERSION": $(json_quote "${PINNED_VERSIONS[9]}")
-            },
+            "pinned": $pinned_snapshot_json,
             "latest": {
               "OH_MY_OPENAGENT_VERSION": $(json_quote "$(get_npm_version 'oh-my-openagent')"),
               "CODEGRAPH_VERSION": $(json_quote "$(get_npm_version '@colbymchenry/codegraph')"),
-              "LEANCTX_VERSION": $(json_quote "$(get_github_tag_raw 'yvgude/lean-ctx')"),
               "OPENSPEC_VERSION": $(json_quote "$(get_npm_version '@fission-ai/openspec')")
             },
             "apt_upgradable": {
@@ -846,7 +852,8 @@ jobs:
                   'MARKSMAN_VERSION': 'Marksman',
                   'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
                   'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
-                  'LEANCTX_VERSION': 'lean-ctx',
+                   'LEANCTX_VERSION': 'lean-ctx',
+                   'LEANCTX_SHA256': 'lean-ctx x86_64 musl SHA256',
                   'OPENSPEC_VERSION': '@fission-ai/openspec',
               }
               return mapping.get(name, name)
