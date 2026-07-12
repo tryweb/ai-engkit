@@ -20,4 +20,34 @@ GATEWAY=$(docker network inspect <network-name> \
   --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}')
 # Then access via http://${GATEWAY}:<mapped_port>
 ```
+
+### Environment Verification — Before Testing Docker Compose Services
+
+1. **Determine target port**: Check the service's `ports` mapping in `docker-compose.yml`
+2. **Verify connectivity** (replace `${PORT}` with the actual port):
+
+```bash
+PORT=8080  # Replace with the target service's mapped port
+
+# Step 1: Try localhost (process in this container or host-published port)
+if curl -sf "http://localhost:${PORT}/healthz" >/dev/null 2>&1; then
+  BASE="http://localhost:${PORT}"
+  echo "✓ Using localhost:${PORT}"
+
+# Step 2: Fallback to Docker bridge gateway
+else
+  NETWORK="${COMPOSE_PROJECT_NAME:-<project-name>}_default"
+  GATEWAY=$(docker network inspect "$NETWORK" \
+    --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null) || ""
+  if [ -n "$GATEWAY" ] && curl -sf "http://${GATEWAY}:${PORT}/healthz" >/dev/null 2>&1; then
+    BASE="http://${GATEWAY}:${PORT}"
+    echo "✓ Using bridge gateway ${GATEWAY}:${PORT}"
+  else
+    echo "FATAL: Cannot reach Compose service (port ${PORT})" >&2
+    exit 1
+  fi
+fi
+```
+
+3. **Pass `$BASE` to test scripts** (e.g., `smoke-test`) — never hardcode `http://localhost:PORT`
 <!-- /@ai-engkit -->
