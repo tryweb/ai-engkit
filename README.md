@@ -8,7 +8,7 @@ It is designed for teams and individuals who want a reproducible AI coding works
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![OpenCode](https://img.shields.io/badge/OpenCode-1.17.18-blue?style=for-the-badge&logoColor=white)
-![OpenChamber](https://img.shields.io/badge/OpenChamber-1.14.1-blue?style=for-the-badge&logoColor=white)
+![OpenChamber](https://img.shields.io/badge/OpenChamber-1.15.0-blue?style=for-the-badge&logoColor=white)
  
 ## Features
 
