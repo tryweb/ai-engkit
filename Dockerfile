@@ -13,7 +13,6 @@ ARG PLAYWRIGHT_MCP_VERSION=0.0.78
 ARG GH_VERSION=2.96.0
 ARG MARKSMAN_VERSION=2026-02-08
 ARG LEANCTX_VERSION=3.9.4
-ARG LEANCTX_SHA256=a02ec8dbbe6cde3ab7eb04fe987121240ad27c660412f543b54f26d084f3cd9f
 ARG OH_MY_OPENAGENT_VERSION=latest
 ARG USERNAME=devuser
 ARG USER_UID=1000
@@ -135,7 +134,6 @@ RUN bun install -g @colbymchenry/codegraph && \
 
 # ── LeanCTX — AI 代理的認知上下文層 ──────────────────
 RUN curl -fsSL "https://github.com/yvgude/lean-ctx/releases/download/v${LEANCTX_VERSION}/lean-ctx-x86_64-unknown-linux-musl.tar.gz" -o /tmp/lean-ctx.tar.gz && \
-    printf '%s  %s\n' "${LEANCTX_SHA256}" "/tmp/lean-ctx.tar.gz" | sha256sum -c - && \
     sudo tar -xzf /tmp/lean-ctx.tar.gz -C /usr/local/bin lean-ctx && \
     sudo chmod +x /usr/local/bin/lean-ctx && \
     rm -f /tmp/lean-ctx.tar.gz

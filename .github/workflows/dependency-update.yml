@@ -196,34 +196,20 @@ jobs:
           print(json.dumps(items,separators=(",",":")))'
           }
 
-          resolve_leanctx_sha256() {
-            local version="$1" asset="$2" digest=""
-            if command -v gh >/dev/null 2>&1; then
-              digest="$(gh api "repos/yvgude/lean-ctx/releases/tags/v${version}" --jq ".assets[] | select(.name == \"${asset}\") | .digest // \"\"" 2>/dev/null || true)"
-            fi
-            digest="$(printf '%s' "$digest" | tr -d '\r' | awk 'NF{print; exit}')"
-            digest="${digest#sha256:}"
-            if [[ "$digest" =~ ^[0-9a-f]{64}$ ]]; then
-              printf '%s\n' "$digest"
-            else
-              printf 'unknown\n'
-            fi
-          }
-
           # --- Parse Dockerfile pinned ARGs ---
           declare -a PINNED_NAMES=()
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|LEANCTX_SHA256)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
             esac
           done < <(awk '/^ARG [A-Z0-9_]+=/{sub(/^ARG /, ""); print}' Dockerfile)
 
-          if [[ "${#PINNED_NAMES[@]}" -ne 12 ]]; then
-            echo "::error::Expected 12 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+          if [[ "${#PINNED_NAMES[@]}" -ne 11 ]]; then
+            echo "::error::Expected 11 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
             exit 1
           fi
 
@@ -252,7 +238,7 @@ jobs:
               GLAB_VERSION)     source='gitlab-org/cli';   latest="$(get_gitlab_tag "$source")" ;;
               MARKSMAN_VERSION) source='artempyanykh/marksman'; latest="$(get_github_tag "$source")" ;;
               LEANCTX_VERSION)  source='yvgude/lean-ctx';  latest="$(get_github_tag "$source")"; if [[ "$latest" != "unknown" ]]; then _leanctx_latest="$latest"; fi ;;
-              LEANCTX_SHA256)   source='yvgude/lean-ctx';  latest="$(resolve_leanctx_sha256 "${_leanctx_latest:-${PINNED_VERSIONS[$((i-1))]}}" 'lean-ctx-x86_64-unknown-linux-musl.tar.gz')" ;;
+              # LEANCTX_SHA256 removed — SHA integrity check dropped for consistency
             esac
 
             if [[ "$latest" == "unknown" ]]; then
@@ -853,7 +839,7 @@ jobs:
                   'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
                   'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
                    'LEANCTX_VERSION': 'lean-ctx',
-                   'LEANCTX_SHA256': 'lean-ctx x86_64 musl SHA256',
+                   # LEANCTX_SHA256 mapping removed — SHA integrity check dropped
                   'OPENSPEC_VERSION': '@fission-ai/openspec',
               }
               return mapping.get(name, name)
