@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.18] - 2026-07-13
+
+### Changed
+- Upgrade OpenChamber from 1.15.0 to 1.16.0.
+- Upgrade lean-ctx from 3.9.7 to 3.9.8.
+
 ## [1.1.17] - 2026-07-12
 
 ### Changed
@@ -690,7 +696,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.17...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.18...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -773,3 +779,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.15]: https://github.com/tryweb/ai-engkit/compare/v1.1.14...v1.1.15
 [1.1.16]: https://github.com/tryweb/ai-engkit/compare/v1.1.15...v1.1.16
 [1.1.17]: https://github.com/tryweb/ai-engkit/compare/v1.1.16...v1.1.17
+[1.1.18]: https://github.com/tryweb/ai-engkit/compare/v1.1.17...v1.1.18
