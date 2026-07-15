@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.19] - 2026-07-15
+
+### Changed
+- Upgrade OpenCode from 1.17.18 to 1.18.1.
+- Upgrade OpenChamber from 1.16.0 to 1.16.1.
+- Upgrade GitLab CLI from 1.107.0 to 1.108.0.
+- Upgrade lean-ctx from 3.9.8 to 3.9.9.
+- Update the tracked latest version for oh-my-openagent from 4.17.0 to 4.18.1.
+
 ## [1.1.18] - 2026-07-13
 
 ### Changed
@@ -696,7 +705,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.18...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.19...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -780,3 +789,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.16]: https://github.com/tryweb/ai-engkit/compare/v1.1.15...v1.1.16
 [1.1.17]: https://github.com/tryweb/ai-engkit/compare/v1.1.16...v1.1.17
 [1.1.18]: https://github.com/tryweb/ai-engkit/compare/v1.1.17...v1.1.18
+[1.1.19]: https://github.com/tryweb/ai-engkit/compare/v1.1.18...v1.1.19
