@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.20] - 2026-07-16
+
+### Changed
+- Upgrade OpenCode from 1.18.1 to 1.18.2.
+- Upgrade lean-ctx from 3.9.9 to 3.9.10.
+
 ## [1.1.19] - 2026-07-15
 
 ### Changed
@@ -705,7 +711,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.19...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.20...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -790,3 +796,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.17]: https://github.com/tryweb/ai-engkit/compare/v1.1.16...v1.1.17
 [1.1.18]: https://github.com/tryweb/ai-engkit/compare/v1.1.17...v1.1.18
 [1.1.19]: https://github.com/tryweb/ai-engkit/compare/v1.1.18...v1.1.19
+[1.1.20]: https://github.com/tryweb/ai-engkit/compare/v1.1.19...v1.1.20
