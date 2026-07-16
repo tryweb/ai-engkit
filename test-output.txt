@@ -13,7 +13,7 @@
   [0;32mPASS[0m HOME is /home/devuser
 
 --- Versions ---
-  [0;32mPASS[0m opencode version (1.18.1)
+  [0;32mPASS[0m opencode version (1.18.2)
   [0;32mPASS[0m openchamber version (1.16.1)
   [0;32mPASS[0m openspec installed (1.6.0)
   [0;32mPASS[0m gh CLI installed
