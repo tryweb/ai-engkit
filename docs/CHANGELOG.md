@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.22] - 2026-07-18
+
+### Changed
+- Upgrade lean-ctx from 3.9.11 to 3.9.12.
+- Update the tracked latest version for oh-my-openagent from 4.18.2 to 4.19.0.
+
 ## [1.1.21] - 2026-07-17
 
 ### Changed
@@ -719,7 +725,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 > 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.21...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.22...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -806,3 +812,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.19]: https://github.com/tryweb/ai-engkit/compare/v1.1.18...v1.1.19
 [1.1.20]: https://github.com/tryweb/ai-engkit/compare/v1.1.19...v1.1.20
 [1.1.21]: https://github.com/tryweb/ai-engkit/compare/v1.1.20...v1.1.21
+[1.1.22]: https://github.com/tryweb/ai-engkit/compare/v1.1.21...v1.1.22
