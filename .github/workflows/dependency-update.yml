@@ -765,17 +765,29 @@ jobs:
           set -euo pipefail
           OPENCODE_VER=$(grep -oP '^ARG OPENCODE_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
           CHAMBER_VER=$(grep -oP '^ARG OPENCHAMBER_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
+          DOCKER_VER=$(grep -oP '^ARG DOCKER_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
+          PLAYWRIGHT_VER=$(grep -oP '^ARG PLAYWRIGHT_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
+          LEANCTX_VER=$(grep -oP '^ARG LEANCTX_VERSION=\K[0-9.]+' Dockerfile || echo "unknown")
 
           # Check if pinned updates include newer versions
           PINNED='${{ needs.check-versions.outputs.pinned-updates }}'
           NEW_OC=$(echo "$PINNED" | jq -r '.[] | select(.name=="OPENCODE_VERSION") | .latest // empty' 2>/dev/null || true)
           NEW_CH=$(echo "$PINNED" | jq -r '.[] | select(.name=="OPENCHAMBER_VERSION") | .latest // empty' 2>/dev/null || true)
+          NEW_DK=$(echo "$PINNED" | jq -r '.[] | select(.name=="DOCKER_VERSION") | .latest // empty' 2>/dev/null || true)
+          NEW_PW=$(echo "$PINNED" | jq -r '.[] | select(.name=="PLAYWRIGHT_VERSION") | .latest // empty' 2>/dev/null || true)
+          NEW_LC=$(echo "$PINNED" | jq -r '.[] | select(.name=="LEANCTX_VERSION") | .latest // empty' 2>/dev/null || true)
 
           if [[ -n "$NEW_OC" ]]; then OPENCODE_VER="$NEW_OC"; fi
           if [[ -n "$NEW_CH" ]]; then CHAMBER_VER="$NEW_CH"; fi
+          if [[ -n "$NEW_DK" ]]; then DOCKER_VER="$NEW_DK"; fi
+          if [[ -n "$NEW_PW" ]]; then PLAYWRIGHT_VER="$NEW_PW"; fi
+          if [[ -n "$NEW_LC" ]]; then LEANCTX_VER="$NEW_LC"; fi
 
           echo "opencode-version=$OPENCODE_VER" >> "$GITHUB_OUTPUT"
           echo "chamber-version=$CHAMBER_VER" >> "$GITHUB_OUTPUT"
+          echo "docker-version=$DOCKER_VER" >> "$GITHUB_OUTPUT"
+          echo "playwright-version=$PLAYWRIGHT_VER" >> "$GITHUB_OUTPUT"
+          echo "leanctx-version=$LEANCTX_VER" >> "$GITHUB_OUTPUT"
 
       - name: Update README badges
         if: steps.decision.outputs.action == 'create-pr' || steps.decision.outputs.action == 'auto-release'
@@ -789,6 +801,19 @@ jobs:
           fi
           if [[ "$CHAMBER_VER" != "unknown" ]]; then
             sed -i "s/OpenChamber-[^-]*-blue/OpenChamber-${CHAMBER_VER}-blue/" README.md
+          fi
+          DOCKER_VER="${{ steps.pkg-versions.outputs.docker-version }}"
+          PLAYWRIGHT_VER="${{ steps.pkg-versions.outputs.playwright-version }}"
+          LEANCTX_VER="${{ steps.pkg-versions.outputs.leanctx-version }}"
+
+          if [[ "$DOCKER_VER" != "unknown" ]]; then
+            sed -i "s/Docker-[^-]*-2496ED/Docker-${DOCKER_VER}-2496ED/" README.md
+          fi
+          if [[ "$PLAYWRIGHT_VER" != "unknown" ]]; then
+            sed -i "s/Playwright-[^-]*-45ba4b/Playwright-${PLAYWRIGHT_VER}-45ba4b/" README.md
+          fi
+          if [[ "$LEANCTX_VER" != "unknown" ]]; then
+            sed -i "s/lean--ctx-[^-]*-7C3AED/lean--ctx-${LEANCTX_VER}-7C3AED/" README.md
           fi
 
       - name: Update CHANGELOG
