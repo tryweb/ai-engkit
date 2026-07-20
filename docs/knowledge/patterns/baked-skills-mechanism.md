@@ -51,6 +51,7 @@ A three-layer mechanism:
 
 - `v0.13.0` — First baked skills shipped: `enable-project-knowledge`, `knowledge-capture`
 - `v0.14.0` — Added `karpathy-guidelines` (86-line SKILL.md, MIT-licensed, from `multica-ai/andrej-karpathy-skills`)
+- `vNext` — Added `enable-finalize-maintenance` with `bootstrap.sh` that auto-provisions `enable-project-knowledge` as a dependency
 - Verified in container: symlink resolves correctly, SKILL.md frontmatter is readable
 - All 48 tests pass, 0 fail
 

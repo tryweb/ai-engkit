@@ -225,7 +225,8 @@ GitHub Actions will automatically:
 │   ├── baked-skills/           # Pre-installed skills shipped in Docker image
 │   │   ├── karpathy-guidelines/
 │   │   ├── knowledge-capture/
-│   │   └── enable-project-knowledge/
+│   │   ├── enable-project-knowledge/
+│   │   └── enable-finalize-maintenance/
 │   └── skills/                 # User-visible skill definitions (symlinks to baked-skills/)
 │       ├── knowledge-capture.md
 │       ├── release.md

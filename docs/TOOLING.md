@@ -71,6 +71,7 @@ ai-engkit also bakes in project-visible skills such as:
 - `karpathy-guidelines`
 - `knowledge-capture`
 - `enable-project-knowledge`
+- `enable-finalize-maintenance`
 
 Related files:
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- Add `enable-finalize-maintenance` baked skill with deterministic bootstrap script. Follows the `enable-xxx` pattern: global skill bootstraps project-local `finalize-maintenance` skill + `docs/knowledge/maintenance/` scaffold. Auto-provisions `enable-project-knowledge` as a dependency when missing.
+- Add `enable-xxx-skill-pattern` knowledge entry documenting the reusable pattern for future optional project skills.
+
 ## [1.1.23] - 2026-07-19
 
 ### Changed
