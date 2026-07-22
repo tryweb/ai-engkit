@@ -6,10 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+
 ### Added
 - Add `enable-finalize-maintenance` baked skill with deterministic bootstrap script. Follows the `enable-xxx` pattern: global skill bootstraps project-local `finalize-maintenance` skill + `docs/knowledge/maintenance/` scaffold. Auto-provisions `enable-project-knowledge` as a dependency when missing.
 - Add `enable-xxx-skill-pattern` knowledge entry documenting the reusable pattern for future optional project skills.
 - Add `OPENCODE_PROVIDER` env var support for injecting custom OpenCode providers (e.g., Ollama) into `opencode.json` at container startup. Configured via `entrypoint.d/02-init-config.sh`, exposed in `docker-compose.yml` and `docker-compose.dev.yml`. See `.env.example` for usage.
+
+## [1.2.0] - 2026-07-22
+
+### Changed
+- Upgrade OpenCode from 1.18.3 to 1.18.4.
+- Upgrade GitLab CLI from 1.108.0 to 1.109.0.
+
 
 ## [1.1.23] - 2026-07-19
 
@@ -699,44 +707,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - Improve the `README.md` document structure.
-
-
 ---
 
 ## Format
 
-### Types
-
-- `Added` - new features
-- `Changed` - changes to existing functionality
-- `Deprecated` - soon-to-be removed features
-- `Removed` - removed features
-- `Fixed` - bug fixes
-- `Security` - security-related changes
-
-### Example
-
-```markdown
-## [1.1.0] - 2026-04-15
-
-### Added
-- Add GPU support.
-- Add multi-model switching.
-
-### Changed
-- Upgrade Ollama to the latest version.
-
-### Fixed
-- Fix container restart issues.
-- Fix permission errors.
-```
-
----
-
-> 📖 This changelog follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
-
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.1.23...HEAD
-[0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.2.0...HEAD
+[1.1.0]: https://github.com/tryweb/ai-engkit/releases/tag/v1.1.0
+[0.3.0]: https://github.com/tryweb/ai-engkit/compare/v1.1.0...v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
 [0.5.1]: https://github.com/tryweb/ai-engkit/compare/v0.5.0...v0.5.1
@@ -824,3 +801,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [1.1.21]: https://github.com/tryweb/ai-engkit/compare/v1.1.20...v1.1.21
 [1.1.22]: https://github.com/tryweb/ai-engkit/compare/v1.1.21...v1.1.22
 [1.1.23]: https://github.com/tryweb/ai-engkit/compare/v1.1.22...v1.1.23
+[1.2.0]: https://github.com/tryweb/ai-engkit/compare/v1.1.23...v1.2.0

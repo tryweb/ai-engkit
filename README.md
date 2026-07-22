@@ -7,7 +7,7 @@ ai-engkit is a self-hosted AI development environment that packages [OpenCode](h
 It is designed for teams and individuals who want a reproducible AI coding workspace without rebuilding their toolchain from scratch.
 
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-orange?style=for-the-badge&logo=ubuntu&logoColor=white)
-![OpenCode](https://img.shields.io/badge/OpenCode-1.18.3-blue?style=for-the-badge&logoColor=white)
+![OpenCode](https://img.shields.io/badge/OpenCode-1.18.4-blue?style=for-the-badge&logoColor=white)
 ![OpenChamber](https://img.shields.io/badge/OpenChamber-1.16.2-blue?style=for-the-badge&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-29.6.2-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-1.61.1-45ba4b?style=for-the-badge&logo=playwright&logoColor=white)
