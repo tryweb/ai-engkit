@@ -25,6 +25,7 @@ services:
     environment:
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-devonly}
       - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
+      - OPENCODE_PROVIDER=${OPENCODE_PROVIDER:-}
       - OPENCHAMBER_UI_PASSWORD=${OPENCHAMBER_UI_PASSWORD:-chamber}
       - OPENCHAMBER_HOST=0.0.0.0
 

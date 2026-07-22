@@ -95,6 +95,7 @@ Copy `.env.example` to `.env` and customize:
 | `OPENCODE_SERVER_PASSWORD` | `devonly` | OpenCode API password |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` | Web UI password |
 | `OPENCODE_PLUGINS` | `oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git` | Comma-separated plugin list |
+| `OPENCODE_PROVIDER` | *(empty)* | Custom OpenCode provider(s) JSON (injected into `provider` key of `opencode.json`). See `.env.example` for usage |
 | `WORKSPACE_PATH` | *(unset → named volume `workspace`)* | Host path for workspace bind mount |
 | `BACKUP_RETENTION` | `5` | Number of backup copies to retain during `./upgrade.sh` |
 | `APT_PACKAGES` | *(empty)* | Extra apt packages installed at container startup |

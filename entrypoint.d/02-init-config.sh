@@ -159,6 +159,20 @@ OPCODE_CONFIG=$(jq -n \
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
+# --- Custom provider injection (from OPENCODE_PROVIDER env var) ---
+# OPENCODE_PROVIDER expects JSON: the value of the "provider" key,
+# e.g. '{"ollama":{"npm":"@ai-sdk/openai-compatible","name":"Ollama","options":{"baseURL":"http://host:11434/v1"},"models":{"gemma4:12b":{"name":"gemma4:12b"}}}}'
+if [ -n "${OPENCODE_PROVIDER:-}" ]; then
+  PROVIDER_OBJ=$(echo "$OPENCODE_PROVIDER" | jq '.' 2>/dev/null) || true
+  if [ -n "$PROVIDER_OBJ" ]; then
+    echo "Merging custom provider(s) from OPENCODE_PROVIDER"
+    jq -s '.[0] * {provider: .[1]}' "$OPCODE_CONFIG_FILE" <(echo "$PROVIDER_OBJ") > "${OPCODE_CONFIG_FILE}.tmp" \
+      && mv "${OPCODE_CONFIG_FILE}.tmp" "$OPCODE_CONFIG_FILE"
+  else
+    echo "Warning: OPENCODE_PROVIDER is not valid JSON, skipping" >&2
+  fi
+fi
+
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true

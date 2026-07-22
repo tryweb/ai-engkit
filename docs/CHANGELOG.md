@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - Add `enable-finalize-maintenance` baked skill with deterministic bootstrap script. Follows the `enable-xxx` pattern: global skill bootstraps project-local `finalize-maintenance` skill + `docs/knowledge/maintenance/` scaffold. Auto-provisions `enable-project-knowledge` as a dependency when missing.
 - Add `enable-xxx-skill-pattern` knowledge entry documenting the reusable pattern for future optional project skills.
+- Add `OPENCODE_PROVIDER` env var support for injecting custom OpenCode providers (e.g., Ollama) into `opencode.json` at container startup. Configured via `entrypoint.d/02-init-config.sh`, exposed in `docker-compose.yml` and `docker-compose.dev.yml`. See `.env.example` for usage.
 
 ## [1.1.23] - 2026-07-19
 
