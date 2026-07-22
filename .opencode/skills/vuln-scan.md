@@ -29,6 +29,9 @@ For routine operations, use the helper scripts:
 
 # Mode B — Dockerfile version pin check (no auth required for npm/GitLab; gh auth needed for GitHub)
 .opencode/scripts/check-versions.sh check       # Full table: pinned vs latest
+.opencode/scripts/check-versions.sh check --latest  # Plus latest-tracked npm packages
+.opencode/scripts/check-versions.sh check --apt     # Plus ubuntu:24.04 base image APT updates
+.opencode/scripts/check-versions.sh check --all --snapshot-save  # Full report + save snapshot
 .opencode/scripts/check-versions.sh outdated     # Only outdated pins (exit 1 if any)
 .opencode/scripts/check-versions.sh json         # Machine-readable JSON
 ```
@@ -242,6 +245,7 @@ checks, use `outdated` (exit 1 if anything needs bumping).
 | `PLAYWRIGHT_VERSION` | npm:playwright | `https://registry.npmjs.org/playwright/latest` |
 | `PLAYWRIGHT_MCP_VERSION` | npm:@playwright/mcp | `https://registry.npmjs.org/@playwright/mcp/latest` |
 | `GLAB_VERSION` | gitlab:gitlab-org/cli | `https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases/permalink/latest` |
+| `LEANCTX_VERSION` | github:yvgude/lean-ctx | `gh release view --repo yvgude/lean-ctx --json tagName --jq .tagName` (strip `v` prefix) |
 
 ### 3. Manual lookup (when the script can't reach a source)
 
