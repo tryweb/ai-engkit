@@ -232,7 +232,7 @@ TODAY="$(date -u +%Y-%m-%d)"
 CHANGELOG="docs/CHANGELOG.md"
 
 python3 - "$CHANGELOG" "$NEXT_VERSION" "$TODAY" <<'PYEOF'
-import json, re, sys
+import re, sys
 
 changelog_path, version, date = sys.argv[1:4]
 version_no_v = version.lstrip('v')
@@ -241,43 +241,52 @@ repo = 'https://github.com/tryweb/ai-engkit'
 with open(changelog_path, 'r', encoding='utf-8') as f:
     content = f.read()
 
-# Remove existing version block with same version (idempotent)
-pat = re.compile(r'^## \[' + re.escape(version_no_v) + r'\] - \d{4}-\d{2}-\d{2}\n(?:.*?)(?=^## \[|\Z)', re.MULTILINE | re.DOTALL)
-content = re.sub(pat, '', content).rstrip() + '\n'
+# 1. Capture existing [Unreleased] content (everything between header and next ##)
+unrel_match = re.search(
+    r'^## \[Unreleased\]\n(.*?)(?=^## \[|\Z)',
+    content, re.MULTILINE | re.DOTALL
+)
+existing_unrel = unrel_match.group(1).strip() if unrel_match else ''
 
-# Ensure [Unreleased] header exists
-if '## [Unreleased]' not in content:
-    content = content.rstrip() + '\n\n## [Unreleased]\n'
+# 2. Remove old [Unreleased] section + its content
+content = re.sub(
+    r'^## \[Unreleased\]\n.*?(?=^## \[|\Z)',
+    '', content, count=1, flags=re.MULTILINE | re.DOTALL
+).rstrip()
 
-# Read auto-detected changes from step 5.2
+# 3. Remove old version section for same version (idempotent)
+content = re.sub(
+    r'^## \[' + re.escape(version_no_v) + r'\] - \d{4}-\d{2}-\d{2}\n.*?(?=^## \[|\Z)',
+    '', content, count=0, flags=re.MULTILINE | re.DOTALL
+).rstrip()
+
+# 4. Read auto-detected changes from step 5.2
 changed_deps = ''
 try:
     with open('/tmp/release-changed-deps') as f:
         deps = f.read().strip()
         if deps:
-            changed_deps = '### Changed\n' + deps + '\n\n'
+            changed_deps = '### Changed\n' + deps
 except (FileNotFoundError, IOError):
     pass
 
-# Build new version section
-new_section = f'## [{version_no_v}] - {date}\n\n{changed_deps}'
+# 5. Build new version section combining existing [Unreleased] + detected changes
+new_section_parts = [f'## [{version_no_v}] - {date}']
+if existing_unrel:
+    new_section_parts.append(existing_unrel)
+if changed_deps:
+    new_section_parts.append(changed_deps)
+new_section = '\n\n'.join(new_section_parts) + '\n'
 
-# Insert after [Unreleased] block (before next ##)
-parts = re.split(r'^## \[Unreleased\]\n', content, 1, re.MULTILINE)
-if len(parts) == 2:
-    before, after_unrel = parts
-    # Find the next ## section after [Unreleased]
-    rest_match = re.search(r'^## \[', after_unrel, re.MULTILINE)
-    if rest_match:
-        insert_at = rest_match.start()
-        body = after_unrel[:insert_at] + new_section + '\n' + after_unrel[insert_at:]
-    else:
-        body = after_unrel + new_section + '\n'
-    content = before + '## [Unreleased]\n\n' + body
+# 6. Insert new empty [Unreleased] + new version section at top
+insert_point = content.find('## [')
+if insert_point >= 0:
+    after = content[insert_point:]
+    content = '## [Unreleased]\n\n\n' + new_section + '\n' + after
 else:
-    content += '\n' + new_section
+    content = '## [Unreleased]\n\n\n' + new_section + '\n' + content
 
-# Rebuild version links
+# 7. Rebuild version links
 versions = re.findall(r'^## \[(\d+\.\d+\.\d+)\] - ', content, re.MULTILINE)
 links = []
 if versions:
@@ -290,13 +299,16 @@ if versions:
             links.append(f'[{v}]: {repo}/compare/v{prev}...v{v}')
         prev = v
 
-# Strip old links footer
+# 8. Strip old links, preserve format footer
 fmt_marker = '\n---\n\n## Format'
 if fmt_marker in content:
     body_part, _ = content.split(fmt_marker, 1)
     content = body_part.rstrip() + fmt_marker
 else:
-    content = re.sub(r'\n*\[(?:Unreleased|\d+\.\d+\.\d+)\]: https://github\.com[^\n]*', '', content).rstrip()
+    content = re.sub(
+        r'\n*\[(?:Unreleased|\d+\.\d+\.\d+)\]: https://github\.com[^\n]*',
+        '', content
+    ).rstrip()
 
 content += '\n\n' + '\n'.join(links) + '\n'
 

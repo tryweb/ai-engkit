@@ -1,23 +1,16 @@
-# Changelog
-
-All notable changes to ai-engkit are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
-
 ## [Unreleased]
 
+
+## [1.2.0] - 2026-07-22
 
 ### Added
 - Add `enable-finalize-maintenance` baked skill with deterministic bootstrap script. Follows the `enable-xxx` pattern: global skill bootstraps project-local `finalize-maintenance` skill + `docs/knowledge/maintenance/` scaffold. Auto-provisions `enable-project-knowledge` as a dependency when missing.
 - Add `enable-xxx-skill-pattern` knowledge entry documenting the reusable pattern for future optional project skills.
 - Add `OPENCODE_PROVIDER` env var support for injecting custom OpenCode providers (e.g., Ollama) into `opencode.json` at container startup. Configured via `entrypoint.d/02-init-config.sh`, exposed in `docker-compose.yml` and `docker-compose.dev.yml`. See `.env.example` for usage.
 
-## [1.2.0] - 2026-07-22
-
 ### Changed
 - Upgrade OpenCode from 1.18.3 to 1.18.4.
 - Upgrade GitLab CLI from 1.108.0 to 1.109.0.
-
 
 ## [1.1.23] - 2026-07-19
 
@@ -712,8 +705,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## Format
 
 [Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.2.0...HEAD
-[1.1.0]: https://github.com/tryweb/ai-engkit/releases/tag/v1.1.0
-[0.3.0]: https://github.com/tryweb/ai-engkit/compare/v1.1.0...v0.3.0
+[0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
 [0.5.1]: https://github.com/tryweb/ai-engkit/compare/v0.5.0...v0.5.1
