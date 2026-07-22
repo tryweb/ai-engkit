@@ -271,9 +271,6 @@ RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh
 
 USER ${USERNAME}
 
-# CodeGraph MCP server 整合（自動配置 opencode）
-RUN cd /home/${USERNAME} && codegraph install --target=opencode --yes
-
 ENV HOME=/home/${USERNAME}
 ENV PATH=/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
