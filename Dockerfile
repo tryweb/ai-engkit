@@ -6,7 +6,7 @@ ARG DOCKER_VERSION=29.6.2
 ARG COMPOSE_VERSION=5.3.1
 ARG BUILDX_VERSION=0.35.0
 ARG OPENCODE_VERSION=1.18.4
-ARG OPENCHAMBER_VERSION=1.16.2
+ARG OPENCHAMBER_VERSION=1.16.3
 ARG GLAB_VERSION=1.109.0
 ARG PLAYWRIGHT_VERSION=1.61.1
 ARG PLAYWRIGHT_MCP_VERSION=0.0.78
@@ -146,7 +146,7 @@ compression_level = "standard"
 shell_allowlist_extra = [
   "gh", "glab",
   "docker", "docker-compose", "docker compose",
-  "pw-mcp", "bun", "marksman", "lancedb-opencode-pro",
+  "pw-mcp", "bun", "marksman", "codegraph",
 ]
 graph_index_max_files = 5000
 savings_footer = "auto"
