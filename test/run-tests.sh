@@ -439,7 +439,87 @@ assert_contains "lean-ctx doctor reports BASH_ENV set" 'BASH_ENV' "$LEAN_CTX_DOC
 assert_contains "lean-ctx doctor reports CLAUDE_ENV_FILE set" 'CLAUDE_ENV_FILE' "$LEAN_CTX_DOCTOR"
 
 # --------------------------------------------------
-# 8.2 Superpowers (Agentic Skills Framework)
+# 8.3 OMO Agent Permissions
+# --------------------------------------------------
+echo ""
+echo "--- OMO Agent Permissions ---"
+
+# 8.3.1 Default file in image
+assert_file_exists "oh-my-openagent.json.default in /etc/opencode" "/etc/opencode/oh-my-openagent.json.default"
+
+# 8.3.2 Runtime copy in user config
+assert_file_exists "oh-my-openagent.json in user config" "/home/devuser/.config/opencode/oh-my-openagent.json"
+
+# 8.3.3 All 11 OMO agents present
+OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '.agents | keys | join(",")' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+assert_contains "explore agent defined"  'explore'           "$OMO_AGENTS"
+assert_contains "oracle agent defined"   'oracle'            "$OMO_AGENTS"
+assert_contains "librarian agent defined" 'librarian'        "$OMO_AGENTS"
+assert_contains "multimodal-looker defined" 'multimodal-looker' "$OMO_AGENTS"
+assert_contains "metis agent defined"    'metis'             "$OMO_AGENTS"
+assert_contains "momus agent defined"    'momus'             "$OMO_AGENTS"
+assert_contains "prometheus agent defined" 'prometheus'      "$OMO_AGENTS"
+assert_contains "sisyphus agent defined" 'sisyphus'          "$OMO_AGENTS"
+assert_contains "hephaestus agent defined" 'hephaestus'      "$OMO_AGENTS"
+assert_contains "atlas agent defined"    'atlas'             "$OMO_AGENTS"
+assert_contains "sisyphus-junior defined" 'sisyphus-junior'  "$OMO_AGENTS"
+
+# 8.3.4 Read-only subagents: explore/oracle/librarian/multimodal-looker
+EXPLORE_BASH=$(docker exec "$CONTAINER" jq -r '.agents.explore.permission.bash' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+ORACLE_BASH=$(docker exec "$CONTAINER" jq -r '.agents.oracle.permission.bash' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+LIBRARIAN_BASH=$(docker exec "$CONTAINER" jq -r '.agents.librarian.permission.bash' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+assert_eq "explore bash=allow (supports ctx_shell)"   "allow" "$EXPLORE_BASH"
+assert_eq "oracle bash=deny"                          "deny"  "$ORACLE_BASH"
+assert_eq "librarian bash=deny"                       "deny"  "$LIBRARIAN_BASH"
+
+EXPLORE_READ=$(docker exec "$CONTAINER" jq -r '.agents.explore.permission.read' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+ORACLE_READ=$(docker exec "$CONTAINER" jq -r '.agents.oracle.permission.read' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+LIBRARIAN_READ=$(docker exec "$CONTAINER" jq -r '.agents.librarian.permission.read' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+MM_LOOKER_READ=$(docker exec "$CONTAINER" jq -r '.agents["multimodal-looker"].permission.read' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+assert_eq "explore read=allow"            "allow" "$EXPLORE_READ"
+assert_eq "oracle read=allow"             "allow" "$ORACLE_READ"
+assert_eq "librarian read=allow"          "allow" "$LIBRARIAN_READ"
+assert_eq "multimodal-looker read=allow"  "allow" "$MM_LOOKER_READ"
+
+EXPLORE_EDIT=$(docker exec "$CONTAINER" jq -r '.agents.explore.permission.edit' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+ORACLE_EDIT=$(docker exec "$CONTAINER" jq -r '.agents.oracle.permission.edit' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+LIBRARIAN_EDIT=$(docker exec "$CONTAINER" jq -r '.agents.librarian.permission.edit' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+assert_eq "explore edit=deny"             "deny" "$EXPLORE_EDIT"
+assert_eq "oracle edit=deny"              "deny" "$ORACLE_EDIT"
+assert_eq "librarian edit=deny"           "deny" "$LIBRARIAN_EDIT"
+
+# 8.3.5 librarian has webfetch allow
+LIBRARIAN_WEBFETCH=$(docker exec "$CONTAINER" jq -r '.agents.librarian.permission.webfetch' /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+assert_eq "librarian webfetch=allow (docs search)" "allow" "$LIBRARIAN_WEBFETCH"
+
+# 8.3.6 Analysis/planning subagents: metis/momus/prometheus — read-only
+for agent in metis momus prometheus; do
+  AGENT_READ=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.read" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  AGENT_BASH=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.bash" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  AGENT_EDIT=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.edit" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  assert_eq "$agent read=allow"  "allow" "$AGENT_READ"
+  assert_eq "$agent bash=deny"   "deny"  "$AGENT_BASH"
+  assert_eq "$agent edit=deny"   "deny"  "$AGENT_EDIT"
+done
+
+# 8.3.7 Execution/coordination agents: sisyphus/hephaestus/atlas/sisyphus-junior — full access
+for agent in sisyphus hephaestus atlas "sisyphus-junior"; do
+  AGENT_READ=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.read" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  AGENT_BASH=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.bash" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  AGENT_EDIT=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.edit" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  AGENT_WRITE=$(docker exec "$CONTAINER" jq -r ".agents[\"$agent\"].permission.write" /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null || echo "")
+  assert_eq "$agent read=allow"   "allow" "$AGENT_READ"
+  assert_eq "$agent bash=allow"   "allow" "$AGENT_BASH"
+  assert_eq "$agent edit=allow"   "allow" "$AGENT_EDIT"
+  assert_eq "$agent write=allow"  "allow" "$AGENT_WRITE"
+done
+
+# 8.3.8 opencode.json must NOT have an inline agent section
+OPCODE_HAS_AGENT=$(docker exec "$CONTAINER" jq 'has("agent")' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
+assert_eq "opencode.json has no inline agent section" "false" "$OPCODE_HAS_AGENT"
+
+# --------------------------------------------------
+# 8.4 Superpowers (Agentic Skills Framework)
 # --------------------------------------------------
 echo ""
 echo "--- Superpowers (Agentic Skills Framework) ---"
