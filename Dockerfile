@@ -233,6 +233,10 @@ EOF
 # at container startup (appends to user's ~/.config/opencode/AGENTS.md).
 COPY .opencode/AGENTS.md.default /etc/opencode/AGENTS.md.default
 
+# oh-my-openagent.json default — consumed by entrypoint.d/02-init-config.sh
+# at container startup (merges into user's ~/.config/opencode/oh-my-openagent.json).
+COPY .opencode/oh-my-openagent.json.default /etc/opencode/oh-my-openagent.json.default
+
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
     cp /etc/opencode/opencode.json.default /home/${USERNAME}/.config/opencode/opencode.json && \

@@ -1,0 +1,117 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "explore": {
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny",
+        "apply_patch": "deny"
+      }
+    },
+    "oracle": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny"
+      }
+    },
+    "librarian": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny",
+        "webfetch": "allow"
+      }
+    },
+    "multimodal-looker": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny"
+      }
+    },
+    "metis": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny"
+      }
+    },
+    "momus": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny"
+      }
+    },
+    "prometheus": {
+      "permission": {
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny"
+      }
+    },
+    "sisyphus": {
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow"
+      }
+    },
+    "hephaestus": {
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow"
+      }
+    },
+    "atlas": {
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow"
+      }
+    },
+    "sisyphus-junior": {
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow"
+      }
+    }
+  }
+}

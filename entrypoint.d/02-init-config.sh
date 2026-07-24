@@ -173,6 +173,24 @@ if [ -n "${OPENCODE_PROVIDER:-}" ]; then
   fi
 fi
 
+# --- OMO agent permission defaults ---
+# 遵循 AGENTS.md.default 模式：build 時寫入 /etc/opencode/，runtime 合併至使用者目錄。
+DEFAULT_OMO_AGENT_PERMS="/etc/opencode/oh-my-openagent.json.default"
+OMO_AGENT_PERMS_FILE="$OPCODE_CONFIG_DIR/oh-my-openagent.json"
+
+if [ -f "$DEFAULT_OMO_AGENT_PERMS" ]; then
+  if [ -f "$OMO_AGENT_PERMS_FILE" ]; then
+    if ! jq -e '.agents' "$OMO_AGENT_PERMS_FILE" >/dev/null 2>&1; then
+      echo "Merging default OMO agent permissions into oh-my-openagent.json"
+      jq -s '.[0] * .[1]' "$DEFAULT_OMO_AGENT_PERMS" "$OMO_AGENT_PERMS_FILE" > "${OMO_AGENT_PERMS_FILE}.tmp" \
+        && mv "${OMO_AGENT_PERMS_FILE}.tmp" "$OMO_AGENT_PERMS_FILE"
+    fi
+  else
+    echo "Creating oh-my-openagent.json with default agent permissions"
+    cp "$DEFAULT_OMO_AGENT_PERMS" "$OMO_AGENT_PERMS_FILE"
+  fi
+fi
+
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true
