@@ -3,6 +3,15 @@
 
 ## [1.3.0] - 2026-07-24
 
+### Added
+- Vendor OMO agent permission defaults as standalone file (`oh-my-openagent.json.default`), following `AGENTS.md.default` pattern. The file ships to `/etc/opencode/` via Dockerfile COPY and is merged into the user's config directory at runtime by `entrypoint.d/02-init-config.sh`.
+
+### Tested
+- Add OMO agent permission verification tests (53 assertions across 8 sub-sections covering all 11 agents).
+
+### Documentation
+- Capture OMO agent permission default pattern as `docs/knowledge/patterns/omo-agent-permission-defaults.md`.
+
 ## [1.2.1] - 2026-07-23
 
 ### Changed

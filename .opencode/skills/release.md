@@ -224,6 +224,29 @@ This step does two things:
 1. Move existing `[Unreleased]` content into the new version section
 2. Auto-generate `### Changed` entries if Step 5.2 detected version bumps
 
+First, generate a categorized commit list from git log as fallback when `[Unreleased]` is empty:
+
+```bash
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+COMMITS_SINCE_TAG=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null || true)
+CATEGORIZED_COMMITS=""
+if [ -n "$COMMITS_SINCE_TAG" ]; then
+  # Categorize commits into sections
+  FEATS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ feat' | sed 's/^[0-9a-f]* //' | sed 's/^feat[^:]*: *//')
+  TESTS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ test' | sed 's/^[0-9a-f]* //' | sed 's/^test[^:]*: *//')
+  DOCS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ docs' | sed 's/^[0-9a-f]* //' | sed 's/^docs[^:]*: *//')
+  FIXES=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ fix' | sed 's/^[0-9a-f]* //' | sed 's/^fix[^:]*: *//')
+  OTHERS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -viE '^[0-9a-f]+ (feat|test|docs|fix)' | sed 's/^[0-9a-f]* //' || true)
+
+  [ -n "$FEATS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Added\n${FEATS}\n\n"
+  [ -n "$FIXES" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Fixed\n${FIXES}\n\n"
+  [ -n "$TESTS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Tested\n${TESTS}\n\n"
+  [ -n "$DOCS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Documentation\n${DOCS}\n\n"
+  [ -n "$OTHERS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Other\n${OTHERS}\n\n"
+  printf '%b' "$CATEGORIZED_COMMITS" > /tmp/release-git-log-commits
+fi
+```
+
 Run the CHANGELOG updater:
 
 ```bash
@@ -232,7 +255,7 @@ TODAY="$(date -u +%Y-%m-%d)"
 CHANGELOG="docs/CHANGELOG.md"
 
 python3 - "$CHANGELOG" "$NEXT_VERSION" "$TODAY" <<'PYEOF'
-import re, sys
+import re, sys, os
 
 changelog_path, version, date = sys.argv[1:4]
 version_no_v = version.lstrip('v')
@@ -270,15 +293,30 @@ try:
 except (FileNotFoundError, IOError):
     pass
 
-# 5. Build new version section combining existing [Unreleased] + detected changes
+# 5. Read auto-generated git log commits (fallback when [Unreleased] is empty)
+git_log_commits = ''
+try:
+    with open('/tmp/release-git-log-commits') as f:
+        gc = f.read().strip()
+        if gc:
+            git_log_commits = gc
+except (FileNotFoundError, IOError):
+    pass
+
+# 6. Build new version section:
+#    - Use [Unreleased] content if present
+#    - Fall back to auto-generated git log commits
+#    - Append changed_deps if any
 new_section_parts = [f'## [{version_no_v}] - {date}']
 if existing_unrel:
     new_section_parts.append(existing_unrel)
+elif git_log_commits:
+    new_section_parts.append(git_log_commits)
 if changed_deps:
     new_section_parts.append(changed_deps)
 new_section = '\n\n'.join(new_section_parts) + '\n'
 
-# 6. Insert new empty [Unreleased] + new version section at top
+# 7. Insert new empty [Unreleased] + new version section at top
 insert_point = content.find('## [')
 if insert_point >= 0:
     after = content[insert_point:]
@@ -286,7 +324,7 @@ if insert_point >= 0:
 else:
     content = '## [Unreleased]\n\n\n' + new_section + '\n' + content
 
-# 7. Rebuild version links
+# 8. Rebuild version links
 versions = re.findall(r'^## \[(\d+\.\d+\.\d+)\] - ', content, re.MULTILINE)
 links = []
 if versions:
@@ -299,7 +337,7 @@ if versions:
             links.append(f'[{v}]: {repo}/compare/v{prev}...v{v}')
         prev = v
 
-# 8. Strip old links, preserve format footer
+# 9. Strip old links, preserve format footer
 fmt_marker = '\n---\n\n## Format'
 if fmt_marker in content:
     body_part, _ = content.split(fmt_marker, 1)
