@@ -227,22 +227,30 @@ This step does two things:
 First, generate a categorized commit list from git log as fallback when `[Unreleased]` is empty:
 
 ```bash
+# Helper: strip commit hash + type prefix, capitalize, add bullet
+fmt_commit() { sed 's/^[0-9a-f]* //' | sed 's/^[a-z]*[^:]*: *//' | sed 's/^./\U&/' | sed 's/^/- /'; }
+
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
 COMMITS_SINCE_TAG=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null || true)
 CATEGORIZED_COMMITS=""
 if [ -n "$COMMITS_SINCE_TAG" ]; then
-  # Categorize commits into sections
-  FEATS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ feat' | sed 's/^[0-9a-f]* //' | sed 's/^feat[^:]*: *//')
-  TESTS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ test' | sed 's/^[0-9a-f]* //' | sed 's/^test[^:]*: *//')
-  DOCS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ docs' | sed 's/^[0-9a-f]* //' | sed 's/^docs[^:]*: *//')
-  FIXES=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ fix' | sed 's/^[0-9a-f]* //' | sed 's/^fix[^:]*: *//')
-  OTHERS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -viE '^[0-9a-f]+ (feat|test|docs|fix)' | sed 's/^[0-9a-f]* //' || true)
+  # Categorize commits into sections matching existing CHANGELOG convention
+  FEATS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ feat' | fmt_commit)
+  FIXES=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ fix' | fmt_commit)
+  DOCS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ docs' | fmt_commit)
+  SECURITY=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ security' | fmt_commit)
+  REMOVED=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ remove' | fmt_commit)
+  CHANGED=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -iE '^[0-9a-f]+ (chore|refactor|perf|test|ci|style)' | fmt_commit)
+  # Breaking changes detected by `!:` in subject (e.g. "feat!: xxx" or "chore!: xxx")
+  BREAKING=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null | grep -E '^[0-9a-f]+ .+!: ' | fmt_commit || true)
 
-  [ -n "$FEATS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Added\n${FEATS}\n\n"
-  [ -n "$FIXES" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Fixed\n${FIXES}\n\n"
-  [ -n "$TESTS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Tested\n${TESTS}\n\n"
-  [ -n "$DOCS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Documentation\n${DOCS}\n\n"
-  [ -n "$OTHERS" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Other\n${OTHERS}\n\n"
+  [ -n "$BREAKING" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Changed\n${BREAKING}\n\n"
+  [ -n "$FEATS" ]    && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Added\n${FEATS}\n\n"
+  [ -n "$FIXES" ]    && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Fixed\n${FIXES}\n\n"
+  [ -n "$SECURITY" ] && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Security\n${SECURITY}\n\n"
+  [ -n "$REMOVED" ]  && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Removed\n${REMOVED}\n\n"
+  [ -n "$DOCS" ]     && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Documentation\n${DOCS}\n\n"
+  [ -n "$CHANGED" ]  && CATEGORIZED_COMMITS="${CATEGORIZED_COMMITS}### Changed\n${CHANGED}\n\n"
   printf '%b' "$CATEGORIZED_COMMITS" > /tmp/release-git-log-commits
 fi
 ```
