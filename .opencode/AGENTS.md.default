@@ -97,6 +97,29 @@ MCP tool (sandboxed code execution) over shell scripting.
 Single direct commands (`git status`, `docker ps`, `jq ...`) run normally — only
 explicit `bash -c` / `sh -c` wrapper forms are blocked.
 
+### lean-ctx background shell completion
+
+Until completion notifications are supported and verified in the active MCP
+host, treat any `ctx_shell` response containing a `shell_*` job ID as poll-only,
+including foreground calls that automatically detach.
+
+- Save the job ID and query
+  `ctx_shell(background_action="status", job_id="shell_...")`
+  until a terminal result or lookup error is returned.
+- Do not end the turn merely to wait for a completion notification.
+  A todo marked `in_progress` tracks work; it does not guarantee a wake-up.
+- Space status checks according to expected runtime; avoid tight polling.
+- Continue dependent steps only after checking the exit code and output,
+  then independently verifying the expected artifact or service state.
+  `completed` alone does not mean success.
+- If the job fails, is cancelled, times out, or becomes unavailable, resolve
+  or report that condition before proceeding. Do not blindly rerun a
+  state-changing command whose outcome is unknown.
+- `shell_*` IDs belong to lean-ctx polling, not OMO `background_output`;
+  OMO `bg_*` task notifications are a separate mechanism.
+
+Tracking: https://github.com/yvgude/lean-ctx/issues/1722
+
 ### Defensive jq Usage
 
 jq is preinstalled (`/usr/bin/jq`, v1.7). Most jq errors agents hit are
