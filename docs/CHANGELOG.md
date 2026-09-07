@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.18.6] - 2026-09-07
+
+### Changed
+- Update the Ubuntu 24.04 APT package snapshot (18 packages have updates: bsdutils (1:2.39.3-9ubuntu6.5),coreutils (9.4-3ubuntu6.2),diffutils (1:3.10-1build1),ncurses-bin (6.4+20240113-1ubuntu2.1),util-linux (2.39.3-9ubuntu6.5),ncurses-base (6.4+20240113-1ubuntu2.1),mount (2.39.3-9ubuntu6.5),libattr1 (1:2.5.2-1build1.1),libblkid1 (2.39.3-9ubuntu6.5),libbz2-1.0 (1.0.8-5.1build0.1),libgcrypt20 (1.10.3-2ubuntu0.1),libmount1 (2.39.3-9ubuntu6.5),libsmartcols1 (2.39.3-9ubuntu6.5),libncursesw6 (6.4+20240113-1ubuntu2.1),libtinfo6 (6.4+20240113-1ubuntu2.1),libuuid1 (2.39.3-9ubuntu6.5),zlib1g (1:1.3.dfsg-3.1ubuntu2.1),gpgv (2.4.4-2ubuntu17.4)).
 
 ## [1.18.5] - 2026-09-06
 
@@ -20,7 +24,6 @@
 
 ### Tests
 - Avoid Docker-dependent exact cookie tests.
-
 
 ## [1.18.3] - 2026-09-05
 
@@ -1918,11 +1921,13 @@
 
 ### Changed
 - Improve the `README.md` document structure.
+
+
 ---
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2090,3 +2095,4 @@
 [1.18.3]: https://github.com/tryweb/ai-engkit/compare/v1.18.2...v1.18.3
 [1.18.4]: https://github.com/tryweb/ai-engkit/compare/v1.18.3...v1.18.4
 [1.18.5]: https://github.com/tryweb/ai-engkit/compare/v1.18.4...v1.18.5
+[1.18.6]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...v1.18.6
