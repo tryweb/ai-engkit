@@ -413,6 +413,9 @@ jobs:
       - name: Create .env for Compose validation
         run: cp .env.example .env
 
+      - name: Install Compose guard dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Verify Compose isolation guard
         run: bash test/test-compose-isolation.sh
 
