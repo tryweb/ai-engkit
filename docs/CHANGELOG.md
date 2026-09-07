@@ -2,8 +2,20 @@
 
 ## [1.18.6] - 2026-09-07
 
+### Added
+- Group LSP servers and clarify built-ins.
+
+### Fixed
+- Count LSP block changes.
+
 ### Changed
 - Update the Ubuntu 24.04 APT package snapshot (18 packages have updates: bsdutils (1:2.39.3-9ubuntu6.5),coreutils (9.4-3ubuntu6.2),diffutils (1:3.10-1build1),ncurses-bin (6.4+20240113-1ubuntu2.1),util-linux (2.39.3-9ubuntu6.5),ncurses-base (6.4+20240113-1ubuntu2.1),mount (2.39.3-9ubuntu6.5),libattr1 (1:2.5.2-1build1.1),libblkid1 (2.39.3-9ubuntu6.5),libbz2-1.0 (1.0.8-5.1build0.1),libgcrypt20 (1.10.3-2ubuntu0.1),libmount1 (2.39.3-9ubuntu6.5),libsmartcols1 (2.39.3-9ubuntu6.5),libncursesw6 (6.4+20240113-1ubuntu2.1),libtinfo6 (6.4+20240113-1ubuntu2.1),libuuid1 (2.39.3-9ubuntu6.5),zlib1g (1:1.3.dfsg-3.1ubuntu2.1),gpgv (2.4.4-2ubuntu17.4)).
+- Install ripgrep for the dependency-update compose isolation guard.
+- Apply responsive styles to grouped LSP tables.
+
+### Documentation
+- Update admin dashboard screenshots.
+- Document lean-ctx background shell polling.
 
 ## [1.18.5] - 2026-09-06
 
