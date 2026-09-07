@@ -404,4 +404,106 @@ describe("createLspReconciler.apply", () => {
     expect(result.changed).toBe(0);
     expect(upserts.length).toBe(0);
   });
+
+  test("regression: enabling installed server with env/package in sync but lsp block missing must count as changed", async () => {
+    const lspPayloads: string[] = [];
+    const bunInstalls: string[] = [];
+    const expectedLspServers =
+      '{"biome":{"enabled":true,"version":null},"pyright":{"enabled":true,"version":null},"typescript":{"enabled":true,"version":null},"yaml-ls":{"enabled":true,"version":null}}';
+    const expectedBunPackages = "@biomejs/biome pyright typescript-language-server yaml-language-server";
+    const deps = makeDeps({
+      exec: async (cmd) => {
+        if (cmd.includes("bun pm ls -g")) {
+          return {
+            stdout:
+              "packages:\n  @biomejs/biome@2.5.11\n  pyright@1.1.413\n  typescript-language-server@6.0.0\n  yaml-language-server@1.24.0\n",
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (cmd.includes("jq -r '.lsp")) {
+          return { stdout: "pyright\ntypescript\nyaml-ls\n", stderr: "", exitCode: 0 };
+        }
+        if (cmd.startsWith("bun install -g")) {
+          bunInstalls.push(cmd);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes(".lsp = $lsp")) {
+          lspPayloads.push(cmd);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("lsp-managed.env")) return { stdout: "", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      readEnv: () => ({
+        LSP_SERVERS: expectedLspServers,
+        BUN_PACKAGES: expectedBunPackages,
+      }),
+    });
+    const reconciler = createLspReconciler(deps);
+    const result = await reconciler.apply();
+    expect(bunInstalls.length).toBe(0);
+    expect(lspPayloads).toHaveLength(1);
+    const raw = lspPayloads[0].match(/--argjson lsp '(.+)' '\.lsp/)?.[1];
+    expect(raw).toBeDefined();
+    const lspBlock = JSON.parse(raw!);
+    expect(lspBlock["biome"]).toBeDefined();
+    expect(lspBlock["biome"].command).toEqual(["biome", "lsp-proxy"]);
+    // Block-only transition must be counted as a change
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.changed).toBe(1);
+      expect(result.applied).toBe(1);
+    }
+  });
+
+  test("regression: disabling server with env/package in sync but lsp block still contains it must count as changed", async () => {
+    const lspPayloads: string[] = [];
+    const bunInstalls: string[] = [];
+    const expectedLspServers =
+      '{"pyright":{"enabled":true,"version":null},"typescript":{"enabled":true,"version":null},"yaml-ls":{"enabled":true,"version":null}}';
+    const expectedBunPackages = "pyright typescript-language-server yaml-language-server";
+    const deps = makeDeps({
+      exec: async (cmd) => {
+        if (cmd.includes("bun pm ls -g")) {
+          return {
+            stdout:
+              "packages:\n  @biomejs/biome@2.5.11\n  pyright@1.1.413\n  typescript-language-server@6.0.0\n  yaml-language-server@1.24.0\n",
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (cmd.includes("jq -r '.lsp")) {
+          return { stdout: "biome\npyright\ntypescript\nyaml-ls\n", stderr: "", exitCode: 0 };
+        }
+        if (cmd.startsWith("bun install -g")) {
+          bunInstalls.push(cmd);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes(".lsp = $lsp")) {
+          lspPayloads.push(cmd);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        }
+        if (cmd.includes("lsp-managed.env")) return { stdout: "", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      readEnv: () => ({
+        LSP_SERVERS: expectedLspServers,
+        BUN_PACKAGES: expectedBunPackages,
+      }),
+    });
+    const reconciler = createLspReconciler(deps);
+    const result = await reconciler.apply();
+    expect(bunInstalls.length).toBe(0);
+    expect(lspPayloads).toHaveLength(1);
+    const raw = lspPayloads[0].match(/--argjson lsp '(.+)' '\.lsp/)?.[1];
+    expect(raw).toBeDefined();
+    const lspBlock = JSON.parse(raw!);
+    expect(lspBlock["biome"]).toBeUndefined();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.changed).toBe(1);
+      expect(result.applied).toBe(1);
+    }
+  });
 });

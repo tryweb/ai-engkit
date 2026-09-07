@@ -260,6 +260,12 @@ export function createLspReconciler(deps: LspReconcilerDeps) {
     const newBunPackages = deriveBunPackages(env[BUN_PACKAGES_ENV_KEY] ?? "", enabledPackages);
     const lspChanged = (env["LSP_SERVERS"] ?? "") !== newLspServers;
     const bunChanged = (env[BUN_PACKAGES_ENV_KEY] ?? "") !== newBunPackages;
+    // PUT persists env before POST apply, so env diffs alone cannot detect block-only changes;
+    // compare desired enabled catalog keys against observed inLspBlock keys (marksman excluded).
+    const desiredLspKeys = new Set(summary.servers.filter((s) => s.desiredEnabled).map((s) => s.serverKey));
+    const observedLspKeys = new Set(summary.servers.filter((s) => s.inLspBlock).map((s) => s.serverKey));
+    const lspBlockChanged =
+      desiredLspKeys.size !== observedLspKeys.size || [...desiredLspKeys].some((k) => !observedLspKeys.has(k));
 
     if (lspChanged) deps.upsertEnvVar("LSP_SERVERS", newLspServers);
     if (bunChanged) {
@@ -284,7 +290,7 @@ export function createLspReconciler(deps: LspReconcilerDeps) {
       };
     }
 
-    const changed = installTargets.size + (lspChanged || bunChanged ? 1 : 0);
+    const changed = installTargets.size + (lspChanged || bunChanged || lspBlockChanged ? 1 : 0);
     const refreshed = await reconcile();
     return { ok: true, changed, applied: changed, failed: 0, servers: refreshed.servers };
   }
