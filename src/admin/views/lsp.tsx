@@ -42,7 +42,102 @@ function driftBadge(drift: LspDriftReason | null) {
   );
 }
 
-const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => (
+export type LspGroupKey = "builtin" | "enabled" | "available";
+
+export interface LspGroup {
+  readonly key: LspGroupKey;
+  readonly label: string;
+  readonly caption: string;
+  readonly rows: readonly LspRow[];
+}
+
+function compareLspRows(a: LspRow, b: LspRow): number {
+  const aDrifted = a.drift !== null ? 0 : 1;
+  const bDrifted = b.drift !== null ? 0 : 1;
+  if (aDrifted !== bDrifted) return aDrifted - bDrifted;
+  return a.serverKey.localeCompare(b.serverKey);
+}
+
+function sortLspRows(rows: readonly LspRow[]): LspRow[] {
+  return [...rows].sort(compareLspRows);
+}
+
+export function groupLspRows(rows: readonly LspRow[]): readonly LspGroup[] {
+  const builtin = sortLspRows(rows.filter((r) => r.builtinBacked));
+  const enabled = sortLspRows(rows.filter((r) => !r.builtinBacked && r.enabled));
+  const available = sortLspRows(rows.filter((r) => !r.builtinBacked && !r.enabled));
+  return [
+    {
+      key: "builtin",
+      label: "Built-in",
+      caption: "Always enabled via OpenCode built-in; pin a version to override.",
+      rows: builtin,
+    },
+    {
+      key: "enabled",
+      label: "Enabled",
+      caption: "Enabled optional servers installed via BUN_PACKAGES.",
+      rows: enabled,
+    },
+    {
+      key: "available",
+      label: "Available",
+      caption: "Disabled optional servers available to enable.",
+      rows: available,
+    },
+  ];
+}
+
+function LspRowCells({ row }: { row: LspRow }) {
+  return (
+    <>
+      <td data-label="Server">
+        <strong>{row.serverKey}</strong>
+        <br />
+        <span class="text-xs text-muted"><code>{row.npmPackage}</code> · <code>{row.command.join(" ")}</code></span>
+      </td>
+      <td data-label="Extensions" class="text-sm">{row.extensions.map((e) => <code key={e} style="margin-right:4px;">{e}</code>)}</td>
+      <td data-label="Version">
+        <div class="flex items-center gap-2">
+          <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey}>
+            <option value="__loaded" hidden></option>
+          </select>
+          {row.pinnedVersion ? <span class="text-xs text-muted">pinned {row.pinnedVersion}</span> : null}
+        </div>
+      </td>
+      <td data-label="Installed">
+        {row.installedVersion !== null
+          ? <code>{row.installedVersion}</code>
+          : <span class="text-muted">—</span>}
+      </td>
+      <td data-label="Status">{driftBadge(row.drift)}</td>
+      <td data-label="Enabled">
+        {row.builtinBacked ? (
+          <span
+            class="badge lsp-builtin"
+            title="Always enabled via OpenCode built-in; pin a version to override."
+            role="img"
+            aria-label="Built-in server. Always enabled via OpenCode built-in; pin a version to override."
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Zm6 4v3" />
+            </svg>
+            <span class="visually-hidden">Built-in</span>
+          </span>
+        ) : (
+          <label class="switch">
+            <input type="checkbox" class="lsp-toggle" data-row={row.serverKey} checked={row.enabled} />
+            <span class="slider" />
+          </label>
+        )}
+      </td>
+    </>
+  );
+}
+
+const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => {
+  const groups = groupLspRows(rows);
+  return (
   <div>
     <div class="flex items-center justify-between" style="margin-bottom:16px;">
       <h2>LSP Server Management</h2>
@@ -53,52 +148,45 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => (
       add it to the generated <code>opencode.json</code> lsp block; pin a version to install that exact
       release. Versions are detected from the npm registry, newest first.
     </p>
-    <div class="card lsp-table-wrap">
-      <table id="lsp-table">
-        <thead>
-          <tr>
-            <th>Server</th>
-            <th>Extensions</th>
-            <th>Version</th>
-            <th>Installed</th>
-            <th>Status</th>
-            <th>Enabled</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr data-key={row.serverKey}>
-              <td data-label="Server">
-                <strong>{row.serverKey}</strong>
-                <br />
-                <span class="text-xs text-muted"><code>{row.npmPackage}</code> · <code>{row.command.join(" ")}</code></span>
-              </td>
-              <td data-label="Extensions" class="text-sm">{row.extensions.map((e) => <code style="margin-right:4px;">{e}</code>)}</td>
-              <td data-label="Version">
-                <div class="flex items-center gap-2">
-                  <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey}>
-                    <option value="__loaded" hidden></option>
-                  </select>
-                  {row.pinnedVersion ? <span class="text-xs text-muted">pinned {row.pinnedVersion}</span> : null}
-                </div>
-              </td>
-              <td data-label="Installed">
-                {row.installedVersion !== null
-                  ? <code>{row.installedVersion}</code>
-                  : <span class="text-muted">—</span>}
-              </td>
-              <td data-label="Status">{driftBadge(row.drift)}</td>
-              <td data-label="Enabled">
-                <label class="switch" title={row.builtinBacked ? "Runs via OpenCode built-in; Admin pins the version" : undefined}>
-                  <input type="checkbox" class="lsp-toggle" data-row={row.serverKey} checked={row.enabled} disabled={row.builtinBacked} />
-                  <span class="slider" />
-                </label>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+
+      {groups.map((group) => (
+        <section key={group.key} aria-labelledby={`lsp-group-${group.key}`} style="margin-bottom:24px;">
+          <div class="flex items-center gap-2" style="margin-bottom:8px;">
+            <h3 id={`lsp-group-${group.key}`} style="margin:0;font-size:1rem;font-weight:600;">
+              {group.label} <span class="text-sm text-muted" style="font-weight:400;">({group.rows.length})</span>
+            </h3>
+          </div>
+          <p class="text-sm text-muted" style="margin-bottom:10px;">{group.caption}</p>
+          <div class="card lsp-table-wrap">
+            <table id={group.key === "builtin" ? "lsp-table" : `lsp-table-${group.key}`} data-group={group.key}>
+              <thead>
+                <tr>
+                  <th>Server</th>
+                  <th>Extensions</th>
+                  <th>Version</th>
+                  <th>Installed</th>
+                  <th>Status</th>
+                  <th>Enabled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {group.rows.length === 0 ? (
+                  <tr>
+                    <td colspan={6} class="text-sm text-muted" style="text-align:center;padding:16px;">No servers in this group</td>
+                  </tr>
+                ) : (
+                  group.rows.map((row) => (
+                    <tr key={row.serverKey} data-key={row.serverKey}>
+                      <LspRowCells row={row} />
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+
     <script>{html`
       var ROWS = ${raw(JSON.stringify(rows))};
       var loaded = {};   // serverKey -> full version list (descending)
@@ -211,8 +299,7 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => (
         });
         if (!res.ok) {
           var err = await res.json().catch(function () { return {}; });
-          alert('Save failed: ' + (err.error || 'unknown error'));
-          throw new Error('save failed');
+          throw new Error('Save failed: ' + (err.error || 'unknown error'));
         }
       }
 
@@ -225,8 +312,7 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => (
           var res = await fetch('/api/lsp/apply', { method: 'POST' });
           var data = await res.json();
           if (!data.ok) { alert('Apply failed: ' + (data.error || 'unknown error')); return; }
-          var msg = 'Applied ' + data.applied + ' change' + (data.applied === 1 ? '' : 's');
-          alert(msg + (data.failed ? ' (' + data.failed + ' failed)' : ''));
+          alert('LSP changes applied successfully.');
           window.location.reload();
         } catch (err) {
           alert('Apply error: ' + err.message);
@@ -237,7 +323,8 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => (
       });
     `}</script>
   </div>
-);
+  );
+};
 
 export function LspPage(rows: readonly LspRow[]) {
   return (
