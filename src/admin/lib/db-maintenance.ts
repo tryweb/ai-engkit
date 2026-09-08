@@ -286,13 +286,6 @@ export async function defaultCreateBackup(
   dbPath: string,
   overrides: BackupCommandOverrides = {},
 ): Promise<ExecResult> {
-  let volume: string;
-  try {
-    volume = await (overrides.resolveDataVolumeFn ?? resolveDataVolume)();
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return { stdout: "", stderr: `Cannot determine data volume for backup: ${msg}`, exitCode: 1 };
-  }
   const hostBackupPath = await (overrides.resolveHostBackupPathFn ?? defaultResolveHostBackupPath)(backupPath);
   if (!hostBackupPath) {
     return {
@@ -300,6 +293,14 @@ export async function defaultCreateBackup(
       stderr: `Cannot resolve host backup path for ${JSON.stringify(backupPath)} — bind mount ${JSON.stringify(BACKUP_CONTAINER_ROOT)} unavailable`,
       exitCode: 1,
     };
+  }
+
+  let volume: string;
+  try {
+    volume = await (overrides.resolveDataVolumeFn ?? resolveDataVolume)();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { stdout: "", stderr: `Cannot determine data volume for backup: ${msg}`, exitCode: 1 };
   }
   const result = await (overrides.dockerCommandFn ?? dockerCommand)(
     `run --rm -v ${volume}:/src:ro -v ${shellQuote(`${hostBackupPath}:/dst`)} alpine sh -c 'cat /src/opencode.db | gzip -6 > /dst/opencode.db.gz'`,
