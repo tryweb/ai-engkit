@@ -3,7 +3,8 @@ import { html } from "hono/html";
 import { Layout } from "./layout";
 import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "../lib/project-tool-status";
 import type { DashboardCenterSummary, DashboardRuntimeProfile, ProviderSummary, SubagentSummary } from "../lib/dashboard-aggregates";
-import { deriveSecurity, formatArchive, formatCompression, formatPermissionInheritance, formatTools, formatApplyState } from "../lib/dashboard-aggregates";
+import { deriveSecurity, formatArchive, formatCompression, formatPermissionInheritance, formatTools, formatApplyState, formatBytesEnUs, formatIntEnUs, deriveDbHealthFreeSpaceTone } from "../lib/dashboard-aggregates";
+import type { DbHealthSummary } from "../lib/dashboard-aggregates";
 
 interface UpdateCheckResult {
   current: string;
@@ -47,6 +48,7 @@ interface DashboardData {
   upgrade_progress_pct: number;
   admin_version: string;
   admin_version_mismatch: boolean;
+  dbHealth?: DbHealthSummary | null;
 }
 
 const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ check, adminVersion }) => {
@@ -264,6 +266,30 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         </div>
       </section>
       </div>
+      <section class="db-health card" aria-label="Database Health">
+        <div class="db-health__header">
+          <h3>Database Health</h3>
+          <div class="db-health__header-actions">
+            {data.dbHealth ? (
+              <StatusPill tone={deriveDbHealthFreeSpaceTone(data.dbHealth.freeSpaceBytes)} label={data.dbHealth.freeSpaceBytes !== null ? formatBytesEnUs(data.dbHealth.freeSpaceBytes) + " free" : "free space unknown"} ariaLabel={data.dbHealth.freeSpaceBytes !== null ? `Free space ${formatBytesEnUs(data.dbHealth.freeSpaceBytes)}` : "Free space unknown"} />
+            ) : (
+              <StatusPill tone="neutral" label="unavailable" ariaLabel="Database health unavailable" />
+            )}
+            <a href="/retention-policy" class="db-health__link">Configure retention →</a>
+          </div>
+        </div>
+        {data.dbHealth ? (
+          <div class="db-health__metrics">
+            <MetricCard title="DB File Size" value={formatBytesEnUs(data.dbHealth.fileSizeBytes)} />
+            <MetricCard title="Sessions" value={formatIntEnUs(data.dbHealth.rowCounts.session)} />
+            <MetricCard title="Events" value={formatIntEnUs(data.dbHealth.rowCounts.event)} />
+            <MetricCard title="Messages" value={formatIntEnUs(data.dbHealth.rowCounts.message)} />
+            <MetricCard title="Parts" value={formatIntEnUs(data.dbHealth.rowCounts.part)} />
+          </div>
+        ) : (
+          <p class="text-sm text-muted">Health data unavailable — probe failed or timed out.</p>
+        )}
+      </section>
       <section class="insights card" aria-label="LeanCTX Insights">
         <h3>LeanCTX Insights</h3>
         <div class="insights__grid">
