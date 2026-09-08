@@ -270,6 +270,48 @@ export function aggregateSubagentSummary(entries: readonly AgentModelEntry[] | n
   return { state: "effective", configuredCount, worstCount: eff, label: `${eff}/${configuredCount} effective`, tone: "success", href };
 }
 
+// DB health helpers — deterministic en-US, reuse MetricCard/StatusPill pattern
+export interface DbHealthCounts {
+  readonly session: number;
+  readonly event: number;
+  readonly message: number;
+  readonly part: number;
+}
+
+export interface DbHealthSummary {
+  readonly fileSizeBytes: number;
+  readonly freelistCount: number;
+  readonly rowCounts: DbHealthCounts;
+  readonly freeSpaceBytes: number | null;
+  readonly freeSpacePath: string;
+  readonly dbPath: string;
+  readonly collectedAt: string;
+}
+
+export function formatBytesEnUs(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "—";
+  if (n < 1024) return `${new Intl.NumberFormat("en-US").format(n)} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function deriveDbHealthFreeSpaceTone(freeSpaceBytes: number | null): Tone {
+  if (freeSpaceBytes === null) return "neutral";
+  if (freeSpaceBytes < 1 * 1024 * 1024 * 1024) return "danger";
+  if (freeSpaceBytes < 5 * 1024 * 1024 * 1024) return "warning";
+  return "success";
+}
+
+export function formatDbHealthFileSize(bytes: number): RuntimeFieldDisplay {
+  return {
+    label: "DB Size",
+    value: formatBytesEnUs(bytes),
+    tone: "neutral",
+    ariaLabel: `Database size ${formatBytesEnUs(bytes)}`,
+  };
+}
+
 export function toneToClass(tone: Tone, kind: "pill" | "badge"): string {
   if (kind === "pill") return `status-pill status-pill--${tone}`;
   return `badge badge-${tone}`;

@@ -520,28 +520,42 @@ async function readProjectOverviews(): Promise<ProjectReadResult> {
 
 /**
  * Probe whether every live OpenChamber session on the ai-dev opencode server
- * is idle. Returns true (all idle), false (at least one session is busy), or
- * null (the opencode server API is unreachable).
+ * is idle. Returns true (all idle, including when no managed server exists
+ * yet), false (at least one session is busy), or null (the opencode server
+ * API is unreachable).
  *
- * The chamber control API wraps exactly this session-status source (its
- * service.js fetches /session/:id/state), and the direct probe was verified
- * against the running container: GET /session + /session/:id/state return
- * live data while the control API's session.list returned no sessions in
- * this build.
+ * Reads the server's /session/status map (authenticated with
+ * OPENCODE_SERVER_PASSWORD when set), the same source the server's own
+ * message-queue consumer uses: the map lists only busy/retry sessions, so an
+ * empty map means nothing is running. Verified against the running container
+ * (per-id /state returns the web UI fallback, and /session returns empty for
+ * zero sessions, so neither is a reliable busy signal).
  */
 const OPENCODE_SESSION_PROBE_SCRIPT = `
 PORT=$(cat "$HOME/.config/openchamber/managed-opencode/"*.json 2>/dev/null | grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]*' | tail -1 | grep -o '[0-9]*$')
 if [ -z "$PORT" ]; then
   PORT=$(pgrep -af 'opencode serve' 2>/dev/null | grep -o '\-\-port[[:space:]][0-9]*' | tail -1 | awk '{print $2}')
 fi
-[ -n "$PORT" ] || exit 3
-SESSIONS=$(curl -fsS -m 5 "http://127.0.0.1:\${PORT}/session" 2>/dev/null) || exit 2
-IDS=$(echo "$SESSIONS" | jq -r '.[].id // empty' 2>/dev/null) || exit 2
-for SID in $IDS; do
-  ST=$(curl -fsS -m 5 "http://127.0.0.1:\${PORT}/session/\${SID}/state" 2>/dev/null) || exit 2
-  BUSY=$(echo "$ST" | jq -r '.busy // false' 2>/dev/null) || exit 2
-  [ "$BUSY" = "true" ] && exit 1
-done
+[ -n "$PORT" ] || exit 0
+# No managed server and no serve process: same pid namespace and HOME were
+# searched, so no session can be running. (A server started later is covered
+# by waitForIdleSessions re-probing every interval.)
+# Authenticated requests when the managed server requires a password
+# (OPENCODE_SERVER_PASSWORD is set in ai-dev); plain requests otherwise.
+# A wrong or stale password fails closed via curl exit 2 below.
+oc_session_get() {
+  if [ -n "\${OPENCODE_SERVER_PASSWORD:-}" ]; then
+    curl -fsS -m 5 -u "opencode:\${OPENCODE_SERVER_PASSWORD}" "http://127.0.0.1:\${PORT}/session$1" 2>/dev/null
+  else
+    curl -fsS -m 5 "http://127.0.0.1:\${PORT}/session$1" 2>/dev/null
+  fi
+}
+# The status map lists only busy/retry sessions (this matches the server's own
+# consumer); an empty map means nothing is running. A malformed response fails
+# closed via the jq fallback below.
+STATUS=$(oc_session_get "/status") || exit 2
+BUSYCOUNT=$(echo "$STATUS" | jq -r '[to_entries[] | .value | select(.type == "busy" or .type == "retry")] | length' 2>/dev/null) || exit 2
+[ "$BUSYCOUNT" = "0" ] || exit 1
 exit 0
 `;
 

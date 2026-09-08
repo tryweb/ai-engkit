@@ -24,6 +24,7 @@ import statusRoutes from "./routes/status";
 import agentRoutes from "./routes/agent";
 import agentModelsRoutes from "./routes/agent-models";
 import openChamberRoutes from "./routes/openchamber";
+import retentionPolicyRoutes from "./routes/retention-policy";
 import { getUpdateCheck } from "./routes/versions";
 import { getStatus as getUpgradeStatus } from "./lib/upgrade";
 import { DashboardPage } from "./views/dashboard";
@@ -32,12 +33,16 @@ import { listKeys } from "./lib/ssh-keys";
 import { createToolStatusProbe } from "./lib/project-tool-status";
 import leanctxRoutes from "./routes/leanctx";
 import lspRoutes from "./routes/lsp";
+import dbHealthRoutes from "./routes/db-health";
+import { createDbMaintenanceRoutes } from "./routes/db-maintenance";
+import { collectHostDbHealth } from "./lib/db-health";
 import { getAgentStatus } from "./agent";
 import { readLeanCtxConfig } from "./lib/leanctx";
 import { deriveDashboardRuntimeState, readAppliedSnapshot } from "./lib/leanctx-applied-snapshot";
 import { aggregateProviderSummary, aggregateSubagentSummary, projectCenter } from "./lib/dashboard-aggregates";
 import { collectProvidersMeta } from "./lib/provider-meta";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
+import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
 
 export const app = new Hono();
 
@@ -134,8 +139,12 @@ app.route("/", adminRoutes);
 app.route("/", secretsRoutes);
 app.route("/", providersRoutes);
 app.route("/", openChamberRoutes);
+app.route("/", retentionPolicyRoutes);
 app.route("/", leanctxRoutes);
 app.route("/", lspRoutes);
+app.route("/", dbHealthRoutes);
+// Live scheduler instance (not the module default): otherwise /schedule always reports Stopped.
+app.route("/", createDbMaintenanceRoutes({ getSchedulerStatus: () => maintenanceScheduler.getStatus() }));
 
 // Dashboard main page — gathers data directly instead of HTTP loopback
 app.get("/", async (c) => {
@@ -221,6 +230,16 @@ app.get("/", async (c) => {
     }
   })();
 
+  const dbHealthPromise = (async () => {
+    try {
+      const health = await timeout(collectHostDbHealth(), 8_000);
+      return health;
+    } catch (error) {
+      void error;
+      return null;
+    }
+  })();
+
   const subagentPromise = (async () => {
     try {
       const lib = createAgentModelsLib();
@@ -235,10 +254,11 @@ app.get("/", async (c) => {
     }
   })();
 
-  const [runtimeProfile, providerSummary, subagentSummary] = await Promise.all([
+  const [runtimeProfile, providerSummary, subagentSummary, dbHealth] = await Promise.all([
     timeout(runtimeProfilePromise.then((v) => v ?? null)),
     timeout(providerPromise.then((v) => v ?? aggregateProviderSummary(null))),
     timeout(subagentPromise.then((v) => v ?? aggregateSubagentSummary(null, false))),
+    timeout(dbHealthPromise.then((v) => v ?? null)),
   ]);
 
   let aiEngkitVer = await getVer("cat /opt/ai-engkit/VERSION") || "dev";
@@ -304,6 +324,7 @@ app.get("/", async (c) => {
       upgrade_current_step: upgradeStatus.current_step,
       upgrade_progress_pct: upgradeStatus.progress_pct,
       admin_version: adminVer,
+      dbHealth: dbHealth ?? null,
       admin_version_mismatch: adminDigest !== null && aiDevDigest !== null && adminDigest !== aiDevDigest,
     })
   );
@@ -341,11 +362,18 @@ export default {
   idleTimeout: 255,
 };
 
+export const maintenanceScheduler = createMaintenanceScheduler();
+
 // Bun binds the declarative server after module evaluation; defer the agent until the next event-loop turn.
 setTimeout(() => {
   try {
     startAgent({ env: { ...process.env, ...readEnvFile() } });
   } catch (error: unknown) {
     console.error("Agent startup failed:", error instanceof Error ? error.message : String(error));
+  }
+  try {
+    maintenanceScheduler.start();
+  } catch (error: unknown) {
+    console.error("Maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
   }
 }, 0);
