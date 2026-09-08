@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+## [1.18.7] - 2026-09-08
+
+### Added
+- Add scheduled and manually confirmed OpenCode database maintenance from the admin dashboard.
+- Add read-only database health metrics, retention policy configuration, and off-peak scheduling.
+- Add fail-closed backup, idle-session, WAL, headroom, and database verification guards.
+
+### Fixed
+- Resolve persistent Docker-out-of-Docker backup paths before creating maintenance backups.
+- Measure database size and free space from the resolved OpenCode data volume when ai-dev is stopped.
+- Clean up maintenance SSE subscribers on terminal completion, request abort, and stream cancellation.
+
+### Documentation
+- Add the database maintenance specification, operational runbook, rollback runbook, and retention-field boundary notes.
+
+### Tests
+- Add coverage for database maintenance, backup and disk-space fallbacks, scheduler behavior, health routes, retention policy, and SSE lifecycle cleanup.
+
 ## [1.18.6] - 2026-09-07
 
 ### Added
@@ -1939,7 +1957,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...HEAD
+[1.18.7]: https://github.com/tryweb/ai-engkit/releases/tag/v1.18.7
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
