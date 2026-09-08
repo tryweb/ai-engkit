@@ -51,6 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-yaml \
     openssh-client \
     rsync \
+    sqlite3 \
     tmux \
     htop \
     procps \
