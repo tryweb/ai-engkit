@@ -87,7 +87,7 @@ function dockerArgs(args: string[], options: ExecOptions): string[] {
   return [options.dockerBinary, ...args.slice(1)];
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
