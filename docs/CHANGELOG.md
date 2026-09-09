@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## [1.18.8] - 2026-09-09
+
+### Added
+- Add Google to key-managed providers
+- Hydrate component versions asynchronously
+- Add async upgrade loading states
+- Dashboard Projects card shows CodeGraph index health
+- Dashboard LSP pill with enabled count and deferred hydration
+
+### Fixed
+- Render upgrade shell before version discovery
+
+### Changed
+- Polish Providers UI with icons, status and review fixes
+- Simplify LSP server management display
+
 ## [1.18.7] - 2026-09-08
 
 ### Added
@@ -1951,14 +1967,11 @@
 
 ### Changed
 - Improve the `README.md` document structure.
-
-
 ---
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...HEAD
-[1.18.7]: https://github.com/tryweb/ai-engkit/releases/tag/v1.18.7
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2127,3 +2140,5 @@
 [1.18.4]: https://github.com/tryweb/ai-engkit/compare/v1.18.3...v1.18.4
 [1.18.5]: https://github.com/tryweb/ai-engkit/compare/v1.18.4...v1.18.5
 [1.18.6]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...v1.18.6
+[1.18.7]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...v1.18.7
+[1.18.8]: https://github.com/tryweb/ai-engkit/releases/tag/v1.18.8
