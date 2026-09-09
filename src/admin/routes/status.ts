@@ -12,6 +12,9 @@ status_route.get("/api/status", async (c) => {
     ...(await collectStatus({
       probeLeanCtxSite: () => toolStatus.probeSite(),
       probeGain: () => toolStatus.probeGain(),
+      probeValueReport: () => toolStatus.probeValueReport(),
+      probeProveReport: () => toolStatus.probeProveReport(),
+      probeSavingsReport: () => toolStatus.probeSavingsReport(),
     })),
     agent_status: getAgentStatus(),
   });

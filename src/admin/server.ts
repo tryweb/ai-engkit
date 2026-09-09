@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { readFileSync } from "fs";
 import { validateSession, isConfigured } from "./lib/auth";
-import { readEnvFile } from "./lib/env";
+import { readEnvFile, upsertEnvVar, deleteEnvVar } from "./lib/env";
 import { startAgent } from "./agent";
 
 import authRoutes from "./routes/auth";
@@ -39,9 +39,10 @@ import { collectHostDbHealth } from "./lib/db-health";
 import { getAgentStatus } from "./agent";
 import { readLeanCtxConfig } from "./lib/leanctx";
 import { deriveDashboardRuntimeState, readAppliedSnapshot } from "./lib/leanctx-applied-snapshot";
-import { aggregateProviderSummary, aggregateSubagentSummary, projectCenter } from "./lib/dashboard-aggregates";
+import { aggregateProviderSummary, aggregateSubagentSummary, aggregateLspSummary, projectCenter } from "./lib/dashboard-aggregates";
 import { collectProvidersMeta } from "./lib/provider-meta";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
+import { createLspReconciler } from "./lib/lsp-reconciler";
 import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
 
 export const app = new Hono();
@@ -254,14 +255,34 @@ app.get("/", async (c) => {
     }
   })();
 
-  const [runtimeProfile, providerSummary, subagentSummary, dbHealth] = await Promise.all([
+  const lspPromise = (async () => {
+    try {
+      const reconciler = createLspReconciler({
+        exec: execInAiDev,
+        readEnv: readEnvFile,
+        upsertEnvVar,
+        deleteEnvVar,
+        lspBlockFile: "/home/devuser/.config/opencode/opencode.json",
+        lspVarsFile: "/home/devuser/.config/opencode/lsp-managed.env",
+      });
+      const summary = await timeout(reconciler.reconcile(), 5_000);
+      if (!summary) return aggregateLspSummary(null);
+      const enabled = summary.servers.filter((s) => s.desiredEnabled).length;
+      return aggregateLspSummary({ ...summary, enabled });
+    } catch (error) {
+      void error;
+      return aggregateLspSummary(null);
+    }
+  })();
+
+  const [runtimeProfile, providerSummary, subagentSummary, dbHealth, lspSummary] = await Promise.all([
     timeout(runtimeProfilePromise.then((v) => v ?? null)),
     timeout(providerPromise.then((v) => v ?? aggregateProviderSummary(null))),
     timeout(subagentPromise.then((v) => v ?? aggregateSubagentSummary(null, false))),
     timeout(dbHealthPromise.then((v) => v ?? null)),
+    timeout(lspPromise.then((v) => v ?? aggregateLspSummary(null))),
   ]);
 
-  let aiEngkitVer = await getVer("cat /opt/ai-engkit/VERSION") || "dev";
   let adminVer = "dev";
   try {
     adminVer = readFileSync("/opt/ai-engkit/VERSION", "utf-8").trim();
@@ -269,16 +290,12 @@ app.get("/", async (c) => {
     void error;
   }
 
-  const [opencodeVer, openchamberVer, dockerVer] = await Promise.all([
+  const [aiEngkitVerRaw, opencodeVer, openchamberVer, dockerVer, updateCheck, adminDigest, aiDevDigest] = await Promise.all([
+    getVer("cat /opt/ai-engkit/VERSION"),
     getVer("opencode --version 2>/dev/null || echo ''"),
     getVer("/home/devuser/.bun/bin/openchamber --version 2>/dev/null || echo ''"),
     getVer("docker --version 2>/dev/null | cut -d' ' -f3 | tr -d ',' || echo ''"),
-  ]);
-
-  const updateCheck = await getUpdateCheck();
-  const upgradeStatus = getUpgradeStatus();
-
-  const [adminDigest, aiDevDigest] = await Promise.all([
+    getUpdateCheck(),
     (async () => {
       const ref = await getSelfContainerRef();
       const result = await dockerCommand(`inspect --format='{{.Image}}' ${ref}`, 10_000);
@@ -289,10 +306,13 @@ app.get("/", async (c) => {
       return result.exitCode === 0 && result.stdout ? result.stdout.trim() : null;
     })(),
   ]);
+  const aiEngkitVer = aiEngkitVerRaw || "dev";
+  const upgradeStatus = getUpgradeStatus();
 
   const finalRuntime = runtimeProfile ?? { applyState: "runtime-unavailable" as const, source: "unavailable" as const, compressionLevel: null, toolProfile: null, permissionInheritance: null, crossProjectSearch: null, secretDetectionEnabled: null, secretRedactionEnabled: null, archiveEnabled: null, archiveMaxAgeHours: null, archiveMaxDiskMb: null };
   const finalProvider = providerSummary ?? aggregateProviderSummary(null);
   const finalSubagent = subagentSummary ?? aggregateSubagentSummary(null, false);
+  const finalLsp = lspSummary ?? aggregateLspSummary(null);
 
   return c.html(
     DashboardPage({
@@ -313,6 +333,7 @@ app.get("/", async (c) => {
       runtimeProfile: finalRuntime,
       providerSummary: finalProvider,
       subagentSummary: finalSubagent,
+      lspSummary: finalLsp,
       leanctx,
       gain,
       valueReport,

@@ -47,6 +47,16 @@ export interface SubagentSummary {
   readonly href: "/agent-models";
 }
 
+export interface LspSummary {
+  readonly state: "in-sync" | "drifted" | "none" | "unavailable";
+  readonly totalCount: number;
+  readonly enabledCount: number;
+  readonly driftCount: number;
+  readonly label: string;
+  readonly tone: Tone;
+  readonly href: "/lsp";
+}
+
 
 
 // Formatting helpers — en-US deterministic
@@ -268,6 +278,28 @@ export function aggregateSubagentSummary(entries: readonly AgentModelEntry[] | n
   // all effective
   const eff = counts.effective;
   return { state: "effective", configuredCount, worstCount: eff, label: `${eff}/${configuredCount} effective`, tone: "success", href };
+}
+
+// LSP summary aggregation — mirrors ProviderSummary pattern for site-summary pill
+export function aggregateLspSummary(
+  input: { inSync: number; drifted: number; enabled: number; total?: number } | null | undefined,
+): LspSummary {
+  const href = "/lsp" as const;
+  if (!input) return { state: "unavailable", totalCount: 0, enabledCount: 0, driftCount: 0, label: "Status unavailable", tone: "neutral", href };
+  const inSync = Math.max(0, Math.floor(input.inSync));
+  const drifted = Math.max(0, Math.floor(input.drifted));
+  const total = input.total !== undefined ? Math.max(0, Math.floor(input.total)) : inSync + drifted;
+  if (total === 0) return { state: "unavailable", totalCount: 0, enabledCount: 0, driftCount: 0, label: "Status unavailable", tone: "neutral", href };
+  const enabled = Math.max(0, Math.floor(input.enabled));
+  if (enabled === 0) {
+    return { state: "none", totalCount: total, enabledCount: 0, driftCount: 0, label: "None enabled", tone: "neutral", href };
+  }
+  if (drifted > 0) {
+    const label = `${enabled} enabled · ${drifted} drifted`;
+    return { state: "drifted", totalCount: total, enabledCount: enabled, driftCount: drifted, label, tone: "warning", href };
+  }
+  const label = `${enabled} enabled · ${enabled} in sync`;
+  return { state: "in-sync", totalCount: total, enabledCount: enabled, driftCount: 0, label, tone: "success", href };
 }
 
 // DB health helpers — deterministic en-US, reuse MetricCard/StatusPill pattern

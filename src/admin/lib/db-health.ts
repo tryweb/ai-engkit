@@ -125,23 +125,23 @@ export async function collectHostDbHealth(
   const sqliteRo = (sql: string): string =>
     `sqlite3 "file:${dbPath}?mode=ro" "${sql.replace(/"/g, '\\"')}"`;
 
-  const fileSizeRaw = await execFn(`stat -c %s "${dbPath}" 2>/dev/null || stat -f %z "${dbPath}" 2>/dev/null || echo ""`);
-  const fileSizeBytes = parseCount(fileSizeRaw.stdout);
-
-  const freelistRaw = await execFn(sqliteRo("PRAGMA freelist_count;"));
-  const freelistCount = freelistRaw.exitCode === 0 ? parseCount(freelistRaw.stdout) : 0;
-
   const tables: (keyof DbHealthRowCounts)[] = ["session", "event", "message", "part"];
-  const mutableCounts: Record<keyof DbHealthRowCounts, number> = { session: 0, event: 0, message: 0, part: 0 };
-  for (const t of tables) {
-    const r = await execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`));
-    mutableCounts[t] = r.exitCode === 0 ? parseCount(r.stdout) : 0;
-  }
-  const rowCounts: DbHealthRowCounts = mutableCounts;
-
-  const dfRaw = await execFn(
-    `df -B1 --output=avail "${freeSpacePath}" 2>/dev/null | tail -n1 | tr -d ' ' | tr -d '\\n' || df -B1 "${freeSpacePath}" 2>/dev/null | awk 'NR==2{print $4}' | tr -d ' '`,
-  );
+  const [fileSizeRaw, freelistRaw, countRaws, dfRaw] = await Promise.all([
+    execFn(`stat -c %s "${dbPath}" 2>/dev/null || stat -f %z "${dbPath}" 2>/dev/null || echo ""`),
+    execFn(sqliteRo("PRAGMA freelist_count;")),
+    Promise.all(tables.map((t) => execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`)))),
+    execFn(
+      `df -B1 --output=avail "${freeSpacePath}" 2>/dev/null | tail -n1 | tr -d ' ' | tr -d '\\n' || df -B1 "${freeSpacePath}" 2>/dev/null | awk 'NR==2{print $4}' | tr -d ' '`,
+    ),
+  ]);
+  const fileSizeBytes = parseCount(fileSizeRaw.stdout);
+  const freelistCount = freelistRaw.exitCode === 0 ? parseCount(freelistRaw.stdout) : 0;
+  const rowCounts: DbHealthRowCounts = {
+    session: countRaws[0].exitCode === 0 ? parseCount(countRaws[0].stdout) : 0,
+    event: countRaws[1].exitCode === 0 ? parseCount(countRaws[1].stdout) : 0,
+    message: countRaws[2].exitCode === 0 ? parseCount(countRaws[2].stdout) : 0,
+    part: countRaws[3].exitCode === 0 ? parseCount(countRaws[3].stdout) : 0,
+  };
   let freeSpaceBytes: number | null = null;
   if (dfRaw.exitCode === 0 && dfRaw.stdout.trim()) {
     const n = parseInt(dfRaw.stdout.trim(), 10);

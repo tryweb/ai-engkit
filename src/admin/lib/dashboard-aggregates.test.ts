@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  aggregateLspSummary,
   aggregateProviderSummary,
   aggregateSubagentSummary,
   deriveSecurity,
@@ -226,6 +227,33 @@ describe("SubAgent aggregation", () => {
     const entries = [makeAgentEntry({ effectiveness: "effective" })];
     const r = aggregateSubagentSummary(entries, false);
     expect(r.label).toBe("Status unavailable");
+  });
+});
+
+describe("LSP aggregation", () => {
+  test("Null input → Status unavailable", () => {
+    const r = aggregateLspSummary(null);
+    expect(r.state).toBe("unavailable"); expect(r.label).toBe("Status unavailable"); expect(r.tone).toBe("neutral");
+  });
+  test("Zero total → Status unavailable", () => {
+    const r = aggregateLspSummary({ inSync: 0, drifted: 0, enabled: 0, total: 0 });
+    expect(r.state).toBe("unavailable"); expect(r.tone).toBe("neutral");
+  });
+  test("None enabled → None enabled neutral", () => {
+    const r = aggregateLspSummary({ inSync: 8, drifted: 0, enabled: 0, total: 8 });
+    expect(r.state).toBe("none"); expect(r.label).toBe("None enabled"); expect(r.tone).toBe("neutral");
+  });
+  test("All enabled in sync shows both counts", () => {
+    const r = aggregateLspSummary({ inSync: 8, drifted: 0, enabled: 8, total: 8 });
+    expect(r.state).toBe("in-sync"); expect(r.label).toBe("8 enabled · 8 in sync"); expect(r.tone).toBe("success");
+  });
+  test("Single enabled shows symmetric counts", () => {
+    const r = aggregateLspSummary({ inSync: 1, drifted: 0, enabled: 1, total: 8 });
+    expect(r.label).toBe("1 enabled · 1 in sync"); expect(r.tone).toBe("success");
+  });
+  test("Drift shows enabled and drifted counts", () => {
+    const r = aggregateLspSummary({ inSync: 7, drifted: 1, enabled: 3, total: 8 });
+    expect(r.state).toBe("drifted"); expect(r.label).toBe("3 enabled · 1 drifted"); expect(r.tone).toBe("warning");
   });
 });
 

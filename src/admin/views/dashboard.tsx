@@ -2,7 +2,7 @@ import type { FC } from "hono/jsx";
 import { html } from "hono/html";
 import { Layout } from "./layout";
 import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "../lib/project-tool-status";
-import type { DashboardCenterSummary, DashboardRuntimeProfile, ProviderSummary, SubagentSummary } from "../lib/dashboard-aggregates";
+import type { DashboardCenterSummary, DashboardRuntimeProfile, ProviderSummary, SubagentSummary, LspSummary } from "../lib/dashboard-aggregates";
 import { deriveSecurity, formatArchive, formatCompression, formatPermissionInheritance, formatTools, formatApplyState, formatBytesEnUs, formatIntEnUs, deriveDbHealthFreeSpaceTone } from "../lib/dashboard-aggregates";
 import type { DbHealthSummary } from "../lib/dashboard-aggregates";
 
@@ -36,6 +36,7 @@ interface DashboardData {
   runtimeProfile?: DashboardRuntimeProfile;
   providerSummary?: ProviderSummary;
   subagentSummary?: SubagentSummary;
+  lspSummary?: LspSummary | null;
   leanctx: LeanCtxSiteStats | null;
   gain: GainStats | null;
   valueReport: ValueReportStats | null;
@@ -81,8 +82,9 @@ const MetricCard: FC<{
   sub?: string;
   foot?: string;
   tone?: "default" | "accent";
-}> = ({ title, value, sub, foot, tone = "default" }) => (
-  <dl class={`metric-card${tone === "accent" ? " metric-card--accent" : ""}`}>
+  id?: string;
+}> = ({ title, value, sub, foot, tone = "default", id }) => (
+  <dl id={id} class={`metric-card${tone === "accent" ? " metric-card--accent" : ""}`}>
     <dt class="metric-card__title">{title}</dt>
     <dd class="metric-card__value">{value}</dd>
     {sub && <dd class="metric-card__sub">{sub}</dd>}
@@ -99,6 +101,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
   const runtimeProfile = data.runtimeProfile ?? { applyState: "runtime-unavailable" as const, source: "unavailable" as const, compressionLevel: null, toolProfile: null, permissionInheritance: null, crossProjectSearch: null, secretDetectionEnabled: null, secretRedactionEnabled: null, archiveEnabled: null, archiveMaxAgeHours: null, archiveMaxDiskMb: null };
   const providerSummary = data.providerSummary ?? { state: "unavailable" as const, totalCount: 0, issueCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/providers" as const };
   const subagentSummary = data.subagentSummary ?? { state: "unavailable" as const, configuredCount: 0, worstCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/agent-models" as const };
+  const lspSummary = data.lspSummary ?? { state: "unavailable" as const, totalCount: 0, enabledCount: 0, driftCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/lsp" as const };
   return (
     <div class="dashboard">
       <h2 class="dashboard__heading">Dashboard</h2>
@@ -132,6 +135,10 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <span class="site-summary__label">Center</span>
           <StatusPill tone={center.tone} label={center.label} ariaLabel={center.ariaLabel} />
         </a>
+        <a href={lspSummary.href} class="site-summary__item site-summary__item--link" aria-label={`LSP ${lspSummary.label}`}>
+          <span class="site-summary__label">LSP</span>
+          <StatusPill tone={lspSummary.tone} label={lspSummary.label} ariaLabel={`LSP ${lspSummary.label}`} />
+        </a>
         {data.admin_version_mismatch && (
           <span class="site-summary__item">
             <StatusPill tone="warning" label={`⚠ ${data.admin_version}`} ariaLabel="Admin container version mismatch" />
@@ -151,6 +158,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
 
       <section class="metric-row" aria-label="Overview metrics">
         <MetricCard
+          id="metric-savings"
           title="Token Savings"
           tone="accent"
           value={gain ? new Intl.NumberFormat("en-US").format(gain.netTokensSaved) : "—"}
@@ -158,12 +166,14 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           foot={gain ? `${gain.compressionPct.toFixed(1)}% compression` : undefined}
         />
         <MetricCard
+          id="metric-memory"
           title="leanCTX Memory"
           value={leanctx ? new Intl.NumberFormat("en-US").format(leanctx.totalMemoryFacts) : "—"}
           sub={leanctx ? `${new Intl.NumberFormat("en-US").format(leanctx.projectsWithFacts)} projects with facts` : "unavailable"}
           foot={leanctx ? `${new Intl.NumberFormat("en-US").format(leanctx.healthCoverage)} projects with health score` : undefined}
         />
         <MetricCard
+          id="metric-activity"
           title="leanCTX Activity"
           value={leanctx ? new Intl.NumberFormat("en-US").format(leanctx.activeProjects24h) : "—"}
           sub={leanctx ? "active in last 24h" : "unavailable"}
@@ -280,11 +290,11 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         </div>
         {data.dbHealth ? (
           <div class="db-health__metrics">
-            <MetricCard title="DB File Size" value={formatBytesEnUs(data.dbHealth.fileSizeBytes)} />
-            <MetricCard title="Sessions" value={formatIntEnUs(data.dbHealth.rowCounts.session)} />
-            <MetricCard title="Events" value={formatIntEnUs(data.dbHealth.rowCounts.event)} />
-            <MetricCard title="Messages" value={formatIntEnUs(data.dbHealth.rowCounts.message)} />
-            <MetricCard title="Parts" value={formatIntEnUs(data.dbHealth.rowCounts.part)} />
+            <MetricCard id="metric-db-size" title="DB File Size" value={formatBytesEnUs(data.dbHealth.fileSizeBytes)} />
+            <MetricCard id="metric-db-sessions" title="Sessions" value={formatIntEnUs(data.dbHealth.rowCounts.session)} />
+            <MetricCard id="metric-db-events" title="Events" value={formatIntEnUs(data.dbHealth.rowCounts.event)} />
+            <MetricCard id="metric-db-messages" title="Messages" value={formatIntEnUs(data.dbHealth.rowCounts.message)} />
+            <MetricCard id="metric-db-parts" title="Parts" value={formatIntEnUs(data.dbHealth.rowCounts.part)} />
           </div>
         ) : (
           <p class="text-sm text-muted">Health data unavailable — probe failed or timed out.</p>
@@ -608,6 +618,56 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             /* reconnect automatically */
           };
         }
+        function fmtInt(n) { try { return new Intl.NumberFormat("en-US").format(n); } catch (_) { return String(n); } }
+        function fmtBytes(n) {
+          try {
+            var v = Number(n);
+            if (!isFinite(v) || v < 0) return "—";
+            if (v < 1024) return fmtInt(v) + " B";
+            if (v < 1024 * 1024) return (v / 1024).toFixed(1) + " KB";
+            if (v < 1024 * 1024 * 1024) return (v / (1024 * 1024)).toFixed(1) + " MB";
+            return (v / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+          } catch (_) { return "—"; }
+        }
+        function setCard(id, value, sub, foot) {
+          var card = document.getElementById(id);
+          if (!card) return;
+          var v = card.querySelector(".metric-card__value");
+          var s = card.querySelector(".metric-card__sub");
+          var f = card.querySelector(".metric-card__foot");
+          if (v && typeof value === "string" && value) v.textContent = value;
+          if (s && typeof sub === "string" && sub) s.textContent = sub;
+          if (f && typeof foot === "string" && foot) f.textContent = foot;
+        }
+        async function hydrateDeferred() {
+          try {
+            var res = await fetch("/api/status");
+            if (res.ok) {
+              var s = await res.json();
+              if (s.gain) {
+                setCard("metric-savings", fmtInt(s.gain.netTokensSaved), "$" + Number(s.gain.netUsdSaved).toFixed(2) + " net saved", Number(s.gain.compressionPct).toFixed(1) + "% compression");
+              }
+              if (s.leanctx) {
+                setCard("metric-memory", fmtInt(s.leanctx.totalMemoryFacts), fmtInt(s.leanctx.projectsWithFacts) + " projects with facts", fmtInt(s.leanctx.healthCoverage) + " projects with health score");
+                setCard("metric-activity", fmtInt(s.leanctx.activeProjects24h), "active in last 24h", s.gain ? (s.gain.ledgerVerified ? "✓ ledger intact · " + fmtInt(s.gain.ledgerEvents) + " events" : "⚠ ledger unverified") : undefined);
+              }
+            }
+          } catch (_) {}
+          try {
+            var hres = await fetch("/api/db-health");
+            if (hres.ok) {
+              var h = await hres.json();
+              if (h && h.rowCounts) {
+                setCard("metric-db-size", fmtBytes(h.fileSizeBytes), undefined, undefined);
+                setCard("metric-db-sessions", fmtInt(h.rowCounts.session), undefined, undefined);
+                setCard("metric-db-events", fmtInt(h.rowCounts.event), undefined, undefined);
+                setCard("metric-db-messages", fmtInt(h.rowCounts.message), undefined, undefined);
+                setCard("metric-db-parts", fmtInt(h.rowCounts.part), undefined, undefined);
+              }
+            }
+          } catch (_) {}
+        }
+        setTimeout(hydrateDeferred, 0);
         var us = document.getElementById("upgrade-inline-progress");
         if (us && us.style.display !== "none") {
           connectUpgradeSSE();
