@@ -259,6 +259,12 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <h3>Projects</h3>
           <p class="stat-number">{data.project_count}</p>
           <p class="text-sm text-muted">workspace projects</p>
+          <span class="ai-runtime__rows">
+            <span class="ai-runtime__row">
+              <span class="ai-runtime__label">CodeGraph</span>
+              <span id="project-codegraph-value" class="ai-runtime__value status-pill status-pill--neutral">…</span>
+            </span>
+          </span>
         </a>
       <section class="ai-runtime card" aria-label="AI Runtime">
         <div class="ai-runtime__header">
@@ -668,6 +674,34 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           } catch (_) {}
         }
         setTimeout(hydrateDeferred, 0);
+        async function hydrateProjects() {
+          try {
+            var res = await fetch("/api/projects/overview");
+            if (!res.ok) return;
+            var data = await res.json();
+            var total = 0, indexed = 0, stale = 0;
+            for (var k in data) {
+              if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+              var p = data[k] || {};
+              if (p.disabled) continue;
+              total++;
+              var cg = p.codegraph;
+              if (cg && cg.initialized) {
+                indexed++;
+                if (cg.index && cg.index.reindexRecommended) stale++;
+              }
+            }
+            var missing = total - indexed;
+            var label = "…", tone = "neutral";
+            if (total === 0) { label = "No projects"; }
+            else if (stale > 0) { label = indexed + " indexed · " + stale + " need reindex"; tone = "warning"; }
+            else if (missing > 0) { label = indexed + " indexed · " + missing + " not indexed"; tone = "warning"; }
+            else { label = indexed + " indexed"; tone = "success"; }
+            var el = document.getElementById("project-codegraph-value");
+            if (el) { el.textContent = label; el.className = "ai-runtime__value status-pill status-pill--" + tone; }
+          } catch (_) {}
+        }
+        setTimeout(hydrateProjects, 0);
         var us = document.getElementById("upgrade-inline-progress");
         if (us && us.style.display !== "none") {
           connectUpgradeSSE();
