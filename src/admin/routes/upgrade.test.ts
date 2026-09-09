@@ -473,3 +473,65 @@ describe("POST /api/upgrade target_type", () => {
     expect(state.deleteCalls.length).toBe(0);
   });
 });
+
+describe("GET /upgrade shell-first", () => {
+  test("renders immediately without blocking, shows component loading skeleton", async () => {
+    const { deps } = depsWith();
+    const app = createUpgradeRoutes(deps);
+    const start = Date.now();
+    const res = await app.request("http://localhost/upgrade");
+    const elapsed = Date.now() - start;
+    expect(res.status).toBe(200);
+    expect(elapsed).toBeLessThan(500);
+    const html = await res.text();
+    expect(html).toContain("Upgrade Engine");
+    expect(html).toContain('id="component-versions-root"');
+    expect(html).toContain('id="component-versions-loading"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('class="spinner"');
+    expect(html).toContain('class="skeleton');
+    expect(html).toContain('id="component-versions-retry"');
+    expect(html).toContain('id="component-versions-skeletons"');
+  });
+
+  test("shell keeps version-selector loading state with spinner, elapsed, aria-busy and retry", async () => {
+    const { deps } = depsWith();
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/upgrade");
+    const html = await res.text();
+    expect(html).toContain('id="versions-loading"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('id="versions-elapsed"');
+    expect(html).toContain('id="versions-retry"');
+    expect(html).toContain('aria-label="Retry loading versions"');
+    expect(html).toContain('id="version-selector-card"');
+    expect(html).toContain('id="current-version-display"');
+  });
+
+  test("shell hydrates via Promise.all and AbortController without altering POST/SSE shapes", async () => {
+    const { deps } = depsWith();
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/upgrade");
+    const html = await res.text();
+    expect(html).toContain("loadComponentVersions");
+    expect(html).toContain("Promise.all");
+    expect(html).toContain("/api/versions");
+    expect(html).toContain("/api/versions/image");
+    expect(html).toContain("AbortController");
+    const statusRes = await app.request("http://localhost/api/upgrade/status");
+    expect(statusRes.status).toBe(200);
+    const logRes = await app.request("http://localhost/api/upgrade/log?history=1");
+    expect([200, 404].includes(logRes.status)).toBe(true);
+  });
+
+  test("dev build shell still shows not-available card and component skeleton", async () => {
+    const { deps } = depsWith({ readVersion: () => "dev" });
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/upgrade");
+    const html = await res.text();
+    expect(html).toContain("Not Available in Dev Build");
+    expect(html).toContain('id="component-versions-root"');
+  });
+});
