@@ -1,4 +1,4 @@
-# OMO v5.x Upgrade Impact (assessed at 5.0.0-beta.30)
+# OMO v5.x Upgrade Impact (assessed at 5.0.0-beta.50)
 
 ## Context
 
@@ -8,7 +8,7 @@ ai-engkit consumes oh-my-openagent (OMO) exclusively as an **OpenCode npm plugin
 - Config: `.opencode/omo.jsonc.default` (11 agents) baked to `/etc/opencode/omo.jsonc.default`, merged into `~/.omo/omo.jsonc` at startup by `entrypoint.d/02-init-config.sh`.
 - Version pipeline: `.opencode/scripts/check-versions.sh` + `.github/workflows/dependency-update.yml` compare against the npm `latest` dist-tag and sync the `$schema` tag in `omo.jsonc.default` (also in `check-updates` SKILL).
 
-OMO v5.0.0 (beta line `5.0.0-beta.1` → `5.0.0-beta.30`, published 2026-08-09–30) is a major rewrite: native CLI `omo-agent-toolkit`, Senpi edition (`omo-ai`, `omo` command), unified config `~/.omo/agent` (previously `~/.omo/omo.jsonc`), one-way legacy-config migration, `omo` bin removed, `shared/<name>` skill names → bare names, reasoning/model config standardization.
+OMO v5.0.0 (beta line `5.0.0-beta.1` → `5.0.0-beta.50`) is a major rewrite: native CLI `omo-agent-toolkit`, Senpi edition (`omo-ai`, `omo` command), one-way legacy-config migration, `omo` bin removed, `shared/<name>` skill names → bare names, and reasoning/model config standardization. The OpenCode plugin config remains `~/.omo/omo.jsonc` in beta.50; `~/.omo/agent` is the native/Senpi agent state directory, not a replacement for the plugin config path.
 
 ## Problem
 
@@ -16,12 +16,12 @@ Does upgrading to omo v5 break AI-EngKit's plugin-based consumption? Which movin
 
 ## Solution
 
-Verified upgrade facts (2026-08-30, npm + v5.0.0-beta.30 source):
+Verified repository baseline (2026-08-30, npm + v5.0.0-beta.30 source), supplemented by the external beta.31–beta.50 release audit below:
 
 ### Structural Safety (no changes needed)
 
 1. **Plugin load path unchanged**: root package is `oh-my-opencode` with `main: ./dist/index.js`; `exports` map identical between v4.19.4 and v5. `plugin: ["oh-my-openagent@<v>"]` loads v5 exactly like v4.
-2. **Config surface already v5-native**: AI-EngKit writes `~/.omo/omo.jsonc` with top-level `agents` — the v5 unified path and a still-valid v5 key. Per-agent keys in `assets/omo.schema.json` are identical between v4.19.4 and v5.0.0-beta.9 (16 keys, `additionalProperties: false`). Note: `permission`/`fallback_models` are absent from the *assets* schema in **both** versions — they live in the runtime dist schema and are genuinely consumed (`omo-fallback-model-config.md`).
+2. **Config surface remains plugin-compatible**: AI-EngKit writes `~/.omo/omo.jsonc` with top-level `agents`, and beta.50 still uses that path for the OpenCode plugin. Per-agent keys in `assets/omo.schema.json` are identical between v4.19.4 and v5.0.0-beta.9 (16 keys, `additionalProperties: false`). Note: `permission`/`fallback_models` are absent from the *assets* schema in **both** versions — they live in the runtime dist schema and are genuinely consumed (`omo-fallback-model-config.md`).
 3. **`omo` bin removed** (new: `omo-agent-toolkit`) — irrelevant here; the repo never invokes the CLI.
 4. **OpenCode requirement ≥1.4.0**; AI-EngKit pins 1.18.18.
 5. **Skill names** `shared/<name>` → bare names; repo already uses bare names.
@@ -30,10 +30,7 @@ Verified upgrade facts (2026-08-30, npm + v5.0.0-beta.30 source):
 
 ### Breaking Changes Requiring Migration (identified in beta.8)
 
-8. **Config path change**: `~/.omo/omo.jsonc` → `~/.omo/agent` (new unified path, with one-time auto-migration).
-   - `entrypoint.d/02-init-config.sh` L193-195: `OMO_CONFIG_FILE="$OMO_CONFIG_DIR/omo.jsonc"` must update.
-   - `src/admin/lib/agent-model-types.ts` L50: `export const OMO_CONFIG = "~/.omo/omo.jsonc"` must update.
-   - `entrypoint.d/lib-omo-model-defaults.bash`: reads/writes `~/.omo/omo.jsonc`.
+8. **Config path correction**: beta.50 still uses `~/.omo/omo.jsonc` for the OpenCode plugin config. `~/.omo/agent` is the native/Senpi agent state directory, not a replacement path for AI-EngKit's plugin config. Do not change the entrypoint or Admin constant based on the earlier, unverified path-migration claim.
 9. **`/omo-telemetry` command removed** — replaced by built-in parallelism telemetry. Remove any references.
 10. **Schema URL update**: `omo.jsonc.default` must point to `v5.0.0` schema.
 
@@ -97,6 +94,17 @@ Verified upgrade facts (2026-08-30, npm + v5.0.0-beta.30 source):
 48. **`0` as unlimited sentinel** for task concurrency/residency caps (omo-config-core + omo-opencode).
 49. **Launcher re-exec under bun** for bun-installed users (omo-native only).
 
+### Beta.31–Beta.50 Cumulative Risks (external release audit)
+
+The following items were identified by reviewing the upstream beta.31–beta.50 release history. They are not all represented in this repository's source tree, so each item must be confirmed against the selected beta before implementation.
+
+56. **Model configuration convergence**: `variant`, `fallback_models`, and related reasoning fields increasingly converge on the canonical `models[]` chain. AI-EngKit Admin currently writes `model` + `variant` and deletes `models`/`fallback_models`; this can erase a v5 fallback chain on every apply.
+57. **New model identities and routing**: beta.43–beta.50 introduce or reprioritize Astra/Fable and fast model variants. The Admin catalog, probe, canonicalization, and replacement policy must recognize these IDs before treating them as unavailable.
+58. **Permission and tool routing changes**: eval-only routing, tool-search capability gating, skill normalization, and removal of legacy `network_access`/`memory.tool_exposure` fields require a v5 permission smoke test.
+59. **CodeGraph packaging**: OMO's packaged CodeGraph integration was removed, but AI-EngKit's independently configured CodeGraph MCP must remain verified as a separate integration.
+60. **Runtime and packaging floor**: beta.36–beta.50 move native packaging toward Bun 1.4.x and compiled workers; the Dockerfile's Bun pin requires a canary check before any OMO beta upgrade.
+61. **Background and compaction state**: delegation defaults, fallback chains, and variants now persist across background wake and compaction boundaries; `/agent` output alone is insufficient evidence for model correctness.
+
 ### Beta.30 Senpi-Only Hotfix (no new breaking changes)
 
 50. **No omo-side commits**: beta.30 only advances Senpi from `2026.8.30-2` to `2026.8.30-3`; no `omo-opencode` logic, plugin entrypoint, agent config, schema, or CLI changes.
@@ -109,7 +117,7 @@ Verified upgrade facts (2026-08-30, npm + v5.0.0-beta.30 source):
 ## Why It Works
 
 - Plugin identity and entry (`main`/`exports`) are unchanged, so opencode loads v5 identically to v4.
-- Config path + `agents` key align with v5's native format, so no legacy migration of the repo's own config is triggered.
+- The `agents` key and `~/.omo/omo.jsonc` plugin path remain compatible with the OpenCode integration; do not infer a path migration from the native/Senpi `~/.omo/agent` directory.
 - Harness isolation keeps memory dormant in AI-EngKit's runtime — no double memory layer with lean-ctx.
 
 ## Side Effects / Tradeoffs
@@ -129,15 +137,14 @@ Pre-upgrade (before v5 stable):
 ☐ Update .opencode/scripts/check-versions.sh sed pattern (widen hyphen support)
 ☐ Update .github/workflows/dependency-update.yml schema-sync pattern
 ☐ Smoke test v5 beta as plugin load (all 11 agents registered)
-☐ Verify ~/.omo/omo.jsonc auto-migrates to ~/.omo/agent
+☐ Confirm the selected beta still reads plugin config from ~/.omo/omo.jsonc
 ☐ Remove any /omo-telemetry references
 
 Upgrade:
 ☐ Dockerfile ARG OH_MY_OPENAGENT_VERSION=5.0.0
 ☐ .opencode/omo.jsonc.default schema URL → v5.0.0
-☐ entrypoint.d/02-init-config.sh update OMO_CONFIG_FILE path (or dual-path fallback)
-☐ src/admin/lib/agent-model-types.ts update OMO_CONFIG constant
-☐ entrypoint.d/lib-omo-model-defaults.bash update read/write paths
+☐ Do not change OMO_CONFIG_FILE, OMO_CONFIG, or model-default paths unless upstream source proves a plugin-path migration
+☐ Update Admin model writes to preserve the canonical v5 models[] chain (application-code follow-up)
 
 Post-upgrade:
 ☐ Smoke test: all 11 agents registered and permissions enforced
@@ -163,6 +170,7 @@ Post-upgrade:
 - beta.13→beta.16: init-deep DAG map-reduce, ULW skill-pointers consolidation (flag rename), Senpi 2026.8.22.
 - beta.16→beta.17: `task.global_concurrency` + 0-as-unlimited sentinel; launcher bun re-exec (native only).
 - beta.17→beta.30: beta.30 is Senpi `2026.8.30-3` hotfix only; release explicitly reports `No omo-side commits`.
+- beta.31→beta.50: external release audit identified model-chain convergence, Astra/Fable catalog changes, tool/permission changes, CodeGraph packaging removal, Bun 1.4.x packaging, and background/compaction state changes; these require upstream-source confirmation before implementation.
 - `packages/omo-opencode/src/index.ts` + `create-plugin-module.ts` (beta.17): no memory imports; memory `memory.enabled` consumed only in `packages/omo-senpi/src/components/memory/wiring.ts`.
 - beta.11 adds `permission.task` respect on OpenCode side (item 34) and LSP out-of-CWD fix (item 37) — both positive for AI-EngKit.
 - `src/admin/lib/agent-model-config.ts` `buildJqWriteCommand`: writes `model`+`variant`, deletes `models`/`fallback_models` — Admin never writes a fallback chain.

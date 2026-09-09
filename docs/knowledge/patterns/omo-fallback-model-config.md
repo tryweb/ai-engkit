@@ -1,4 +1,4 @@
-# OMO Fallback Model Config (v4.19.4)
+# OMO Fallback Model Config (v4.19.4 and v5 migration note)
 
 ## Context
 
@@ -11,7 +11,7 @@ ai-engkit uses oh-my-openagent (OMO) 4.19.4. The plugin assigns default models t
 
 ## Solution
 
-Set `fallback_models` under `agents.plan` and `agents.prometheus` in both `.opencode/omo.jsonc.default` and `~/.omo/omo.jsonc`:
+For OMO 4.19.4, set `fallback_models` under `agents.plan` and `agents.prometheus` in both `.opencode/omo.jsonc.default` and `~/.omo/omo.jsonc`:
 
 ```jsonc
 "plan": {
@@ -34,10 +34,12 @@ Keep the live `$schema` pin at v4.19.4 and treat persisted config, `/agent`, and
 - Runtime probing on 192.168.11.195 with OMO 4.19.4 persisted `opencode/big-pickle` for all tested OMO agents, but live results remained `plan=opencode-go/kimi-k3` and `librarian=opencode-go/qwen3.7-plus`; do not call this configuration effective without matching runtime evidence.
 - First-class `subtask` delegation reproduced the same mismatch: completed `plan` and `librarian` children used those fallback models, with non-zero token usage.
 
+For the v5 migration, treat `models[]` as the canonical fallback-chain direction and preserve it during Admin Apply. The current Admin command writes only `model` + `variant` and deletes both `models` and `fallback_models`; therefore an Admin Apply can silently erase a manually configured chain. This is an application-code follow-up, not a documentation-only migration step.
+
 ## Side Effects / Tradeoffs
 
 - **Admin "SubAgent 預設模型" wipes fallback chains on apply**: `src/admin/lib/agent-model-config.ts` `buildJqWriteCommand` writes `.agents[$agent].model` + `.variant` and **deletes** `models`/`fallback_models` every time the Admin UI applies a model. So a manually configured `fallback_models` chain under `agents.plan`/`prometheus` survives until the next Admin apply, then is removed. The Admin UI has no fallback-chain editor — it only sets the primary.
-- **v5 migration opportunity**: v5's canonical chain key is `models` (array of `{model, variant?}`), present in both v4/v5 schemas. Adopting v5 chains requires changing `buildJqWriteCommand` to write `models` instead of deleting it (see `omo-v5-upgrade-impact.md`).
+- **v5 migration risk**: v5's canonical chain key is `models` (array of `{model, variant?}`). Adopting v5 chains requires changing `buildJqWriteCommand` to preserve or write `models` instead of deleting it (see `omo-v5-upgrade-impact.md`).
 - **Startup migration validation error (pre-existing noise)**: the migration schema `OmoAgentDefInputSchema` has no `permission` field, so 11 agents' `permission` blocks produce `Unrecognized key: "permission"` in `[config-migration] startup completed`. This predates the fallback_models change (admin's original permission-only config triggered it), does not block runtime config loading, and is harmless — but appears at every startup.
 - Restart required for config changes to take effect.
 - A direct `POST /session` with `agent:<name>` bypasses OMO's `delegate-task`/`call_omo_agent` resolver and is not valid evidence for OMO delegation.
