@@ -46,6 +46,7 @@ function featureStatsText(f, stats) {
 
 function codegraphState(data) {
   if (!data || !data.codegraph) return "unknown";
+  if (data.codegraph.initialized && data.codegraph.index && data.codegraph.index.reindexRecommended) return "stale";
   return data.codegraph.initialized ? "indexed" : "missing";
 }
 
@@ -174,7 +175,12 @@ function buildRow(name) {
   const cgBtn = document.createElement("button");
   cgBtn.className = "cap-badge";
   const cgState = codegraphState(data);
-  if (cgState === "indexed") {
+  if (cgState === "stale") {
+    cgBtn.classList.add("cap-badge--cg-stale");
+    cgBtn.textContent = "CG";
+    cgBtn.title = "CodeGraph needs reindex — " + (codegraphTooltip(data) || "view details");
+    cgBtn.setAttribute("aria-label", "CodeGraph needs reindex — view details");
+  } else if (cgState === "indexed") {
     cgBtn.classList.add("cap-badge--cg");
     cgBtn.textContent = "CG";
     cgBtn.title = "CodeGraph indexed — " + (codegraphTooltip(data) || "view details");
@@ -392,7 +398,10 @@ function renderDrawer() {
   const cg = data.codegraph;
   if (!cg) cgStats.textContent = "Status unknown";
   else if (!cg.initialized) cgStats.textContent = "Not indexed";
-  else cgStats.textContent = codegraphTooltip(data) || "Indexed";
+  else {
+    cgStats.textContent = codegraphTooltip(data) || "Indexed";
+    if (codegraphState(data) === "stale") cgStats.classList.add("drawer-cap__stats--warn");
+  }
   cgBody.appendChild(cgStats);
   cgRow.appendChild(cgBody);
   

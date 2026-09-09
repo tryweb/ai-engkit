@@ -495,6 +495,7 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
 .cap-badge--off { background: rgba(161,161,170,0.1); color: var(--text-muted); border-color: var(--border); }
 .cap-badge--off:hover { border-color: var(--accent); color: var(--accent); }
 .cap-badge--cg { color: var(--accent); border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.12); }
+.cap-badge--cg-stale { color: var(--warning); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.12); }
 .cap-badge--cg-off { color: var(--text-muted); border-color: var(--border); background: rgba(161,161,170,0.1); }
 .row-menu-wrap { position: relative; }
 .btn-menu {
@@ -552,6 +553,7 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
   color: var(--text-muted); font-size: var(--text-xs); margin-top: 2px;
   line-height: 1.6; white-space: pre-line;
 }
+.drawer-cap__stats--warn { color: var(--warning); }
 .drawer-cap__enable { margin-top: 6px; padding: 4px 12px; }
 .drawer__actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 16px 0 0; }
 
