@@ -87,4 +87,75 @@ describe("UpgradePage view", () => {
     expect(html).toContain("configured-version-warning");
     expect(html).toContain("is not in the discovered release list");
   });
+
+  test("shell renders component versions loading skeleton with accessible status", async () => {
+    const html = UpgradePage({ devBuild: false }).toString();
+    expect(html).toContain('id="component-versions-root"');
+    expect(html).toContain('id="component-versions-loading"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('class="spinner"');
+    expect(html).toContain('id="component-versions-elapsed"');
+    expect(html).toContain('class="skeleton');
+    expect(html).toContain('id="component-versions-skeletons"');
+    expect(html).toContain('id="component-versions-data"');
+    expect(html).toContain('id="component-versions-error"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('id="component-versions-retry"');
+    expect(html).toContain('Retry loading component versions');
+  });
+
+  test("shell versions-loading has spinner, aria-busy, elapsed and retry", async () => {
+    const html = UpgradePage({ devBuild: false }).toString();
+    expect(html).toContain('id="versions-loading"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('id="versions-elapsed"');
+    expect(html).toContain('id="versions-retry"');
+    expect(html).toContain('aria-label="Retry loading versions"');
+    expect(html).toContain('min-height:44px');
+  });
+
+  test("shell script hydrates component metadata via Promise.all and AbortController timeout", async () => {
+    const html = UpgradePage({ devBuild: false }).toString();
+    expect(html).toContain("loadComponentVersions");
+    expect(html).toContain("Promise.all");
+    expect(html).toContain('fetch("/api/versions"');
+    expect(html).toContain('fetch("/api/versions/image"');
+    expect(html).toContain("AbortController");
+    expect(html).toContain("COMPONENT_TIMEOUT_MS");
+    expect(html).toContain("component-versions-retry");
+    expect(html).toContain("renderComponentVersions");
+  });
+
+  test("upgrade version loader uses AbortController timeout, spinner/elapsed, retry reuses same loader", async () => {
+    const html = UpgradePage({ devBuild: false }).toString();
+    expect(html).toContain("upgradeAbortController");
+    expect(html).toContain("UPGRADE_TIMEOUT_MS");
+    expect(html).toContain("versions-elapsed");
+    expect(html).toContain("versions-retry");
+    expect(html).toContain('addEventListener("click", loadVersions)');
+    expect(html).toContain("Request timed out");
+  });
+
+  test("script avoids duplicate event listeners on retry", async () => {
+    const html = UpgradePage({ devBuild: false }).toString();
+    expect(html).toContain("upgradeListenersBound");
+    expect(html).toContain("bindUpgradeControlListenersOnce");
+    expect(html).toContain("componentRetryBound");
+    expect(html).toContain("upgradeRetryBound");
+  });
+
+  test("shell renders immediately with empty Versions props (no blocking data)", async () => {
+    const html = UpgradePage({ devBuild: false, versionsByCategory: {}, imageMeta: {} }).toString();
+    expect(html).toContain("Loading component versions");
+    expect(html).not.toContain("<code>v");
+  });
+
+  test("real data rendering still shows tables without skeleton when props provided", async () => {
+    const html = UpgradePage({ devBuild: false, versionsByCategory: { core: { Bun: "1.2.0" } }, imageMeta: { image: "ghcr.io/tryweb/ai-engkit:latest" } }).toString();
+    expect(html).toContain("<code>1.2.0</code>");
+    expect(html).toContain("<code>ghcr.io/tryweb/ai-engkit:latest</code>");
+  });
 });
