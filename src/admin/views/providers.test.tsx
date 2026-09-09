@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { ProvidersPage } from "./providers";
 
-function render(providers: Array<Record<string, unknown>>): string {
+function render(providers: Array<Record<string, unknown>>, entries: Record<string, unknown> = {}): string {
   return String(ProvidersPage({
     meta: { invalid: false, error: null, providers: providers as never },
-    entries: {},
+    entries,
   }));
 }
 
@@ -35,6 +35,20 @@ const openai = {
   keyManagement: true,
   authStoreKeyPresent: false,
   oauthManaged: true,
+  oauthConnected: false,
+  virtual: true,
+  registry: { keyCount: 0, activeKeyId: null, keys: [] },
+};
+
+const googleProvider = {
+  name: "google",
+  label: "Google",
+  npm: "",
+  baseURL: "",
+  hasApiKey: false,
+  keyManagement: true,
+  authStoreKeyPresent: false,
+  oauthManaged: false,
   oauthConnected: false,
   virtual: true,
   registry: { keyCount: 0, activeKeyId: null, keys: [] },
@@ -92,5 +106,71 @@ describe("ProvidersPage", () => {
     } }]);
     expect(html).toContain('title="sk-測試密鑰-1234"');
     expect(html).toContain("sk-測試密鑰-1234");
+  });
+
+  it("renders Google provider with brand icon, placeholder, and registry section", () => {
+    const html = render([googleProvider]);
+    expect(html).toContain('data-provider="google"');
+    expect(html).toContain("Google</h3>");
+    expect(html).toContain("Google keys in registry (0)");
+    expect(html).toContain("Google AI Studio API Key");
+    expect(html).toContain("auth-managed");
+  });
+
+  it("renders provider overview summary grid", () => {
+    const html = render([opencodeGo, openai, googleProvider]);
+    expect(html).toContain("providers-overview-grid");
+    expect(html).toContain("Configured Providers");
+    expect(html).toContain("Active / Connected");
+    expect(html).toContain("Key-Managed Providers");
+  });
+
+  it("escapes entries JSON in boot script to prevent script tag injection", () => {
+    const maliciousEntries = {
+      test: { name: "</script><script>alert(1)</script>" },
+    };
+    const html = render([opencodeGo], maliciousEntries);
+    expect(html).not.toContain("</script><script>alert(1)</script>");
+    expect(html).toContain("\\u003c/script>\\u003cscript>alert(1)\\u003c/script>");
+  });
+
+  it("counts non-key-managed providers with hasApiKey as active in overview grid", () => {
+    const envProvider = {
+      name: "custom-api",
+      label: "Custom API",
+      npm: "@ai-sdk/openai-compatible",
+      baseURL: "https://api.custom.com",
+      hasApiKey: true,
+      keyManagement: false,
+      authStoreKeyPresent: false,
+      oauthManaged: false,
+      oauthConnected: false,
+      virtual: false,
+      registry: { keyCount: 0, activeKeyId: null, keys: [] },
+    };
+    const html = render([opencodeGo, envProvider]);
+    expect(html).toContain('class="stat-number text-success" style="font-size: var(--text-2xl);">2</div>');
+    expect(html).toContain('provider-card--active" data-provider="custom-api"');
+    expect(html).toContain("API key set");
+  });
+
+  it("renders Nvidia provider with valid brand icon", () => {
+    const nvidiaProvider = {
+      name: "nvidia",
+      label: "Nvidia API",
+      npm: "",
+      baseURL: "",
+      hasApiKey: false,
+      keyManagement: true,
+      authStoreKeyPresent: false,
+      oauthManaged: false,
+      oauthConnected: false,
+      virtual: true,
+      registry: { keyCount: 0, activeKeyId: null, keys: [] },
+    };
+    const html = render([nvidiaProvider]);
+    expect(html).toContain('data-provider="nvidia"');
+    expect(html).toContain('fill="#76B900"');
+    expect(html).toContain("M8.939 8.922");
   });
 });
