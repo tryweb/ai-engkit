@@ -120,6 +120,29 @@ describe("collectProvidersMeta", () => {
     });
   });
 
+  test("surfaces google as a key-managed virtual card", async () => {
+    const seed = JSON.stringify({
+      providers: {
+        google: {
+          keys: [{ id: "k1", value: "AIzaSyTest123456789", createdAt: "2026-01-01T00:00:00.000Z" }],
+          activeKeyId: "k1",
+        },
+      },
+    });
+    await withRegistry(seed, async () => {
+      const meta = await collectProvidersMeta(stubDeps);
+      const google = meta.providers.find((p) => p.name === "google");
+      expect(google).toBeDefined();
+      expect(google?.label).toBe("Google");
+      expect(google?.virtual).toBe(true);
+      expect(google?.keyManagement).toBe(true);
+      expect(google?.oauthManaged).toBe(false);
+      expect(google?.registry.keyCount).toBe(1);
+      expect(google?.registry.activeKeyId).toBe("k1");
+      expect(JSON.stringify(meta)).not.toContain("AIzaSyTest123456789");
+    });
+  });
+
   test("auto-imports an auth-store key into an empty registry and masks it", async () => {
     const rawKey = "nvapi-sk-autoimport-1234567890";
     authStoreKeys.set("nvidia", rawKey);

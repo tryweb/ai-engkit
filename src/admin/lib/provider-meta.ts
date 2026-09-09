@@ -29,6 +29,7 @@ export interface ProviderMeta {
 const KEY_MANAGED_LABELS: Record<string, string> = {
   "opencode-go": "Opencode Go",
   openai: "OpenAI API",
+  google: "Google",
   nvidia: "Nvidia API",
   openrouter: "OpenRouter",
 };
