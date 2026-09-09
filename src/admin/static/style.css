@@ -59,6 +59,7 @@ label { display: block; margin-bottom: 4px; color: var(--text-muted); font-size:
 .justify-between { justify-content: space-between; }
 .mt-4 { margin-top: 16px; }
 .mb-4 { margin-bottom: 16px; }
+.text-xs { font-size: var(--text-xs); }
 .text-sm { font-size: var(--text-sm); }
 .stat-number { font-size: var(--text-4xl); font-weight: 600; }
 .text-muted { color: var(--text-muted); }
@@ -204,8 +205,8 @@ th { color: var(--text-muted); font-weight: 500; font-size: var(--text-sm); text
 .lsp-table-wrap table th { white-space: nowrap; }
 .lsp-status { min-width: 28px; justify-content: center; }
 .lsp-status [aria-hidden="true"] { line-height: 1; }
-.lsp-builtin { min-width: 28px; justify-content: center; }
-.lsp-builtin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lsp-builtin { min-width: 28px; justify-content: center; gap: 4px; color: var(--text-muted); }
+.lsp-builtin svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Screen-reader-only text (pairs with aria-label on icon-only status) */
 .visually-hidden {

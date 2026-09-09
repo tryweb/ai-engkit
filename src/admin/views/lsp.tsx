@@ -94,16 +94,17 @@ function LspRowCells({ row }: { row: LspRow }) {
       <td data-label="Server">
         <strong>{row.serverKey}</strong>
         <br />
-        <span class="text-xs text-muted"><code>{row.npmPackage}</code> · <code>{row.command.join(" ")}</code></span>
+        <span class="text-xs text-muted" title={`Command: ${row.command.join(" ")}`}>
+          <code>{row.npmPackage}</code>
+        </span>
       </td>
-      <td data-label="Extensions" class="text-sm">{row.extensions.map((e) => <code key={e} style="margin-right:4px;">{e}</code>)}</td>
+      <td data-label="Extensions" class="text-sm">
+        <code>{row.extensions.join(" ")}</code>
+      </td>
       <td data-label="Version">
-        <div class="flex items-center gap-2">
-          <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey}>
-            <option value="__loaded" hidden></option>
-          </select>
-          {row.pinnedVersion ? <span class="text-xs text-muted">pinned {row.pinnedVersion}</span> : null}
-        </div>
+        <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey}>
+          <option value="__loaded" hidden></option>
+        </select>
       </td>
       <td data-label="Installed">
         {row.installedVersion !== null
@@ -114,7 +115,7 @@ function LspRowCells({ row }: { row: LspRow }) {
       <td data-label="Enabled">
         {row.builtinBacked ? (
           <span
-            class="badge lsp-builtin"
+            class="badge lsp-builtin text-muted"
             title="Always enabled via OpenCode built-in; pin a version to override."
             role="img"
             aria-label="Built-in server. Always enabled via OpenCode built-in; pin a version to override."
@@ -122,7 +123,7 @@ function LspRowCells({ row }: { row: LspRow }) {
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Zm6 4v3" />
             </svg>
-            <span class="visually-hidden">Built-in</span>
+            <span>Built-in</span>
           </span>
         ) : (
           <label class="switch">
