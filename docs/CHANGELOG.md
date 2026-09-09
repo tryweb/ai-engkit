@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+
+## [1.18.9] - 2026-09-09
+
+### Added
+- Bump OpenCode 1.18.29 → 1.18.30, OpenChamber 1.22.2 → 1.23.0, glab 1.116.0 → 1.117.0, OpenSpec 1.12.0 → 1.13.0
+- Highlight CodeGraph reindex state in amber
+
+### Documentation
+- Update OMO v5 upgrade risk assessment
+
+### Changed
+- Upgrade OpenCode from 1.18.29 to 1.18.30.
+- Upgrade OpenChamber from 1.22.2 to 1.23.0.
+- Upgrade GitLab CLI from 1.116.0 to 1.117.0.
+- Upgrade OpenSpec from 1.12.0 to 1.13.0.
+
 ## [1.18.8] - 2026-09-09
 
 ### Added
@@ -1971,7 +1987,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2141,4 +2157,5 @@
 [1.18.5]: https://github.com/tryweb/ai-engkit/compare/v1.18.4...v1.18.5
 [1.18.6]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...v1.18.6
 [1.18.7]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...v1.18.7
-[1.18.8]: https://github.com/tryweb/ai-engkit/releases/tag/v1.18.8
+[1.18.8]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...v1.18.8
+[1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
