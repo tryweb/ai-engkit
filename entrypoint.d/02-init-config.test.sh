@@ -4,23 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENTRYPOINT_FILE="$SCRIPT_DIR/02-init-config.sh"
 
-# Robust function extraction using awk (counts braces, works across all sed versions)
+# Robust function extraction using BEGIN/END markers (cross-platform stable)
 extract_function() {
   local func_name="$1"
   local src_file="$2"
-  awk -v fn="$func_name" '
-    $0 ~ "^"fn"\\(\\) \\{" { found = 1; depth = 0 }
-    found {
-      # Count opening and closing braces
-      for (i = 1; i <= length($0); i++) {
-        c = substr($0, i, 1)
-        if (c == "{") depth++
-        else if (c == "}") depth--
-      }
-      print
-      if (depth == 0 && NR > 1) exit
-    }
-  ' "$src_file"
+  sed -n "/^# BEGIN FUNCTION: ${func_name}$/,/^# END FUNCTION: ${func_name}$/p" "$src_file"
 }
 
 run_sync() {
