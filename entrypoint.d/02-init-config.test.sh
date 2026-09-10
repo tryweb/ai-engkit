@@ -4,10 +4,29 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENTRYPOINT_FILE="$SCRIPT_DIR/02-init-config.sh"
 
+# Robust function extraction using awk (counts braces, works across all sed versions)
+extract_function() {
+  local func_name="$1"
+  local src_file="$2"
+  awk -v fn="$func_name" '
+    $0 ~ "^"fn"\\(\\) \\{" { found = 1; depth = 0 }
+    found {
+      # Count opening and closing braces
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (c == "{") depth++
+        else if (c == "}") depth--
+      }
+      print
+      if (depth == 0 && NR > 1) exit
+    }
+  ' "$src_file"
+}
+
 run_sync() {
   local root="$1"
   local sync_source="$root/sync.sh"
-  sed -n '/^sync_ai_engkit_agents_md()/,/^sync_ai_engkit_agents_md "\$AI_ENGKIT_AGENTS_DEFAULT" "\$USER_AGENTS_MD"$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$sync_source"
+  extract_function "sync_ai_engkit_agents_md" "$ENTRYPOINT_FILE" > "$sync_source"
   source "$sync_source"
   sync_ai_engkit_agents_md "$root/default.md" "$root/AGENTS.md"
 }
@@ -15,15 +34,14 @@ run_sync() {
 run_migration() {
   local root="$1"
   local migration_source="$root/migrate.sh"
-  sed -n '/^migrate_leanctx_compression_level()/,/^migrate_leanctx_compression_level$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$migration_source"
-  printf '%s\n' 'migrate_leanctx_compression_level' >> "$migration_source"
+  extract_function "migrate_leanctx_compression_level" "$ENTRYPOINT_FILE" > "$migration_source"
   LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$migration_source"
 }
 
 run_ensure() {
   local root="$1"
   local ensure_source="$root/ensure.sh"
-  sed -n '/^leanctx_runtime_config_is_malformed()/,/^ensure_leanctx_config$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$ensure_source"
+  extract_function "leanctx_runtime_config_is_malformed" "$ENTRYPOINT_FILE" > "$ensure_source"
   printf '%s\n' 'ensure_leanctx_config' >> "$ensure_source"
   LEANCTX_BASELINE_CONFIG="$root/default.toml" LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$ensure_source"
 }
@@ -33,8 +51,7 @@ run_upgrade() {
   local skill_name="${2:-knowledge-capture}"
   local bootstrap_dir="${3:-$root/skills/enable-project-knowledge}"
   local upgrade_source="$root/upgrade.sh"
-  # Extract the complete function (including closing brace), then append the call
-  sed -n '/^upgrade_bootstrapped_skills()/,/^}/p' "$ENTRYPOINT_FILE" > "$upgrade_source"
+  extract_function "upgrade_bootstrapped_skills" "$ENTRYPOINT_FILE" > "$upgrade_source"
   printf '%s\n' "upgrade_bootstrapped_skills \"$skill_name\" \"$bootstrap_dir\" \"$root/workspace\" \"$root/.skill-versions\"" >> "$upgrade_source"
   # shellcheck disable=SC1091
   source "$upgrade_source"
@@ -291,13 +308,13 @@ assert_upgrade_multiple_skills_independently() {
 
   # Upgrade knowledge-capture
   run_upgrade "$root" "knowledge-capture" "$root/skills/enable-project-knowledge"
-  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
-  grep -q 'knowledge-capture=1.1.0' "$root/.skill-versions"
+  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md" || { echo "FAIL: knowledge-capture not upgraded" >&2; exit 1; }
+  grep -q 'knowledge-capture=1.1.0' "$root/.skill-versions" || { echo "FAIL: knowledge-capture marker not written" >&2; exit 1; }
 
   # Upgrade finalize-maintenance
   run_upgrade "$root" "finalize-maintenance" "$root/skills/enable-finalize-maintenance"
-  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md"
-  grep -q 'finalize-maintenance=1.1.0' "$root/.skill-versions"
+  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md" || { echo "FAIL: finalize-maintenance not upgraded" >&2; exit 1; }
+  grep -q 'finalize-maintenance=1.1.0' "$root/.skill-versions" || { echo "FAIL: finalize-maintenance marker not written" >&2; exit 1; }
 
   rm -rf "$root"
 }
