@@ -4,17 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENTRYPOINT_FILE="$SCRIPT_DIR/02-init-config.sh"
 
-# Robust function extraction using BEGIN/END markers (cross-platform stable)
-extract_function() {
-  local func_name="$1"
-  local src_file="$2"
-  sed -n "/^# BEGIN FUNCTION: ${func_name}$/,/^# END FUNCTION: ${func_name}$/p" "$src_file"
-}
-
 run_sync() {
   local root="$1"
   local sync_source="$root/sync.sh"
-  extract_function "sync_ai_engkit_agents_md" "$ENTRYPOINT_FILE" > "$sync_source"
+  sed -n '/^sync_ai_engkit_agents_md()/,/^sync_ai_engkit_agents_md "\$AI_ENGKIT_AGENTS_DEFAULT" "\$USER_AGENTS_MD"$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$sync_source"
   source "$sync_source"
   sync_ai_engkit_agents_md "$root/default.md" "$root/AGENTS.md"
 }
@@ -22,16 +15,23 @@ run_sync() {
 run_migration() {
   local root="$1"
   local migration_source="$root/migrate.sh"
-  extract_function "migrate_leanctx_compression_level" "$ENTRYPOINT_FILE" > "$migration_source"
+  sed -n '/^migrate_leanctx_compression_level()/,/^migrate_leanctx_compression_level$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$migration_source"
+  printf '%s\n' 'migrate_leanctx_compression_level' >> "$migration_source"
   LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$migration_source"
 }
 
 run_ensure() {
   local root="$1"
   local ensure_source="$root/ensure.sh"
-  extract_function "leanctx_runtime_config_is_malformed" "$ENTRYPOINT_FILE" > "$ensure_source"
+  sed -n '/^leanctx_runtime_config_is_malformed()/,/^ensure_leanctx_config$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$ensure_source"
   printf '%s\n' 'ensure_leanctx_config' >> "$ensure_source"
   LEANCTX_BASELINE_CONFIG="$root/default.toml" LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$ensure_source"
+}
+
+extract_function() {
+  local func_name="$1"
+  local src_file="$2"
+  sed -n "/^# BEGIN FUNCTION: ${func_name}$/,/^# END FUNCTION: ${func_name}$/p" "$src_file"
 }
 
 run_upgrade() {
@@ -250,7 +250,7 @@ assert_upgrade_when_version_changes() {
   make_bootstrap_script "$root/skills/enable-project-knowledge/bootstrap.sh" "1.1.0"
   run_upgrade "$root"
   grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
-  grep -q 'Knowledge Capture v1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -q 'knowledge-capture v1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
   grep -q 'knowledge-capture=1.1.0' "$root/.skill-versions"
   rm -rf "$root"
 }

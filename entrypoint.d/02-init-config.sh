@@ -6,7 +6,6 @@ OPENCHAMBER_DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/workspace}"
 LEANCTX_BASELINE_CONFIG="${LEANCTX_BASELINE_CONFIG:-/etc/lean-ctx/config.default.toml}"
 LEANCTX_RUNTIME_CONFIG="${LEANCTX_RUNTIME_CONFIG:-$HOME/.config/lean-ctx/config.toml}"
-# BEGIN FUNCTION: migrate_leanctx_compression_level
 migrate_leanctx_compression_level() {
     local marker_path="${LEANCTX_RUNTIME_CONFIG}.migration-v2"
     local backup_path="${LEANCTX_RUNTIME_CONFIG}.pre-migration-v2"
@@ -54,10 +53,8 @@ migrate_leanctx_compression_level() {
     chmod 600 "$temporary_path" || { rm -f "$temporary_path"; return 1; }
     mv "$temporary_path" "$marker_path" || { rm -f "$temporary_path"; return 1; }
 }
-# END FUNCTION: migrate_leanctx_compression_level
 migrate_leanctx_compression_level
 
-# BEGIN FUNCTION: leanctx_runtime_config_is_malformed
 leanctx_runtime_config_is_malformed() {
     local validation_output
     local compression_level
@@ -92,7 +89,6 @@ leanctx_runtime_config_is_malformed() {
             ;;
     esac
 }
-# END FUNCTION: leanctx_runtime_config_is_malformed
 ensure_leanctx_config() {
   mkdir -p "$(dirname "$LEANCTX_RUNTIME_CONFIG")"
 
@@ -502,7 +498,6 @@ done
 AI_ENGKIT_AGENTS_DEFAULT="/etc/opencode/AGENTS.md.default"
 USER_AGENTS_MD="$OPCODE_CONFIG_DIR/AGENTS.md"
 
-# BEGIN FUNCTION: sync_ai_engkit_agents_md
 sync_ai_engkit_agents_md() {
   local default_file="$1"
   local user_file="$2"
@@ -567,7 +562,7 @@ sync_ai_engkit_agents_md() {
     rm -f "$tmp_file"
   fi
 }
-# END FUNCTION: sync_ai_engkit_agents_md
+
 sync_ai_engkit_agents_md "$AI_ENGKIT_AGENTS_DEFAULT" "$USER_AGENTS_MD"
 
 # --- OpenChamber default settings (seed + backfill defaultModel, update notifications off) ---
