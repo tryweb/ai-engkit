@@ -2,7 +2,7 @@
 # bootstrap.sh — Deterministic project knowledge base bootstrap
 #
 # Creates the docs/knowledge/ directory scaffold, README, _template,
-# and .opencode/skills/knowledge-capture.md in the given project root.
+# and .opencode/skills/knowledge-capture/SKILL.md in the given project root.
 #
 # Usage: bootstrap.sh <project-root>
 #
@@ -99,7 +99,7 @@ Promote a note here only if it is:
 
 ## Usage
 
-Use the `knowledge-capture` skill (in `.opencode/skills/knowledge-capture.md`)
+Use the `knowledge-capture` skill (in `.opencode/skills/knowledge-capture/SKILL.md`)
 to manually write and validate entries after completing relevant tasks.
 README
 
@@ -143,7 +143,7 @@ Limits, risks, or follow-up considerations.
 - tag-2
 TEMPLATE
 
-put "$ROOT/.opencode/skills/knowledge-capture.md" <<'SKILL'
+put "$ROOT/.opencode/skills/knowledge-capture/SKILL.md" <<'SKILL'
 ---
 name: knowledge-capture
 description: Manually capture reusable project knowledge into docs/knowledge markdown for Phase 1 validation.
