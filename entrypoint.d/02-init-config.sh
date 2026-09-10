@@ -402,29 +402,36 @@ if [ -d "$BAKED_SKILLS_DIR" ]; then
   done < <(find "$BAKED_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
 fi
 
-# --- Bootstrapped skill upgrade (knowledge-capture) ---
-# When the template version in baked-skills changes, auto-upgrade all projects
-# that have the skill enabled. Version is tracked in $OPCODE_CONFIG_DIR/.skill-versions.
+# --- Bootstrapped skill upgrade ---
+# When a template skill in baked-skills changes (version bump), auto-upgrade
+# all projects that have the skill enabled. Version is tracked per-skill in
+# $OPCODE_CONFIG_DIR/.skill-versions.
+#
+# Usage: upgrade_bootstrapped_skills <skill_name> <bootstrap_dir> <workspace_dir> <version_file>
+#   skill_name:     name of the skill (e.g. "knowledge-capture")
+#   bootstrap_dir:  path to the bootstrap script's parent directory
+#   workspace_dir:  path to the workspace containing projects
+#   version_file:   path to the version tracking file
 upgrade_bootstrapped_skills() {
-  local skills_root="$1"
-  local workspace_dir="$2"
-  local version_file="$3"
+  local bootstrap_skill="$1"
+  local bootstrap_dir="$2"
+  local workspace_dir="$3"
+  local version_file="$4"
 
-  local bootstrap_skill="knowledge-capture"
-  local bootstrap_script="$skills_root/enable-project-knowledge/bootstrap.sh"
+  local bootstrap_script="$bootstrap_dir/bootstrap.sh"
 
   if [ ! -f "$bootstrap_script" ]; then
     return 0
   fi
 
   local template_ver
-  template_ver="$(grep 'skill-version:' "$bootstrap_script" 2>/dev/null | head -1 | sed 's/.*skill-version:[[:space:]]*//;s/[[:space:]]*-->//')"
+  template_ver="$(grep 'skill-version:' "$bootstrap_script" 2>/dev/null | head -1 | sed 's/.*skill-version:[[:space:]]*//;s/[[:space:]]*-->//' || true)"
   if [ -z "$template_ver" ]; then
     return 0
   fi
 
   local last_ver
-  last_ver="$(grep "^${bootstrap_skill}=" "$version_file" 2>/dev/null | cut -d= -f2)"
+  last_ver="$(grep "^${bootstrap_skill}=" "$version_file" 2>/dev/null | cut -d= -f2 || true)"
   if [ "$template_ver" = "$last_ver" ]; then
     return 0
   fi
@@ -463,7 +470,20 @@ upgrade_bootstrapped_skills() {
   fi
 }
 
-upgrade_bootstrapped_skills "$SKILLS_ROOT" "$WORKSPACE_DIR" "$OPCODE_CONFIG_DIR/.skill-versions"
+# Register all bootstrappable skills for auto-upgrade.
+# Format: <skill_name> <bootstrap_dir>
+# Skills not following the bootstrap.sh + SKILL.md pattern (e.g. superpowers via symlink,
+# openspec via CLI) are not listed here.
+UPGRADEABLE_SKILLS=(
+  "knowledge-capture:$SKILLS_ROOT/enable-project-knowledge"
+  "finalize-maintenance:$SKILLS_ROOT/enable-finalize-maintenance"
+)
+
+for _entry in "${UPGRADEABLE_SKILLS[@]}"; do
+  _skill_name="${_entry%%:*}"
+  _bootstrap_dir="${_entry#*:}"
+  upgrade_bootstrapped_skills "$_skill_name" "$_bootstrap_dir" "$WORKSPACE_DIR" "$OPCODE_CONFIG_DIR/.skill-versions"
+done
 
 # --- ai-engkit environment knowledge (AGENTS.md) ---
 # Sync ai-engkit-specific sections into the user's AGENTS.md.

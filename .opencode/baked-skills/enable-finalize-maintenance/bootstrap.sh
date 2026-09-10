@@ -4,19 +4,25 @@
 # Creates docs/knowledge/maintenance/ directory, README index, _template,
 # and .opencode/skills/finalize-maintenance/SKILL.md in the given project root.
 #
-# Usage: bootstrap.sh <project-root>
+# Usage: bootstrap.sh [--force] <project-root>
 #
-# Idempotent — never overwrites an existing file.
+# Idempotent — never overwrites an existing file (unless --force).
 # Outputs a summary table matching the SKILL.md report format.
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "Usage: bootstrap.sh <project-root>" >&2
+FORCE=0
+if [ "${1:-}" = "--force" ]; then
+  FORCE=1
+  shift
+fi
+
+if [ $# -lt 1 ]; then
+  echo "Usage: bootstrap.sh [--force] <project-root>" >&2
   exit 1
 fi
 
 ROOT="$1"
-if [[ ! -d "$ROOT" ]]; then
+if [ ! -d "$ROOT" ]; then
   echo "Error: not a directory: $ROOT" >&2
   exit 1
 fi
@@ -24,9 +30,9 @@ fi
 ROOT="${ROOT%/}"
 
 # Auto-provision project knowledge base if missing
-if [[ ! -f "$ROOT/docs/knowledge/README.md" ]]; then
+if [ ! -f "$ROOT/docs/knowledge/README.md" ]; then
   ENABLE_SCRIPT="$HOME/.config/opencode/skills/enable-project-knowledge/bootstrap.sh"
-  if [[ -x "$ENABLE_SCRIPT" ]]; then
+  if [ -x "$ENABLE_SCRIPT" ]; then
     echo "Project knowledge base not found. Auto-invoking enable-project-knowledge..."
     "$ENABLE_SCRIPT" "$ROOT"
   else
@@ -40,7 +46,7 @@ SKIPPED=()
 
 mk() {
   local dir="$1"
-  if [[ -d "$dir" ]]; then
+  if [ -d "$dir" ]; then
     SKIPPED+=("$dir/")
   else
     mkdir -p "$dir"
@@ -50,9 +56,12 @@ mk() {
 
 put() {
   local dest="$1"
-  if [[ -f "$dest" ]]; then
-    SKIPPED+=("$dest")
-    return
+  local forceable="${2:-0}"
+  if [ -f "$dest" ]; then
+    if [ "$FORCE" != "1" ] || [ "$forceable" != "1" ]; then
+      SKIPPED+=("$dest")
+      return
+    fi
   fi
   mkdir -p "$(dirname "$dest")"
   cat > "$dest"
@@ -121,7 +130,8 @@ put "$ROOT/docs/knowledge/maintenance/_template.md" <<'TEMPLATE'
 {{appendix}}
 TEMPLATE
 
-put "$ROOT/.opencode/skills/finalize-maintenance/SKILL.md" <<'SKILL'
+put "$ROOT/.opencode/skills/finalize-maintenance/SKILL.md" 1 <<'SKILL'
+<!-- skill-version: 1.0.0 -->
 ---
 name: finalize-maintenance
 description: 維護完成後標準作業：撰寫維護報告、提煉經驗至知識庫、提交至 GitLab。

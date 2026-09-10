@@ -30,9 +30,12 @@ run_ensure() {
 
 run_upgrade() {
   local root="$1"
+  local skill_name="${2:-knowledge-capture}"
+  local bootstrap_dir="${3:-$root/skills/enable-project-knowledge}"
   local upgrade_source="$root/upgrade.sh"
-  sed -n '/^upgrade_bootstrapped_skills()/,/^upgrade_bootstrapped_skills "\$SKILLS_ROOT" "\$WORKSPACE_DIR" "\$OPCODE_CONFIG_DIR\/.skill-versions"$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$upgrade_source"
-  printf '%s\n' 'upgrade_bootstrapped_skills "$root/skills" "$root/workspace" "$root/.skill-versions"' >> "$upgrade_source"
+  # Extract the complete function (including closing brace), then append the call
+  sed -n '/^upgrade_bootstrapped_skills()/,/^}/p' "$ENTRYPOINT_FILE" > "$upgrade_source"
+  printf '%s\n' "upgrade_bootstrapped_skills \"$skill_name\" \"$bootstrap_dir\" \"$root/workspace\" \"$root/.skill-versions\"" >> "$upgrade_source"
   # shellcheck disable=SC1091
   source "$upgrade_source"
 }
@@ -203,8 +206,9 @@ assert_malformed() {
 make_bootstrap_script() {
   local dest="$1"
   local version="$2"
+  local skill_name="${3:-knowledge-capture}"
   mkdir -p "$(dirname "$dest")"
-  # Use a quoted heredoc to prevent variable expansion, then substitute version
+  # Use a quoted heredoc to prevent variable expansion, then substitute version and skill name
   cat > "$dest" <<'SCRIPT_TEMPLATE'
 #!/usr/bin/env bash
 FORCE=0
@@ -213,7 +217,7 @@ if [ "$1" = "--force" ]; then
   shift
 fi
 ROOT="$1"
-SKILL_DIR="$ROOT/.opencode/skills/knowledge-capture"
+SKILL_DIR="$ROOT/.opencode/skills/__SKILL_NAME__"
 SKILL_FILE="$SKILL_DIR/SKILL.md"
 if [ -f "$SKILL_FILE" ] && [ "$FORCE" != "1" ]; then
   echo "SKIPPED"
@@ -223,12 +227,12 @@ mkdir -p "$SKILL_DIR"
 cat > "$SKILL_FILE" <<'SKILL_CONTENT'
 <!-- skill-version: __VERSION__ -->
 ---
-name: knowledge-capture
+name: __SKILL_NAME__
 ---
-# Knowledge Capture v__VERSION__
+# __SKILL_NAME__ v__VERSION__
 SKILL_CONTENT
 SCRIPT_TEMPLATE
-  sed -i "s/__VERSION__/$version/g" "$dest"
+  sed -i "s/__VERSION__/$version/g; s/__SKILL_NAME__/$skill_name/g" "$dest"
   chmod +x "$dest"
 }
 
@@ -270,6 +274,34 @@ assert_skip_projects_without_skill() {
   rm -rf "$root"
 }
 
+assert_upgrade_multiple_skills_independently() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-multi"
+
+  # Setup knowledge-capture skill (v1.0.0 -> v1.1.0)
+  mkdir -p "$project_dir/.opencode/skills/knowledge-capture"
+  printf '%s\n' '<!-- skill-version: 1.0.0 -->' '---' 'name: knowledge-capture' '---' '# Old KC' > "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  make_bootstrap_script "$root/skills/enable-project-knowledge/bootstrap.sh" "1.1.0" "knowledge-capture"
+
+  # Setup finalize-maintenance skill (v1.0.0 -> v1.1.0)
+  mkdir -p "$project_dir/.opencode/skills/finalize-maintenance"
+  printf '%s\n' '<!-- skill-version: 1.0.0 -->' '---' 'name: finalize-maintenance' '---' '# Old FM' > "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md"
+  make_bootstrap_script "$root/skills/enable-finalize-maintenance/bootstrap.sh" "1.1.0" "finalize-maintenance"
+
+  # Upgrade knowledge-capture
+  run_upgrade "$root" "knowledge-capture" "$root/skills/enable-project-knowledge"
+  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -q 'knowledge-capture=1.1.0' "$root/.skill-versions"
+
+  # Upgrade finalize-maintenance
+  run_upgrade "$root" "finalize-maintenance" "$root/skills/enable-finalize-maintenance"
+  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md"
+  grep -q 'finalize-maintenance=1.1.0' "$root/.skill-versions"
+
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent() {
   local root first_hash second_hash
   root="$(mktemp -d)"
@@ -308,5 +340,6 @@ assert_malformed closing-without-open $'prefix\nmanaged\n<!-- /@ai-engkit -->\ns
 assert_upgrade_when_version_changes
 assert_skip_when_version_unchanged
 assert_skip_projects_without_skill
+assert_upgrade_multiple_skills_independently
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
