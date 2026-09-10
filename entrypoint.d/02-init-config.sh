@@ -402,6 +402,69 @@ if [ -d "$BAKED_SKILLS_DIR" ]; then
   done < <(find "$BAKED_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/SKILL.md' ';' -print | sort)
 fi
 
+# --- Bootstrapped skill upgrade (knowledge-capture) ---
+# When the template version in baked-skills changes, auto-upgrade all projects
+# that have the skill enabled. Version is tracked in $OPCODE_CONFIG_DIR/.skill-versions.
+upgrade_bootstrapped_skills() {
+  local skills_root="$1"
+  local workspace_dir="$2"
+  local version_file="$3"
+
+  local bootstrap_skill="knowledge-capture"
+  local bootstrap_script="$skills_root/enable-project-knowledge/bootstrap.sh"
+
+  if [ ! -f "$bootstrap_script" ]; then
+    return 0
+  fi
+
+  local template_ver
+  template_ver="$(grep 'skill-version:' "$bootstrap_script" 2>/dev/null | head -1 | sed 's/.*skill-version:[[:space:]]*//;s/[[:space:]]*-->//')"
+  if [ -z "$template_ver" ]; then
+    return 0
+  fi
+
+  local last_ver
+  last_ver="$(grep "^${bootstrap_skill}=" "$version_file" 2>/dev/null | cut -d= -f2)"
+  if [ "$template_ver" = "$last_ver" ]; then
+    return 0
+  fi
+
+  echo "Bootstrapped skill '$bootstrap_skill' updated ($last_ver -> $template_ver), upgrading projects..."
+  local upgraded=0
+  local failed=0
+  if [ -d "$workspace_dir" ]; then
+    for proj_dir in "$workspace_dir"/*/; do
+      [ -d "$proj_dir" ] || continue
+      if [ -f "${proj_dir}.opencode/skills/${bootstrap_skill}/SKILL.md" ]; then
+        echo "  Upgrading: $(basename "$proj_dir")"
+        if bash "$bootstrap_script" --force "$proj_dir"; then
+          upgraded=$((upgraded + 1))
+        else
+          echo "  Warning: upgrade failed for $(basename "$proj_dir")" >&2
+          failed=$((failed + 1))
+        fi
+      fi
+    done
+  fi
+
+  # Only update version marker if at least one project upgraded and none failed
+  if [ "$upgraded" -gt 0 ] && [ "$failed" -eq 0 ]; then
+    if grep -q "^${bootstrap_skill}=" "$version_file" 2>/dev/null; then
+      sed -i "s/^${bootstrap_skill}=.*/${bootstrap_skill}=${template_ver}/" "$version_file"
+    else
+      echo "${bootstrap_skill}=${template_ver}" >> "$version_file"
+    fi
+    echo "Bootstrapped skill upgrade complete: $bootstrap_skill=$template_ver ($upgraded project(s))"
+  elif [ "$failed" -gt 0 ]; then
+    echo "Bootstrapped skill upgrade incomplete: $failed project(s) failed. Will retry on next start." >&2
+    return 1
+  else
+    echo "Bootstrapped skill upgrade: no projects to upgrade"
+  fi
+}
+
+upgrade_bootstrapped_skills "$SKILLS_ROOT" "$WORKSPACE_DIR" "$OPCODE_CONFIG_DIR/.skill-versions"
+
 # --- ai-engkit environment knowledge (AGENTS.md) ---
 # Sync ai-engkit-specific sections into the user's AGENTS.md.
 # The template is delimited by <!-- @ai-engkit --> ... <!-- /@ai-engkit -->

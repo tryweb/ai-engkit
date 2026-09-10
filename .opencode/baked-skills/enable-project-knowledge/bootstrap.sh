@@ -4,14 +4,20 @@
 # Creates the docs/knowledge/ directory scaffold, README, _template,
 # and .opencode/skills/knowledge-capture/SKILL.md in the given project root.
 #
-# Usage: bootstrap.sh <project-root>
+# Usage: bootstrap.sh [--force] <project-root>
 #
-# Idempotent — never overwrites an existing file.
+# Idempotent — never overwrites an existing file (unless --force).
 # Outputs a summary table matching the SKILL.md report format.
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-  echo "Usage: bootstrap.sh <project-root>" >&2
+FORCE=0
+if [ "${1:-}" = "--force" ]; then
+  FORCE=1
+  shift
+fi
+
+if [ $# -lt 1 ]; then
+  echo "Usage: bootstrap.sh [--force] <project-root>" >&2
   exit 1
 fi
 
@@ -38,9 +44,12 @@ mk() {
 
 put() {
   local dest="$1"
-  if [[ -f "$dest" ]]; then
-    SKIPPED+=("$dest")
-    return
+  local forceable="${2:-0}"
+  if [ -f "$dest" ]; then
+    if [ "$FORCE" != "1" ] || [ "$forceable" != "1" ]; then
+      SKIPPED+=("$dest")
+      return
+    fi
   fi
   mkdir -p "$(dirname "$dest")"
   cat > "$dest"
@@ -143,7 +152,8 @@ Limits, risks, or follow-up considerations.
 - tag-2
 TEMPLATE
 
-put "$ROOT/.opencode/skills/knowledge-capture/SKILL.md" <<'SKILL'
+put "$ROOT/.opencode/skills/knowledge-capture/SKILL.md" 1 <<'SKILL'
+<!-- skill-version: 1.1.0 -->
 ---
 name: knowledge-capture
 description: Manually capture reusable project knowledge into docs/knowledge markdown for Phase 1 validation.

@@ -28,6 +28,15 @@ run_ensure() {
   LEANCTX_BASELINE_CONFIG="$root/default.toml" LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$ensure_source"
 }
 
+run_upgrade() {
+  local root="$1"
+  local upgrade_source="$root/upgrade.sh"
+  sed -n '/^upgrade_bootstrapped_skills()/,/^upgrade_bootstrapped_skills "\$SKILLS_ROOT" "\$WORKSPACE_DIR" "\$OPCODE_CONFIG_DIR\/.skill-versions"$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$upgrade_source"
+  printf '%s\n' 'upgrade_bootstrapped_skills "$root/skills" "$root/workspace" "$root/.skill-versions"' >> "$upgrade_source"
+  # shellcheck disable=SC1091
+  source "$upgrade_source"
+}
+
 assert_migration_backup_and_marker_boundary() {
   local root
   root="$(mktemp -d)"
@@ -191,6 +200,76 @@ assert_malformed() {
   rm -rf "$root"
 }
 
+make_bootstrap_script() {
+  local dest="$1"
+  local version="$2"
+  mkdir -p "$(dirname "$dest")"
+  # Use a quoted heredoc to prevent variable expansion, then substitute version
+  cat > "$dest" <<'SCRIPT_TEMPLATE'
+#!/usr/bin/env bash
+FORCE=0
+if [ "$1" = "--force" ]; then
+  FORCE=1
+  shift
+fi
+ROOT="$1"
+SKILL_DIR="$ROOT/.opencode/skills/knowledge-capture"
+SKILL_FILE="$SKILL_DIR/SKILL.md"
+if [ -f "$SKILL_FILE" ] && [ "$FORCE" != "1" ]; then
+  echo "SKIPPED"
+  exit 0
+fi
+mkdir -p "$SKILL_DIR"
+cat > "$SKILL_FILE" <<'SKILL_CONTENT'
+<!-- skill-version: __VERSION__ -->
+---
+name: knowledge-capture
+---
+# Knowledge Capture v__VERSION__
+SKILL_CONTENT
+SCRIPT_TEMPLATE
+  sed -i "s/__VERSION__/$version/g" "$dest"
+  chmod +x "$dest"
+}
+
+assert_upgrade_when_version_changes() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-a"
+  mkdir -p "$project_dir/.opencode/skills/knowledge-capture"
+  printf '%s\n' '<!-- skill-version: 1.0.0 -->' '---' 'name: knowledge-capture' '---' '# Old' > "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  make_bootstrap_script "$root/skills/enable-project-knowledge/bootstrap.sh" "1.1.0"
+  run_upgrade "$root"
+  grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -q 'Knowledge Capture v1.1.0' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -q 'knowledge-capture=1.1.0' "$root/.skill-versions"
+  rm -rf "$root"
+}
+
+assert_skip_when_version_unchanged() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-a"
+  mkdir -p "$project_dir/.opencode/skills/knowledge-capture"
+  printf '%s\n' '<!-- skill-version: 1.0.0 -->' '---' 'name: knowledge-capture' '---' '# Content' > "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  make_bootstrap_script "$root/skills/enable-project-knowledge/bootstrap.sh" "1.0.0"
+  echo "knowledge-capture=1.0.0" > "$root/.skill-versions"
+  run_upgrade "$root"
+  grep -q '# Content' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  rm -rf "$root"
+}
+
+assert_skip_projects_without_skill() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-b"
+  mkdir -p "$project_dir/.opencode/skills/other-skill"
+  make_bootstrap_script "$root/skills/enable-project-knowledge/bootstrap.sh" "1.1.0"
+  run_upgrade "$root"
+  test ! -f "$root/.skill-versions"
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent() {
   local root first_hash second_hash
   root="$(mktemp -d)"
@@ -226,4 +305,8 @@ assert_malformed closing-before-opening $'prefix\n<!-- /@ai-engkit -->\nbody\n<!
 assert_malformed duplicate-opening $'prefix\n<!-- @ai-engkit -->\nfirst\n<!-- @ai-engkit -->\nsecond\n<!-- /@ai-engkit -->\nsuffix'
 assert_malformed opening-without-close $'prefix\n<!-- @ai-engkit -->\nmanaged\nsuffix'
 assert_malformed closing-without-open $'prefix\nmanaged\n<!-- /@ai-engkit -->\nsuffix'
+assert_upgrade_when_version_changes
+assert_skip_when_version_unchanged
+assert_skip_projects_without_skill
 printf '%s\n' 'AGENTS sync tests passed'
+printf '%s\n' 'Bootstrapped skill upgrade tests passed'
