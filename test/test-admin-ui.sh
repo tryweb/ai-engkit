@@ -35,8 +35,8 @@ FAIL=0
 RED='\033[0;31m'; GREEN='\033[0;32m'; NC='\033[0m'
 pass() { PASS=$((PASS+1)); echo -e "  ${GREEN}PASS${NC} $1"; }
 fail() { FAIL=$((FAIL+1)); echo -e "  ${RED}FAIL${NC} $1"; }
-assert_contains() { local label="$1" n="$2" h="$3"; if echo "$h" | grep -qi "$n"; then pass "$label"; else fail "$label (expected '$n')"; fi; }
-assert_not_contains() { local label="$1" n="$2" h="$3"; if echo "$h" | grep -qi "$n"; then fail "$label (unexpected '$n')"; else pass "$label"; fi; }
+assert_contains() { local label="$1" n="$2" h="$3"; if grep -qi "$n" <<<"$h"; then pass "$label"; else fail "$label (expected '$n')"; fi; }
+assert_not_contains() { local label="$1" n="$2" h="$3"; if grep -qi "$n" <<<"$h"; then fail "$label (unexpected '$n')"; else pass "$label"; fi; }
 
 COMPOSE_PROJECT="$(docker inspect "$ADMIN_CONTAINER" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
 if [ -z "$COMPOSE_PROJECT" ]; then
