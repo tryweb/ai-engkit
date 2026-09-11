@@ -1,6 +1,29 @@
 ## [Unreleased]
 
 
+## [1.18.10] - 2026-09-11
+
+### Added
+- Add generic multi-skill auto-upgrade for all bootstrappable skills
+- Add auto-upgrade for bootstrapped skills on container start
+
+### Fixed
+- Persist database maintenance success state across admin container restarts
+- Avoid pipefail false failures in admin UI smoke assertions
+- Restore entrypoint test extraction and fix upgrade assertion casing
+- Use BEGIN/END markers for function extraction
+- Replace sed extraction with awk for cross-platform stability
+
+### Removed
+- Remove stale baked-skills knowledge-capture copy
+
+### Documentation
+- Capture CI smoke-test pipefail troubleshooting
+- Capture knowledge for updating AI-EngKit built-in skills
+
+### Changed
+- Update bootstrap-knowledge.sh to output folder SKILL.md format
+
 ## [1.18.9] - 2026-09-09
 
 ### Added
@@ -1987,7 +2010,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2159,3 +2182,4 @@
 [1.18.7]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...v1.18.7
 [1.18.8]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...v1.18.8
 [1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
+[1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
