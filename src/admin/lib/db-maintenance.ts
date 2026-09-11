@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
   dockerCommand,
   execInAiDev,
@@ -23,6 +24,12 @@ export const DEFAULT_CRITICAL_FLOOR_BYTES = Math.floor(1.5 * 1024 * 1024 * 1024)
 // Pre-start headroom multiplier: VACUUM needs ~1x live DB in WAL mode + backup headroom
 export const DEFAULT_HEADROOM_MULTIPLIER = 1.5;
 
+function getMaintenanceStatePath(): string {
+  return (
+    process.env.MAINTENANCE_STATE_PATH ?? "/opt/ai-engkit/admin-data/db-maintenance-state.json"
+  );
+}
+
 export type MaintenanceStep = "backup" | "quiesce" | "delete" | "reclaim" | "verify";
 export type StepStatus = "pending" | "running" | "success" | "failure";
 export type MaintenanceState = "idle" | "running" | "done" | "failed";
@@ -44,11 +51,38 @@ export interface MaintenanceStatus {
   last_error: string | null;
 }
 
+interface DbMaintenanceStateFile {
+  lastSuccessAt: string | null;
+}
+
+function loadState(): DbMaintenanceStateFile {
+  const path = getMaintenanceStatePath();
+  if (!existsSync(path)) return { lastSuccessAt: null };
+  try {
+    const text = readFileSync(path, "utf-8");
+    const parsed = JSON.parse(text) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return { lastSuccessAt: null };
+    const rec = parsed as Record<string, unknown>;
+    const lastSuccessAt = typeof rec["lastSuccessAt"] === "string" ? rec["lastSuccessAt"] : null;
+    return { lastSuccessAt };
+  } catch {
+    return { lastSuccessAt: null };
+  }
+}
+
+function saveState(state: DbMaintenanceStateFile): void {
+  const path = getMaintenanceStatePath();
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = join(dirname(path), `.db-maintenance-state.json.tmp.${Date.now()}`);
+  writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmp, path);
+}
+
 let nextEventId = 1;
 let currentState: MaintenanceState = "idle";
 let eventLog: MaintenanceEvent[] = [];
 let subscribers: ((event: MaintenanceEvent) => void)[] = [];
-let lastSuccessAt: string | null = null;
+let lastSuccessAt: string | null = loadState().lastSuccessAt;
 let lastError: string | null = null;
 
 export function getMaintenanceState(): MaintenanceState {
@@ -110,7 +144,7 @@ export function _resetMaintenanceState(): void {
   eventLog = [];
   nextEventId = 1;
   subscribers = [];
-  lastSuccessAt = null;
+  lastSuccessAt = loadState().lastSuccessAt;
   lastError = null;
 }
 
@@ -671,6 +705,14 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
     // Success terminal
     currentState = "done";
     lastSuccessAt = new Date().toISOString();
+    try {
+      saveState({ lastSuccessAt });
+    } catch (error: unknown) {
+      console.error(
+        "Failed to persist database maintenance success state:",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     lastError = null;
     return true;
   } catch (error: unknown) {

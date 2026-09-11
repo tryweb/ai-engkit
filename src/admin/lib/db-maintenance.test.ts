@@ -181,10 +181,23 @@ function baseDeps(overrides: Partial<DbMaintenanceDeps> = {}): DbMaintenanceDeps
   };
 }
 
-describe("db-maintenance state machine and concurrent lock", () => {
-  beforeEach(() => _resetMaintenanceState());
-  afterEach(() => _resetMaintenanceState());
+let testTempDir: string;
+let originalStatePath: string | undefined;
 
+beforeEach(() => {
+  testTempDir = mkdtempSync(join(tmpdir(), "db-maint-test-"));
+  originalStatePath = process.env.MAINTENANCE_STATE_PATH;
+  process.env.MAINTENANCE_STATE_PATH = join(testTempDir, "db-maintenance-state.json");
+  _resetMaintenanceState();
+});
+
+afterEach(() => {
+  process.env.MAINTENANCE_STATE_PATH = originalStatePath;
+  rmSync(testTempDir, { recursive: true, force: true });
+  _resetMaintenanceState();
+});
+
+describe("db-maintenance state machine and concurrent lock", () => {
   test("concurrent trigger returns conflict (second run throws)", async () => {
     const deps = baseDeps({
       createBackup: async () => {
@@ -242,9 +255,6 @@ describe("db-maintenance state machine and concurrent lock", () => {
 });
 
 describe("compressed backup with gzip integrity gating", () => {
-  beforeEach(() => _resetMaintenanceState());
-  afterEach(() => _resetMaintenanceState());
-
   test("corrupt/interrupted backup fails before any delete", async () => {
     let deleteCalled = false;
     const deps = baseDeps({
@@ -283,9 +293,6 @@ describe("compressed backup with gzip integrity gating", () => {
 });
 
 describe("quiesce and restart with health poll", () => {
-  beforeEach(() => _resetMaintenanceState());
-  afterEach(() => _resetMaintenanceState());
-
   test("restart failure surfaces failed state without marking success", async () => {
     const deps = baseDeps({
       startAiDev: async () => failExec("restart failed", 1),
@@ -394,7 +401,6 @@ describe("FK-correct delete with cascade deltas on fixture DB", () => {
   const nowMs = Date.now();
 
   beforeEach(() => {
-    _resetMaintenanceState();
     dir = mkdtempSync(join(tmpdir(), "db-maint-"));
     const fixture = createFixtureDb(dir, nowMs);
     dbPath = fixture.dbPath;
@@ -408,7 +414,6 @@ describe("FK-correct delete with cascade deltas on fixture DB", () => {
     try {
       rmSync(dir, { recursive: true, force: true });
     } catch {}
-    _resetMaintenanceState();
   });
 
   test("cascade deltas match pre-counts and event_sequence deleted before session", async () => {
@@ -515,10 +520,63 @@ describe("FK-correct delete with cascade deltas on fixture DB", () => {
   });
 });
 
-describe("reclaim guards: pre-start headroom and mid-run floor abort", () => {
-  beforeEach(() => _resetMaintenanceState());
-  afterEach(() => _resetMaintenanceState());
+describe("db-maintenance persistence", () => {
+  test("successful run persists lastSuccessAt", async () => {
+    const ok = await runMaintenance(baseDeps());
+    expect(ok).toBe(true);
 
+    const statePath = process.env.MAINTENANCE_STATE_PATH!;
+    expect(existsSync(statePath)).toBe(true);
+    const content = JSON.parse(readFileSync(statePath, "utf-8"));
+    expect(content.lastSuccessAt).toBeDefined();
+    expect(new Date(content.lastSuccessAt).getTime()).toBeGreaterThan(0);
+
+    expect(getMaintenanceStatus().last_success_at).toBe(content.lastSuccessAt);
+  });
+
+  test("failed run does not overwrite existing state", async () => {
+    const statePath = process.env.MAINTENANCE_STATE_PATH!;
+    const oldDate = "2023-01-01T00:00:00.000Z";
+    writeFileSync(statePath, JSON.stringify({ lastSuccessAt: oldDate }));
+    _resetMaintenanceState();
+    expect(getMaintenanceStatus().last_success_at).toBe(oldDate);
+
+    const deps = baseDeps({
+      createBackup: async () => failExec("fail", 1),
+    });
+    const ok = await runMaintenance(deps);
+    expect(ok).toBe(false);
+
+    const content = JSON.parse(readFileSync(statePath, "utf-8"));
+    expect(content.lastSuccessAt).toBe(oldDate);
+    expect(getMaintenanceStatus().last_success_at).toBe(oldDate);
+  });
+
+  test("hydration on module load (via _resetMaintenanceState)", async () => {
+    const statePath = process.env.MAINTENANCE_STATE_PATH!;
+    const someDate = "2024-05-20T12:00:00.000Z";
+    writeFileSync(statePath, JSON.stringify({ lastSuccessAt: someDate }));
+
+    _resetMaintenanceState();
+    expect(getMaintenanceStatus().last_success_at).toBe(someDate);
+  });
+
+  test("missing state file is handled safely", () => {
+    const statePath = process.env.MAINTENANCE_STATE_PATH!;
+    expect(existsSync(statePath)).toBe(false);
+    _resetMaintenanceState();
+    expect(getMaintenanceStatus().last_success_at).toBeNull();
+  });
+
+  test("malformed state file is handled safely", () => {
+    const statePath = process.env.MAINTENANCE_STATE_PATH!;
+    writeFileSync(statePath, "not json");
+    _resetMaintenanceState();
+    expect(getMaintenanceStatus().last_success_at).toBeNull();
+  });
+});
+
+describe("reclaim guards: pre-start headroom and mid-run floor abort", () => {
   test("guard refusal: insufficient free space refuses to start (no delete)", async () => {
     let deleteCalled = false;
     const deps = baseDeps({
