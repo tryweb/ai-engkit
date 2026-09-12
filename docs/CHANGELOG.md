@@ -1,6 +1,24 @@
 ## [Unreleased]
 
 
+## [1.18.11] - 2026-09-12
+
+### Added
+- Bump buildx 0.37.0 → 0.37.1, openchamber 1.23.0 → 1.23.1
+- Lock retention enable until first manual success
+- Reschedule maintenance when retention policy is saved
+- Pass allowDisabledPolicy on manual maintenance runs
+- Re-arm scheduler timer when dailyRunAt changes
+- Let manual db maintenance bypass the disabled-policy gate
+
+### Documentation
+- Capture db maintenance verification and MCP timeout knowledge
+- Drop English-only rule for new entries
+
+### Changed
+- Upgrade Docker Buildx from 0.37.0 to 0.37.1.
+- Upgrade OpenChamber from 1.23.0 to 1.23.1.
+
 ## [1.18.10] - 2026-09-11
 
 ### Added
@@ -2010,7 +2028,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2183,3 +2201,4 @@
 [1.18.8]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...v1.18.8
 [1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
 [1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
+[1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
