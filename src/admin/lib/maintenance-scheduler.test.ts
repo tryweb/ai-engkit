@@ -346,6 +346,51 @@ describe("scheduler lifecycle wired to admin server start/stop (4.2) — integra
 
     rmSync(dir, { recursive: true, force: true });
   });
+
+  test("lifecycle: reschedule re-arms timer for a new dailyRunAt after a policy change", async () => {
+    const { dir, path } = tmpStatePath();
+    const policy = { enabled: true, cutoffDays: 30, dailyRunAt: "03:00" };
+    const capturedDelays: number[] = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((fn: (...args: unknown[]) => void, ms?: number, ...rest: unknown[]) => {
+      capturedDelays.push(ms ?? 0);
+      return originalSetTimeout(fn, ms, ...rest);
+    }) as typeof setTimeout;
+
+    try {
+      const sched = createMaintenanceScheduler({
+        readRetentionPolicy: () => policy,
+        getLastSuccessAt: () => null,
+        getMaintenanceState: () => "idle",
+        getLastError: () => null,
+        runMaintenance: async () => true,
+        nowMs: () => FIXED_NOW,
+        statePath: path,
+        intervalMs: 60 * 60 * 1000,
+      });
+
+      sched.reschedule();
+      expect(capturedDelays.length).toBe(0);
+
+      sched.start();
+      expect(capturedDelays.length).toBe(1);
+      const initialDelay = nextDailyOccurrence("03:00", FIXED_NOW) - FIXED_NOW;
+      expect(capturedDelays[0]).toBe(initialDelay);
+
+      policy.dailyRunAt = "04:05";
+      sched.reschedule();
+      expect(capturedDelays.length).toBe(2);
+      const newDelay = nextDailyOccurrence("04:05", FIXED_NOW) - FIXED_NOW;
+      expect(capturedDelays[1]).toBe(newDelay);
+      expect(newDelay).not.toBe(initialDelay);
+
+      sched.stop();
+      expect(sched.isStarted()).toBe(false);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("nextDailyOccurrence wall-clock", () => {

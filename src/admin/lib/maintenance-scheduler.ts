@@ -204,6 +204,7 @@ export function getSchedulerStatus(deps: MaintenanceSchedulerDeps = {}): Schedul
 export interface MaintenanceScheduler {
   start(): void;
   stop(): void;
+  reschedule(): void;
   isStarted(): boolean;
   evaluate(): Promise<EvaluateResult>;
   getStatus(): SchedulerStatus;
@@ -288,6 +289,10 @@ export function createMaintenanceScheduler(
     started = false;
   }
 
+  function reschedule(): void {
+    if (started) scheduleNext();
+  }
+
   function isStartedFn(): boolean {
     return started;
   }
@@ -307,6 +312,7 @@ export function createMaintenanceScheduler(
   return {
     start,
     stop,
+    reschedule,
     isStarted: isStartedFn,
     evaluate: doEvaluate,
     getStatus,
