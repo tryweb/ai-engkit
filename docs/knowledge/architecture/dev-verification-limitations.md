@@ -28,6 +28,26 @@ In dev (uses `build:`), this triggers a full Dockerfile build (2-5 min).
 Even if dev rebuild succeeds, it only proves the Dockerfile builds — not that
 the pull-based upgrade flow works.
 
+### 3. DB Maintenance (Retention) Backup
+
+The db-maintenance pipeline's first step resolves a backup target. Production
+and prod-like envs bind-mount `backups` (`./backups:/opt/ai-engkit/backups:rw`),
+so the backup path resolves. Dev uses **named volumes** (DooD sibling
+deployment), so the backup step cannot resolve its target and `runMaintenance`
+fails there — **this is a pre-existing environment limitation, not a
+regression** (confirmed on the dev env during retention-gate verification).
+
+Consequences for dev verification of retention/db-maintenance:
+
+- Backup + real deletion cannot be exercised end-to-end in dev.
+- The fail-closed design means the run aborts before any deletion side effect —
+  safe, but dev can only prove UI/gate/marker mechanics (e.g. the
+  `hasPriorSuccess` lock, manual-run escape, unlock after success) with a
+  substitute marker.
+- Real backup + deletion runs must be verified on a prod-shaped env such as
+  `192.168.11.194` (host inventory:
+  `docs/knowledge/troubleshooting/admin-restart-self-destruct.md`).
+
 ### 2. Environment Variable Application
 
 Production: `docker compose up -d --force-recreate ai-dev` re-reads `.env` → new vars apply
@@ -66,6 +86,8 @@ We do NOT modify code to make these features verifiable in dev.
 | Upgrade pipeline | ❌ Not meaningful (rebuilds from source) | ✅ Full pull → recreate flow |
 | SSE progress stream | ✅ Can test | ✅ Same |
 | backup / merge_env steps | ✅ Can test (pure logic) | ✅ Same |
+| DB maintenance backup + deletion | ❌ Backup step fails (named volume) | ✅ Full run (verify on prod-like env, e.g. .194) |
+| Retention gate UI (lock/unlock) | ✅ Can test (substitute marker) | ✅ Same |
 
 ## Related Files
 
@@ -77,4 +99,4 @@ We do NOT modify code to make these features verifiable in dev.
 
 ## Tags
 
-`#dev-vs-prod` `#verification` `#testing` `#dood` `#upgrade` `#env-editor`
+`#dev-vs-prod` `#verification` `#testing` `#dood` `#upgrade` `#env-editor` `#db-maintenance`
