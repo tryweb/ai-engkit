@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { createDbMaintenanceRoutes } from "./db-maintenance";
+import type { DbMaintenanceDeps } from "../lib/db-maintenance";
 import { nextDailyOccurrence } from "../lib/maintenance-scheduler";
 
 describe("db-maintenance schedule route", () => {
@@ -157,5 +158,37 @@ describe("db-maintenance schedule route", () => {
     const res = await app.request("http://localhost/api/admin/db-maintenance/schedule");
     const body = (await res.json()) as { nextEvaluationAt: string | null };
     expect(body.nextEvaluationAt).toBe(new Date(nextDailyOccurrence("22:15", nowMs)).toISOString());
+  });
+});
+
+describe("db-maintenance run route", () => {
+  test("POST /run passes allowDisabledPolicy so manual runs bypass the disabled-policy gate", async () => {
+    let captured: DbMaintenanceDeps | undefined;
+    const app = createDbMaintenanceRoutes({
+      getState: () => "idle" as const,
+      getStatus: () => ({
+        state: "idle" as const,
+        events: [],
+        current_step: "" as const,
+        progress_pct: 0,
+        last_success_at: null,
+        last_error: null,
+      }),
+      getEventLog: () => [],
+      subscribe: () => () => {},
+      runMaintenance: (async (deps: DbMaintenanceDeps) => {
+        captured = deps;
+        return true;
+      }) as unknown as (deps?: DbMaintenanceDeps) => Promise<boolean>,
+      getDeleteCounts: async () => ({ sessions: 0, eventSequences: 0 }),
+      readRetentionPolicy: () => ({ enabled: false, cutoffDays: 30, dailyRunAt: "03:00" }),
+    });
+    const res = await app.request("http://localhost/api/admin/db-maintenance/run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    });
+    expect(res.status).toBe(202);
+    expect(captured?.allowDisabledPolicy).toBe(true);
   });
 });

@@ -188,7 +188,7 @@ export function createDbMaintenanceRoutes(options: DbMaintenanceRoutesDeps = {})
     }
 
     startInFlight = true;
-    const runDeps = deps.maintenanceDeps ?? {};
+    const runDeps = { ...(deps.maintenanceDeps ?? {}), allowDisabledPolicy: true };
     void deps.runMaintenance(runDeps).catch(() => {}).finally(() => {
       startInFlight = false;
     });
