@@ -9,6 +9,7 @@ import { RetentionPolicyPage } from "../views/retention-policy";
 
 export interface RetentionPolicyRoutesOptions {
   policyPath?: string;
+  onPolicySaved?: () => void;
 }
 
 export function createRetentionPolicyRoutes(options: RetentionPolicyRoutesOptions = {}) {
@@ -52,6 +53,8 @@ export function createRetentionPolicyRoutes(options: RetentionPolicyRoutesOption
       return c.json({ error: message }, 500);
     }
 
+    options.onPolicySaved?.();
+
     return c.json({ ok: true, ...result.value });
   });
 
@@ -59,5 +62,3 @@ export function createRetentionPolicyRoutes(options: RetentionPolicyRoutesOption
 
   return retention;
 }
-
-export default createRetentionPolicyRoutes();

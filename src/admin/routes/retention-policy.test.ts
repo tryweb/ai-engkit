@@ -188,6 +188,42 @@ describe("Retention policy routes", () => {
     }
   });
 
+  test("invokes onPolicySaved after a successful PUT", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "retention-routes-"));
+    const policyPath = join(directory, "retention-policy.json");
+    let savedCalls = 0;
+    const app = createRetentionPolicyRoutes({ policyPath, onPolicySaved: () => { savedCalls++; } });
+    try {
+      const response = await app.request("http://localhost/api/admin/retention-policy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true, cutoffDays: 30, dailyRunAt: "12:35" }),
+      });
+      expect(response.status).toBe(200);
+      expect(savedCalls).toBe(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("does not invoke onPolicySaved when validation fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "retention-routes-"));
+    const policyPath = join(directory, "retention-policy.json");
+    let savedCalls = 0;
+    const app = createRetentionPolicyRoutes({ policyPath, onPolicySaved: () => { savedCalls++; } });
+    try {
+      const response = await app.request("http://localhost/api/admin/retention-policy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true, cutoffDays: 0, dailyRunAt: "12:35" }),
+      });
+      expect(response.status).toBe(400);
+      expect(savedCalls).toBe(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("serves retention policy page with time input and server time hint", async () => {
     const directory = await mkdtemp(join(tmpdir(), "retention-routes-"));
     const policyPath = join(directory, "retention-policy.json");
@@ -250,7 +286,8 @@ describe("Retention policy routes", () => {
       expect(html).toContain('EventSource');
       expect(html).toContain('confirm');
       expect(html).toContain('hard-deleted');
-      expect(html).toContain('Enable the policy first');
+      expect(html).toContain('id="enable-gate-hint"');
+      expect(html).toContain('Requires one successful manual run');
       expect(html).toContain('already in progress');
       expect(html).toContain('status-pill--success');
       expect(html).toContain('status-pill--danger');
