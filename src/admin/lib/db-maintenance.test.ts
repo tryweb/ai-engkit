@@ -670,6 +670,17 @@ describe("reclaim guards: pre-start headroom and mid-run floor abort", () => {
     expect(getMaintenanceState()).toBe("failed");
     expect(getMaintenanceEventLog().some((e) => e.message.includes("Retention policy is disabled"))).toBe(true);
   });
+
+  test("manual run with allowDisabledPolicy bypasses the disabled-policy gate", async () => {
+    const deps = baseDeps({
+      readRetentionPolicy: () => ({ enabled: false, cutoffDays: 30, dailyRunAt: "03:00" }),
+      allowDisabledPolicy: true,
+    });
+    const ok = await runMaintenance(deps);
+    expect(ok).toBe(true);
+    expect(getMaintenanceState()).toBe("done");
+    expect(getMaintenanceEventLog().some((e) => e.message.includes("Retention policy is disabled"))).toBe(false);
+  });
 });
 
 describe("route layer concurrent trigger conflict", () => {

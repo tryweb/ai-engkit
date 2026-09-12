@@ -437,6 +437,9 @@ export interface DbMaintenanceDeps {
   criticalFloorBytes?: number;
   nowMs?: () => number;
   getHostBackupPath?: (containerPath: string) => Promise<string | null>;
+  // Explicit manual runs may proceed while the policy is disabled — the
+  // scheduled path is still gated by evaluateMaintenanceScheduler.
+  allowDisabledPolicy?: boolean;
 }
 
 /**
@@ -505,6 +508,7 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
   const headroomMultiplier = deps.headroomMultiplier ?? DEFAULT_HEADROOM_MULTIPLIER;
   const criticalFloorBytes = deps.criticalFloorBytes ?? DEFAULT_CRITICAL_FLOOR_BYTES;
   const nowMs = deps.nowMs ?? Date.now;
+  const allowDisabledPolicy = deps.allowDisabledPolicy ?? false;
 
   currentState = "running";
   eventLog = [];
@@ -522,9 +526,9 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
   };
 
   try {
-    // --- Guard: retention policy enabled ---
+    // --- Guard: retention policy enabled (manual runs may opt out) ---
     const policy = readPolicy();
-    if (!policy.enabled) {
+    if (!policy.enabled && !allowDisabledPolicy) {
       return failStep("backup", "Retention policy is disabled — enable it before running maintenance");
     }
 
