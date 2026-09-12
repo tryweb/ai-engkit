@@ -21,6 +21,7 @@ export function RetentionPolicyPage() {
             <input id="retention-enabled" type="checkbox" />
             <span>Enable retention policy</span>
           </label>
+          <p id="enable-gate-hint" class="text-sm text-muted" role="status" style="display:none;"></p>
           <label class="flex items-center gap-2 retention-field">
             <span class="retention-label">Inactivity cutoff (days)</span>
             <input id="retention-cutoff" type="number" min="1" max="365" step="1" style="max-width:120px;" />
@@ -73,8 +74,9 @@ export function RetentionPolicyPage() {
           const runStatus = document.getElementById("run-status");
           const runProgress = document.getElementById("run-progress");
           const runResult = document.getElementById("run-result");
+          const enableGateHint = document.getElementById("enable-gate-hint");
           let runInProgress = false;
-          let runPolicyEnabled = false;
+          let hasPriorSuccess = false;
           let runEventSource = null;
           let runLastEventId = 0;
           let runTerminalReached = false;
@@ -102,6 +104,7 @@ export function RetentionPolicyPage() {
                 retentionDailyRunAt.value = typeof data.dailyRunAt === "string" ? data.dailyRunAt : "03:00";
               }
               retentionButton.disabled = false;
+              applyEnableGate();
             } catch (error) {
               retentionStatus.textContent = error instanceof Error ? error.message : "Failed to load retention policy";
             }
@@ -187,6 +190,7 @@ export function RetentionPolicyPage() {
               } catch { policyEnabled = null; }
               if (!schedRes.ok) throw new Error(sched.error || "Failed to load maintenance schedule");
               if (!maintRes.ok) throw new Error(maint.error || "Failed to load maintenance status");
+              hasPriorSuccess = typeof maint.last_success_at === "string" && maint.last_success_at.length > 0;
               const isRunning = sched.isStarted === true;
               const pillClass = policyEnabled === false || !isRunning ? "status-pill--neutral" : "status-pill--success";
               const pillText = policyEnabled === false ? "Paused" : (isRunning ? "Running" : "Stopped");
@@ -194,6 +198,8 @@ export function RetentionPolicyPage() {
               let nextRunHtml;
               if (policyEnabled === false) {
                 nextRunHtml = '<span class="text-muted">Paused — policy disabled</span>';
+              } else if (!hasPriorSuccess) {
+                nextRunHtml = '<span class="text-muted">Paused — awaiting first successful manual run</span>';
               } else if (sched.nextEvaluationAt) {
                 nextRunHtml = formatMaintTs(sched.nextEvaluationAt) + ' <span class="text-muted" style="font-size:var(--text-xs);">(server time)</span>';
               } else {
@@ -223,13 +229,25 @@ export function RetentionPolicyPage() {
                 '</dl>' +
                 '<dl class="retention-db__metrics"><div class="retention-db__field"><dt class="retention-db__label">Last maintenance outcome</dt><dd id="maint-last-outcome" class="retention-db__value">' + outcomeHtml + '</dd></div></dl>' +
                 '</div>';
+              applyEnableGate();
             } catch (error) {
               maintDetail.textContent = error instanceof Error ? error.message : "Failed to load maintenance status";
             }
           }
 
+          function applyEnableGate() {
+            const locked = !hasPriorSuccess && !retentionToggle.checked;
+            retentionToggle.disabled = locked;
+            if (enableGateHint) {
+              enableGateHint.style.display = locked ? "block" : "none";
+              enableGateHint.textContent = locked
+                ? "Requires one successful manual run before enabling — run maintenance now once to unlock."
+                : "";
+            }
+          }
+
           function updateRunButtonState() {
-            const shouldDisable = runInProgress || !runConfirm.checked || !runPolicyEnabled;
+            const shouldDisable = runInProgress || !runConfirm.checked;
             runButton.disabled = shouldDisable;
           }
 
@@ -238,21 +256,14 @@ export function RetentionPolicyPage() {
               const response = await fetch("/api/admin/db-maintenance/counts");
               const data = await response.json();
               if (!response.ok) throw new Error(data.error || data.detail || "Failed to load delete counts");
-              runPolicyEnabled = data.enabled === true;
-              if (!runPolicyEnabled) {
-                runCounts.innerHTML = '<span class="text-muted">Enable the policy first</span>';
-              } else {
-                const sessions = typeof data.sessions === "number" ? data.sessions.toLocaleString("en-US") : "—";
-                const seqs = typeof data.eventSequences === "number" ? data.eventSequences.toLocaleString("en-US") : "—";
-                const days = typeof data.cutoffDays === "number" ? String(data.cutoffDays) : "—";
-                runCounts.textContent = sessions + " sessions, " + seqs + " event sequences older than " + days + " days will be hard-deleted";
-              }
+              const sessions = typeof data.sessions === "number" ? data.sessions.toLocaleString("en-US") : "—";
+              const seqs = typeof data.eventSequences === "number" ? data.eventSequences.toLocaleString("en-US") : "—";
+              const days = typeof data.cutoffDays === "number" ? String(data.cutoffDays) : "—";
+              runCounts.textContent = sessions + " sessions, " + seqs + " event sequences older than " + days + " days will be hard-deleted";
               runCounts.classList.remove("text-muted");
-              if (!runPolicyEnabled) runCounts.classList.add("text-muted");
             } catch (error) {
               runCounts.textContent = error instanceof Error ? error.message : "Failed to load delete counts";
               runCounts.classList.add("text-muted");
-              runPolicyEnabled = false;
             }
             updateRunButtonState();
           }
