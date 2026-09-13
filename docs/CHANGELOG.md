@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [1.18.12] - 2026-09-13
+
+### Changed
+- Update the Ubuntu 24.04 APT package snapshot (3 packages have updates: libc6 (2.39-0ubuntu8.8),base-files (13ubuntu10.4),libc-bin (2.39-0ubuntu8.8)).
 
 ## [1.18.11] - 2026-09-12
 
@@ -2024,11 +2028,13 @@
 
 ### Changed
 - Improve the `README.md` document structure.
+
+
 ---
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2202,3 +2208,4 @@
 [1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
 [1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
 [1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
+[1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
