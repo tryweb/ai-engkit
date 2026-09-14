@@ -344,7 +344,35 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Same guard as dependency-update.yml's scheduled auto-release path:
+      # auto-tagging main tip would bundle unreleased human commits
+      # (feat/fix/style/ci/...) into a dependency-only patch release.
+      - name: Check unreleased commits
+        id: gate
+        run: |
+          set -euo pipefail
+          LAST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+
+          if [[ -z "$LAST_TAG" ]]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No stable release tag found; auto-tag blocked pending a manual release"
+            exit 0
+          fi
+
+          SIGNIFICANT_LIST=$(git log "${LAST_TAG}..HEAD" --no-merges --format='%h %s' \
+            | grep -vE '^[0-9a-f]+ (chore|docs)(\(|:)' || true)
+
+          if [[ -z "$SIGNIFICANT_LIST" ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No significant unreleased commits since ${LAST_TAG}"
+          else
+            COUNT=$(printf '%s\n' "$SIGNIFICANT_LIST" | wc -l | tr -d ' ')
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::$COUNT significant unreleased commit(s) since ${LAST_TAG}; auto-tag skipped - cut a manual release instead"
+          fi
+
       - name: Calculate PATCH version
+        if: steps.gate.outputs.allowed == 'true'
         id: version
         run: |
           set -euo pipefail
@@ -370,6 +398,7 @@ jobs:
           echo "::notice::Version bump: $LATEST_TAG -> ${NEXT_VERSION}"
 
       - name: Create and push tag
+        if: steps.gate.outputs.allowed == 'true'
         env:
           GIT_TERMINAL_PROMPT: "0"
         run: |
@@ -382,15 +411,18 @@ jobs:
           echo "::notice::Created and pushed tag: $NEXT_VERSION"
 
       - name: Download image artifact
+        if: steps.gate.outputs.allowed == 'true'
         uses: actions/download-artifact@v8
         with:
           name: image
           path: /tmp
 
       - name: Load image
+        if: steps.gate.outputs.allowed == 'true'
         run: docker load -i /tmp/image.tar
 
       - name: Inject version into image
+        if: steps.gate.outputs.allowed == 'true'
         run: |
           VERSION="${{ steps.version.outputs.next-version }}"
           printf '%s' "${VERSION}" > /tmp/ai-engkit-version
@@ -401,6 +433,7 @@ jobs:
           echo "::notice::Injected version: ${VERSION}"
 
       - name: Login to GHCR
+        if: steps.gate.outputs.allowed == 'true'
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -408,6 +441,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag and push image
+        if: steps.gate.outputs.allowed == 'true'
         run: |
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
           NEXT_VERSION="${{ steps.version.outputs.next-version }}"
@@ -417,6 +451,7 @@ jobs:
           echo "::notice::Pushed image: ${IMAGE}:${NEXT_VERSION}"
 
       - name: Generate Release Body
+        if: steps.gate.outputs.allowed == 'true'
         id: body
         env:
           HIGH_COUNT: ${{ needs.scan.outputs.high-count }}
@@ -429,6 +464,7 @@ jobs:
             "${{ needs.scan.outputs.critical-count }}"
 
       - name: Create Release
+        if: steps.gate.outputs.allowed == 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.next-version }}

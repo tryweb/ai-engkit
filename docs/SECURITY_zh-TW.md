@@ -280,7 +280,7 @@ sequenceDiagram
 
 ### 自動化更新流程
 
-版本監控與升級由 `.github/workflows/dependency-update.yml` **每日 20:00 UTC** 自動執行：
+版本監控與升級由 `.github/workflows/dependency-update.yml` **每週日 21:30 UTC** 自動執行：
 
 1. 對比 `Dockerfile` pinned 與上游 GitHub Release / npm registry
 2. 對比 `lean-ctx` snapshot 與當前 latest
@@ -289,6 +289,7 @@ sequenceDiagram
 5. 依決策樹自動動作：
    - Dockerfile 變更 + 全過 → 開 PR（人工 review 破壞性變更）
    - 只 latest / apt 變更 + 全過 → 自動 release（push GHCR + tag + GitHub Release）
+   - 自上次 release 以來存在未釋出的非 chore/docs commit → 跳過 auto-release 並開 issue（避免把人類 commit 打包成 dependency-only patch release）
    - 任一失敗 → 開 issue
 
 > Grype 結果同時上傳到 GitHub Security tab，與 dependency graph 整合追蹤。

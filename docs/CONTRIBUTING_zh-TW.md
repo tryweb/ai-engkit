@@ -396,7 +396,7 @@ skill 會：
 
 #### 例外：Dockerfile pinned 版本
 
-`Dockerfile` 中的 `OPENCODE_VERSION`、`OPENCHAMBER_VERSION` 等 ARG 升版**不需要**手動發布 tag — `.github/workflows/dependency-update.yml` 每日 20:00 UTC 自動偵測上游版本，自動跑 build / test / Grype scan，通過後自動開 PR（破壞性變更）或 auto-release（patch 安全更新）。
+`Dockerfile` 中的 `OPENCODE_VERSION`、`OPENCHAMBER_VERSION` 等 ARG 升版**不需要**手動發布 tag — `.github/workflows/dependency-update.yml` 每週日 21:30 UTC 自動偵測上游版本，自動跑 build / test / Grype scan，通過後自動開 PR（破壞性變更）或 auto-release（patch 安全更新）。auto-release 前會檢查自上次 stable release 以來是否存在未釋出的 `feat`/`fix`/`ci` 等 commit：若存在則**跳過** auto-release 並開 issue，改以 `/release` skill 手動發布，避免依賴更新把人類 commit 一起打包成 dependency-only patch release。
 
 ## 授權
 

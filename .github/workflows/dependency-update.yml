@@ -1373,7 +1373,10 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'Dependency update check - auto-release blocked',
+              # Title deliberately avoids the 'Dependency update check' prefix so the
+              # failure-issue dedup (includes('Dependency update check')) above never
+              # matches this gate issue and suppresses a real failure issue.
+              title: 'Auto-release blocked - significant unreleased commits',
               body: [
                 '## Auto-Release Blocked\n',
                 'The scheduled auto-release was **skipped** to avoid packaging unreleased human commits into a dependency-only patch release.\n',
@@ -1386,7 +1389,7 @@ jobs:
                 '### Why This Matters',
                 'Auto-releases tag `vX.Y.Z` directly against the tip of `main` and generate dependency-only release notes. Any `feat`/`fix`/`style`/`ci` commit merged since the last release would be silently shipped and vanish from release notes and the semantic version history.\n',
                 '### Action Required',
-                'Run the manual release flow (the `release` skill) to cut a proper version, or merge the pending commits through the normal release process. Once no significant unreleased commits remain, a later scheduled run will auto-release normally.\n',
+                'Run the manual release flow (the `release` skill) to cut a proper version, or merge the pending commits through the normal release process. Once the significant commits are released, auto-release resumes on a later scheduled run that detects new upstream updates (blocked runs still upload `version-snapshot.json`, so runs seeing no new changes skip the update path entirely).\n',
                 '### Pending Dependency Updates',
                 '**Latest tracked packages:**',
                 '```json',

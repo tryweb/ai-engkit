@@ -75,7 +75,7 @@ requires, read from the `packageManager` field (`"bun@X.Y.Z"`) of
 - Local: `check-versions.sh` derives the target from the `OPENCHAMBER_VERSION`
   pinned in `Dockerfile`, so the Bun requirement must be rechecked whenever
   OpenChamber changes.
-- CI: `dependency-update.yml` expects exactly 13 pinned ARGs and derives the
+- CI: `dependency-update.yml` expects exactly 15 pinned ARGs and derives the
   Bun target from the candidate OpenChamber version when both pins update in
   the same run (pinned version as fallback).
 - Drift is exact-equality: pinned ahead OR behind the required version both
@@ -89,8 +89,8 @@ tags a dependency-only patch release directly against the tip of `main`
 (no PR). Because it tags HEAD as-is, any human commit merged since the last
 release would be silently bundled into that "dependency updates" release —
 shipped with dependency-only release notes and missing from the semantic
-version history (v1.18.6 packaged 3 such commits: feat(admin) LSP grouping,
-style(admin) tables, ci ripgrep).
+version history (v1.18.6 packaged 4 such commits: feat(admin) LSP grouping,
+style(admin) responsive tables, fix(admin) LSP block-change count, ci ripgrep).
 
 Guard added 2026-09 (`Check unreleased commits` step): before the auto-release
 decision, the workflow walks `git log <last-stable-tag>..HEAD --no-merges` and
@@ -101,6 +101,17 @@ unreleased commits so a human cuts a proper release (the `release` skill).
 Only when the range is exclusively chore/docs (or empty) does auto-release fire.
 No stable tag at all also blocks auto-release (conservative: whole history is
 unreleased).
+
+The same guard covers the second auto-release producer: `ci.yml`'s `auto-tag`
+job (which tags `main` after a `chore: update Dockerfile pinned versions` PR
+merge) runs an identical `Check unreleased commits` gate and skips tagging
+when significant commits exist, posting a warning annotation instead.
+Promotion (`promote.yml`) stays manual and is unaffected — a blocked
+auto-release only delays when a promotable tag exists.
+
+Note on resumption: a blocked run still uploads `version-snapshot.json`, so
+auto-release resumes not on "no significant commits remain" but on a later
+scheduled run that detects new upstream updates.
 
 #### OMO schema reference sync rule
 
@@ -192,7 +203,7 @@ Two gaps closed:
   matches runtime pin" assertion; CI workflow YAML parsed cleanly with the new
   schema-sync step.
 - `.github/workflows/dependency-update.yml` parsed successfully after its pin
-  count changed from 11 to 12; the workflow now expects 13 pinned ARGs with
+  count changed from 11 to 12; the workflow now expects 15 pinned ARGs with
   `BUN_VERSION` registered.
 - Release CHANGELOG script tested: creates version section, inserts
   `### Changed` block, rebuilds links correctly.
