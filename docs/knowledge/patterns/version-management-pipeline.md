@@ -82,6 +82,26 @@ requires, read from the `packageManager` field (`"bun@X.Y.Z"`) of
   count as outdated, because the image must ship the Bun version OpenChamber
   declares.
 
+#### Auto-release gate
+
+`dependency-update.yml` Job 4 (handle-updates) has an auto-release path that
+tags a dependency-only patch release directly against the tip of `main`
+(no PR). Because it tags HEAD as-is, any human commit merged since the last
+release would be silently bundled into that "dependency updates" release —
+shipped with dependency-only release notes and missing from the semantic
+version history (v1.18.6 packaged 3 such commits: feat(admin) LSP grouping,
+style(admin) tables, ci ripgrep).
+
+Guard added 2026-09 (`Check unreleased commits` step): before the auto-release
+decision, the workflow walks `git log <last-stable-tag>..HEAD --no-merges` and
+drops only `chore:` / `docs:` subjects. If any significant commit remains
+(feat/fix/style/ci/build/...), the decision routes to a new
+`release-gate-issue` action: auto-release is skipped and an issue lists the
+unreleased commits so a human cuts a proper release (the `release` skill).
+Only when the range is exclusively chore/docs (or empty) does auto-release fire.
+No stable tag at all also blocks auto-release (conservative: whole history is
+unreleased).
+
 #### OMO schema reference sync rule
 
 `.opencode/omo.jsonc.default` pins its `$schema` URL to a versioned OMO tag
