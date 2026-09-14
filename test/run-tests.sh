@@ -628,7 +628,7 @@ fi
 assert_eq "OMO plugin declaration matches runtime pin" "oh-my-opencode-slim@$OMO_VERSION" "$OMO_PLUGIN"
 
 # 8.3.3 All slim agents present (preset agents + top-level overrides)
-OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '((.presets.opencode-go // {} | keys) + (.agents // {} | keys) | unique | join(","))' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
+OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '((.presets["opencode-go"] // {} | keys) + (.agents // {} | keys) | unique | join(","))' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
 assert_contains "orchestrator agent defined" 'orchestrator' "$OMO_AGENTS"
 assert_contains "explorer agent defined"    'explorer'      "$OMO_AGENTS"
 assert_contains "librarian agent defined"   'librarian'     "$OMO_AGENTS"

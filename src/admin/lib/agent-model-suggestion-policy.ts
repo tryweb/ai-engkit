@@ -75,8 +75,9 @@ function capReason(s: string): string {
 }
 
 export function category(agent: string): "reasoning" | "exploration" | "general" {
-  if (["plan", "oracle", "metis", "momus"].includes(agent)) return "reasoning";
-  if (["explore", "librarian"].includes(agent)) return "exploration";
+  const role = roleForAgent(agent);
+  if (role === "planning" || role === "deep-reasoning" || role === "review") return "reasoning";
+  if (role === "exploration" || role === "research") return "exploration";
   return "general";
 }
 
@@ -480,7 +481,7 @@ export function suggestForMode(input: PolicyInput): PolicyOutput {
       winner.providerId,
       (providerReuse.get(winner.providerId) ?? 0) + 1,
     );
-    if (agent === "sisyphus-junior") codingModel = winner.reference;
+    if (profile.role === "coding") codingModel = winner.reference;
   }
   return {
     mode: input.mode,

@@ -62,10 +62,10 @@ describe("bounded diversity - non-tied winner remains unchanged", () => {
       catalog,
       metadata,
       capabilities: caps(catalog),
-      agents: ["sisyphus-junior", "general"],
+      agents: ["fixer", "general"],
     });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/cheap");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/cheap");
     expect(out.suggestions.get("general")?.model).toBe("p/cheap");
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(false);
     expect(out.suggestions.get("general")?.reason.includes("cross-review")).toBe(false);
@@ -82,10 +82,10 @@ describe("bounded diversity - non-tied winner remains unchanged", () => {
       catalog,
       metadata,
       capabilities: caps(catalog),
-      agents: ["sisyphus-junior", "general"],
+      agents: ["fixer", "general"],
     });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/high");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/high");
     expect(out.suggestions.get("general")?.model).toBe("p/high");
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(false);
   });
@@ -98,9 +98,9 @@ describe("bounded diversity - tied candidates diversify deterministically", () =
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1 })],
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/a");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/a");
     expect(out.suggestions.get("general")?.model).toBe("p/b");
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(true);
     expect((out.suggestions.get("general")?.reason.length ?? 0) <= 200).toBe(true);
@@ -112,9 +112,9 @@ describe("bounded diversity - tied candidates diversify deterministically", () =
       ["p/a", meta("p/a", { contextLimit: 100_000, outputLimit: 8_192 })],
       ["p/b", meta("p/b", { contextLimit: 100_000, outputLimit: 8_192 })],
     ]);
-    const input = baseInput({ mode: "performance", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const input = baseInput({ mode: "performance", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/a");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/a");
     expect(out.suggestions.get("general")?.model).toBe("p/b");
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(true);
   });
@@ -125,9 +125,9 @@ describe("bounded diversity - tied candidates diversify deterministically", () =
       ["p/a", meta("p/a", { inputPrice: 0, outputPrice: 0 })],
       ["p/b", meta("p/b", { inputPrice: 0, outputPrice: 0 })],
     ]);
-    const input = baseInput({ mode: "free", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const input = baseInput({ mode: "free", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/a");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/a");
     expect(out.suggestions.get("general")?.model).toBe("p/b");
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(true);
   });
@@ -141,11 +141,11 @@ describe("bounded diversity - reuse count and provider count ordering", () => {
       ["p1/b", meta("p1/b", { inputPrice: 1, outputPrice: 1 })],
       ["p2/c", meta("p2/c", { inputPrice: 1, outputPrice: 1 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general", "explore"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general", "explorer"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p1/a");
+    expect(out.suggestions.get("fixer")?.model).toBe("p1/a");
     expect(out.suggestions.get("general")?.model).toBe("p2/c");
-    expect(out.suggestions.get("explore")?.model).toBe("p1/b");
+    expect(out.suggestions.get("explorer")?.model).toBe("p1/b");
   });
 
   test("model reuse ordering: least reused model wins before provider fallback", () => {
@@ -155,11 +155,11 @@ describe("bounded diversity - reuse count and provider count ordering", () => {
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
       ["p/c", meta("p/c", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general", "explore", "plan"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general", "explorer", "plan"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/a");
+    expect(out.suggestions.get("fixer")?.model).toBe("p/a");
     expect(out.suggestions.get("general")?.model).toBe("p/b");
-    expect(out.suggestions.get("explore")?.model).toBe("p/c");
+    expect(out.suggestions.get("explorer")?.model).toBe("p/c");
     expect(out.suggestions.get("plan")?.model).toBe("p/a");
   });
 });
@@ -171,12 +171,12 @@ describe("bounded diversity - high-risk cross-review separation", () => {
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "momus"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "councillor"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/a");
-    expect(out.suggestions.get("momus")?.model).toBe("p/b");
-    expect(out.suggestions.get("momus")?.reason.includes("cross-review")).toBe(true);
-    expect((out.suggestions.get("momus")?.reason.length ?? 0) <= 200).toBe(true);
+    expect(out.suggestions.get("fixer")?.model).toBe("p/a");
+    expect(out.suggestions.get("councillor")?.model).toBe("p/b");
+    expect(out.suggestions.get("councillor")?.reason.includes("cross-review")).toBe(true);
+    expect((out.suggestions.get("councillor")?.reason.length ?? 0) <= 200).toBe(true);
   });
 
   test("deep-reasoning after coding cross-review", () => {
@@ -185,7 +185,7 @@ describe("bounded diversity - high-risk cross-review separation", () => {
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "oracle"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "oracle"] });
     const out = suggestForMode(input);
     expect(out.suggestions.get("oracle")?.model).toBe("p/b");
     expect(out.suggestions.get("oracle")?.reason.includes("cross-review")).toBe(true);
@@ -197,23 +197,23 @@ describe("bounded diversity - high-risk cross-review separation", () => {
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["momus", "sisyphus-junior"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["councillor", "fixer"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("momus")?.model).toBe("p/a");
-    expect(out.suggestions.get("momus")?.reason.includes("cross-review")).toBe(false);
-    expect(out.suggestions.get("momus")?.reason.includes("diversity")).toBe(false);
-    expect(out.suggestions.get("sisyphus-junior")?.model).toBe("p/b");
-    expect(out.suggestions.get("sisyphus-junior")?.reason.includes("diversity")).toBe(true);
-    expect(out.suggestions.get("sisyphus-junior")?.reason.includes("cross-review")).toBe(false);
+    expect(out.suggestions.get("councillor")?.model).toBe("p/a");
+    expect(out.suggestions.get("councillor")?.reason.includes("cross-review")).toBe(false);
+    expect(out.suggestions.get("councillor")?.reason.includes("diversity")).toBe(false);
+    expect(out.suggestions.get("fixer")?.model).toBe("p/b");
+    expect(out.suggestions.get("fixer")?.reason.includes("diversity")).toBe(true);
+    expect(out.suggestions.get("fixer")?.reason.includes("cross-review")).toBe(false);
   });
 
   test("high-risk with only one tied candidate equal to coding model falls back to same model", () => {
     const catalog = ["p/a"];
     const metadata = new Map<string, NormalizedModelMetadata>([["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })]]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "momus"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "councillor"] });
     const out = suggestForMode(input);
-    expect(out.suggestions.get("momus")?.model).toBe("p/a");
-    expect(out.suggestions.get("momus")?.reason.includes("diversity")).toBe(false);
+    expect(out.suggestions.get("councillor")?.model).toBe("p/a");
+    expect(out.suggestions.get("councillor")?.reason.includes("diversity")).toBe(false);
   });
 });
 
@@ -221,9 +221,9 @@ describe("bounded diversity - single candidate fallback", () => {
   test("single candidate selected without diversity marker", () => {
     const catalog = ["p/shared"];
     const metadata = new Map<string, NormalizedModelMetadata>([["p/shared", meta("p/shared", { inputPrice: 1, outputPrice: 1, contextLimit: 256_000 })]]);
-    const input = baseInput({ mode: "performance", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general", "oracle"] });
+    const input = baseInput({ mode: "performance", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general", "oracle"] });
     const out = suggestForMode(input);
-    for (const agent of ["sisyphus-junior", "general", "oracle"]) {
+    for (const agent of ["fixer", "general", "oracle"]) {
       expect(out.suggestions.get(agent)?.model).toBe("p/shared");
       expect(out.suggestions.get(agent)?.reason.includes("diversity")).toBe(false);
       expect(out.suggestions.get(agent)?.reason.includes("cross-review")).toBe(false);
@@ -239,7 +239,7 @@ describe("bounded diversity - input permutation remains deterministic", () => {
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1 })],
       ["p/c", meta("p/c", { inputPrice: 1, outputPrice: 1 })],
     ]);
-    const agents = ["sisyphus-junior", "general", "explore"] as const;
+    const agents = ["fixer", "general", "explorer"] as const;
     const input1 = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: [...agents] });
     const input2 = baseInput({ mode: "economy", catalog: [...catalog].reverse(), metadata, capabilities: caps([...catalog].reverse()), agents: [...agents] });
     const out1 = suggestForMode(input1);
@@ -253,10 +253,10 @@ describe("bounded diversity - input permutation remains deterministic", () => {
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1 })],
       ["p/b", meta("p/b", { inputPrice: 1, outputPrice: 1 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const out1 = suggestForMode(input);
     const out2 = suggestForMode(input);
-    expect(out1.suggestions.get("sisyphus-junior")?.model).toBe(out2.suggestions.get("sisyphus-junior")?.model);
+    expect(out1.suggestions.get("fixer")?.model).toBe(out2.suggestions.get("fixer")?.model);
     expect(out1.suggestions.get("general")?.model).toBe(out2.suggestions.get("general")?.model);
   });
 });
@@ -271,14 +271,14 @@ describe("bounded diversity - reason marker is bounded", () => {
     const solo = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["general"] });
     const soloOut = suggestForMode(solo);
     expect(soloOut.suggestions.get("general")?.reason.includes("diversity")).toBe(false);
-    const duo = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const duo = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const duoOut = suggestForMode(duo);
     expect(duoOut.suggestions.get("general")?.reason.includes("diversity")).toBe(true);
     expect((duoOut.suggestions.get("general")?.reason.length ?? 0) <= 200).toBe(true);
-    const cross = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "momus"] });
+    const cross = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "councillor"] });
     const crossOut = suggestForMode(cross);
-    expect(crossOut.suggestions.get("momus")?.reason.includes("cross-review")).toBe(true);
-    expect((crossOut.suggestions.get("momus")?.reason.length ?? 0) <= 200).toBe(true);
+    expect(crossOut.suggestions.get("councillor")?.reason.includes("cross-review")).toBe(true);
+    expect((crossOut.suggestions.get("councillor")?.reason.length ?? 0) <= 200).toBe(true);
   });
 
   test("no marker when tie group size is one", () => {
@@ -287,7 +287,7 @@ describe("bounded diversity - reason marker is bounded", () => {
       ["p/a", meta("p/a", { inputPrice: 1, outputPrice: 1 })],
       ["p/b", meta("p/b", { inputPrice: 10, outputPrice: 10 })],
     ]);
-    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["sisyphus-junior", "general"] });
+    const input = baseInput({ mode: "economy", catalog, metadata, capabilities: caps(catalog), agents: ["fixer", "general"] });
     const out = suggestForMode(input);
     expect(out.suggestions.get("general")?.reason.includes("diversity")).toBe(false);
   });
