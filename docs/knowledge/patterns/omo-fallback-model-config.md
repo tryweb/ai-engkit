@@ -11,26 +11,21 @@ ai-engkit uses oh-my-openagent (OMO) 4.19.4. The plugin assigns default models t
 
 ## Solution
 
-For OMO 4.19.4, set `fallback_models` under `agents.plan` and `agents.prometheus` in both `.opencode/omo.jsonc.default` and `~/.omo/omo.jsonc`:
+**Do NOT set `fallback_models` on OMO 4.19.4.** The 2026-09-14 discriminating experiment proved that adding `fallback_models` to a single agent (schema-legal object form) silently invalidates **every** persisted `agents.<name>.model` override at model resolution: all agents fall back to compiled chain defaults, including agents that never received the key (see `troubleshooting/omo-model-mismatch-rejection-vs-precedence.md`). Migration validation accepts the key (no `Unrecognized key` line), so the early symptom is not a startup error — it is silent cross-agent regression in `GET /agent`.
 
-```jsonc
-"plan": {
-  "fallback_models": [
-    { "model": "opencode-go/kimi-k3", "variant": "max" },
-    { "model": "openai/gpt-5.6-sol", "variant": "high" },
-    { "model": "openai/gpt-5.6-luna" }
-  ]
-}
-```
+The repo default template (`.opencode/omo.jsonc.default`) ships v5-style `models[]` (not 4.19.4's `fallback_models`) under `agents.plan`/`agents.prometheus`. `models` is not among the 4.19.4 agents-override keys verified in the runtime schema (`model`, `fallback_models`), so it belongs to the same hazard class — unverified by experiment; treat as suspect until tested. The reconciler's `del(.agents[$agent].models, .agents[$agent].fallback_models)` on apply is the correct defensive behavior.
 
 Keep the live `$schema` pin at v4.19.4 and treat persisted config, `/agent`, and executed delegation as separate observations.
 
 ## Why It Works
 
-- `getRawFallbackModelsForSession` reads `pluginConfig.agents.<name>.fallback_models` directly — the key is genuinely consumed by fallback handling.
+Source-level consumption is confirmed but does NOT translate to a usable configuration on 4.19.4:
+
+- `getRawFallbackModelsForSession` reads `pluginConfig.agents.<name>.fallback_models` directly — the key **is** parsed and consumed by the fallback resolution layer.
 - `collectPendingBuiltinAgents` passes `pluginConfig.agents` into `applyModelResolution`, whose `userModel` path accepts `agents.<name>.model`.
 - Runtime schema `AgentOverrideConfigSchema` (dist/index.js ~26808) defines both `fallback_models` and `permission` fields for each known agent.
 - Migration validation accepts `fallback_models` (neither `plan` nor `prometheus.fallback_models` appear in the startup validation error), while `permission` is flagged — see Side Effects.
+- **However (2026-09-14 experiment):** injecting `fallback_models` into a single agent's config (`agents.plan`) caused **every** agent's persisted `model` override to be dropped at resolution — all 14 agents reverted to compiled chain defaults. A clean-config control run on the same environment confirmed the overrides worked without `fallback_models`; a re-injection replication reproduced the regression identically. The cross-agent regression is the Mechanism A signature (whole-config rejection at model resolution, not migration validation). See `troubleshooting/omo-model-mismatch-rejection-vs-precedence.md` for the discriminating experiment details.
 - Runtime probing on 192.168.11.195 with OMO 4.19.4 persisted `opencode/big-pickle` for all tested OMO agents, but live results remained `plan=opencode-go/kimi-k3` and `librarian=opencode-go/qwen3.7-plus`; do not call this configuration effective without matching runtime evidence.
 - First-class `subtask` delegation reproduced the same mismatch: completed `plan` and `librarian` children used those fallback models, with non-zero token usage.
 
@@ -38,7 +33,7 @@ For the v5 migration, treat `models[]` as the canonical fallback-chain direction
 
 ## Side Effects / Tradeoffs
 
-- **Admin "SubAgent 預設模型" wipes fallback chains on apply**: `src/admin/lib/agent-model-config.ts` `buildJqWriteCommand` writes `.agents[$agent].model` + `.variant` and **deletes** `models`/`fallback_models` every time the Admin UI applies a model. So a manually configured `fallback_models` chain under `agents.plan`/`prometheus` survives until the next Admin apply, then is removed. The Admin UI has no fallback-chain editor — it only sets the primary.
+- **Admin `buildJqWriteCommand` deletes `models`/`fallback_models` on apply — this is now proven CORRECT and DEFENSIVE**: `src/admin/lib/agent-model-config.ts` `buildJqWriteCommand` writes `.agents[$agent].model` + `.variant` and **deletes** `models`/`fallback_models` every time the Admin UI applies a model. The 2026-09-14 experiment proved that the presence of `fallback_models` in `~/.omo/omo.jsonc` invalidates every agent's persisted override at resolution (Mechanism A), so the Admin's deletion behavior prevents this regression. Do not change this deletion to preserve-chain behavior until a working fallback mechanism is verified on a version that supports it.
 - **v5 migration risk**: v5's canonical chain key is `models` (array of `{model, variant?}`). Adopting v5 chains requires changing `buildJqWriteCommand` to preserve or write `models` instead of deleting it (see `omo-v5-upgrade-impact.md`).
 - **Startup migration validation error (pre-existing noise)**: the migration schema `OmoAgentDefInputSchema` has no `permission` field, so 11 agents' `permission` blocks produce `Unrecognized key: "permission"` in `[config-migration] startup completed`. This predates the fallback_models change (admin's original permission-only config triggered it), does not block runtime config loading, and is harmless — but appears at every startup.
 - Restart required for config changes to take effect.
@@ -48,6 +43,13 @@ For the v5 migration, treat `models[]` as the canonical fallback-chain direction
 
 ## Evidence
 
+- **2026-09-14 discriminating experiment (Mechanism A confirmed):**
+  - Baseline on managed server (port 42885): all 14 agents resolve to persisted models (plan=muse-spark-1.3-contributor, oracle=big-pickle, librarian=deepseek-v4.1-flash, etc.).
+  - Inject `fallback_models` into ONE agent (`agents.plan`, object form with `model` + `variant`) in `~/.omo/omo.jsonc`: all 14 agents regress to compiled chain defaults (plan→kimi-k3, oracle→gpt-5.6-sol, librarian→gpt-5.6-luna-fast, metis→kimi-k3, momus→gpt-5.6-terra, etc.).
+  - Control run (same isolation environment, clean config): all persisted overrides effective.
+  - Replication (re-injected): identical full regression reproduced.
+  - Migration log: `[config-migration] startup completed` shows no error for `fallback_models` — the key passes validation silently; rejection happens at model resolution, not migration.
+  - `.opencode/omo.jsonc.default` ships v5-style `models[]` (not `fallback_models`) under `agents.plan`/`agents.prometheus`; `models` is not in the 4.19.4 agents-override schema (`model`/`fallback_models` only) — same hazard class.
 - Plugin log `/tmp/oh-my-opencode.log` (2026-08-08 restart):
   - `config-handler agents loaded` + `config handler applied {agentCount:13}` — config loads.
   - `[config-migration] startup completed {"error":"Migration validation failed ... Unrecognized key: \"permission\" ..."}` — 11 agents flagged for `permission` only; `plan` and `fallback_models` not flagged.

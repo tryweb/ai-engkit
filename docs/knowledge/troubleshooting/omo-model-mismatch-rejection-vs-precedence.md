@@ -18,7 +18,7 @@ Treat "child resolved to a non-persisted model" as **ambiguous** until a discrim
 2. Migration log: `grep '\[config-migration\]' /tmp/oh-my-opencode.log`. If the startup error lists the suspect key under `Unrecognized key:` **and** other previously-working overrides break simultaneously → mechanism A. If only `permission` is flagged and the log shows `config handler applied {agentCount:N}` → mechanism B.
 3. Execution probe: first-class `subtask` part child metadata (see `troubleshooting/omo-agent-model-verification-boundary.md`); `POST /session` with `agent:<name>` is not valid evidence.
 
-**Discriminating experiment (not yet run)**: baseline reconcile → inject `fallback_models` into ONE agent entry → restart managed server → compare (a) whether the migration log lists `fallback_models` and (b) whether OTHER agents' `GET /agent` resolutions regress. Only an automated e2e assertion of this experiment earns the strict-schema invariant the word "confirmed".
+**Discriminating experiment (RUN 2026-09-14 — Mechanism A confirmed)**: baseline reconcile → inject `fallback_models` into ONE agent entry (`agents.plan`) → start an isolated `opencode serve` instance sharing the same plugin + `~/.omo/omo.jsonc` → compare `GET /agent`. Result: injecting `fallback_models` into `plan` alone dropped **every** persisted model override — all 14 agents resolved to compiled chain defaults (plan muse-spark→kimi-k3, oracle big-pickle→gpt-5.6-sol, librarian deepseek-v4.1-flash→gpt-5.6-luna-fast, metis/momus/sisyphus-junior/explore/multimodal-looker likewise). Control run (same isolation, restored clean config) resolved every persisted override correctly; a second injection run reproduced the identical full regression. Verdict: **whole-config rejection at model resolution** (cross-agent regression = Mechanism A signal). Caveat: `[config-migration] startup completed` did **not** flag `fallback_models` — rejection happens at resolution, not migration validation — so absence of an "Unrecognized key" line does not rule out A; the cross-agent `GET /agent` regression probe is the reliable discriminator.
 
 Evidence state at capture time (2026-08-23):
 
@@ -32,8 +32,8 @@ Both mechanisms terminate in the same observable (runtime uses a chain model ins
 
 ## Side Effects / Tradeoffs
 
-- `write_omo_model()`'s `del(.agents[$agent].fallback_models)` (script L128) is correct under **either** mechanism — stripping undeclared keys is safe regardless — so reconciliation behavior needs no change; only the comment's causal wording ("invalidates the WHOLE config") overstates the proven scope until the experiment runs.
-- Do not rewrite `omo-fallback-model-config.md` L30/L33 before the discriminating experiment assigns the mechanism; afterwards, qualify those lines with the outcome and the OMO version tested.
+- `write_omo_model()`'s `del(.agents[$agent].fallback_models)` (script L128) is **required** — the 2026-09-14 experiment proved the key is actively harmful on 4.19.4, not merely inert: its presence drops every persisted override at resolution. The strict-schema comment's causal wording ("invalidates the WHOLE config") matches the observed behavior; what is rejected is not migration validation (no `Unrecognized key` line) but runtime model resolution.
+- `omo-fallback-model-config.md` L30/L33 qualified after the experiment (2026-09-14): source-level consumption (`getRawFallbackModelsForSession` reads the key) does not mean the key is usable — configuring it inverts all overrides. Do not use `fallback_models` on 4.19.4.
 - Probe coverage gap: 3 of 6 agents yielded no child sessions, so any conclusion drawn from those runs generalizes at most to explore/oracle/multimodal-looker.
 
 ## Evidence
