@@ -23,7 +23,7 @@
 #   GH_VERSION             → github:cli/cli
 #   MARKSMAN_VERSION       → github:artempyanykh/marksman
 #   LEANCTX_VERSION        → github:yvgude/lean-ctx
-#   OH_MY_OPENAGENT_VERSION → npm:oh-my-openagent
+#   OH_MY_OPENCODE_SLIM_VERSION → npm:oh-my-opencode-slim
 #   OPENCODE_VERSION       → npm:opencode-ai
 #   OPENCHAMBER_VERSION    → npm:@openchamber/web
 #   BUN_VERSION            → github:openchamber/openchamber  (derived: packageManager
@@ -144,7 +144,7 @@ lookup() {
         PLAYWRIGHT_MCP_VERSION) get_npm_latest "@playwright/mcp" ;;
         GLAB_VERSION)           get_gitlab_latest "gitlab-org/cli" ;;
         LEANCTX_VERSION)        get_github_latest "yvgude/lean-ctx" ;;
-        OH_MY_OPENAGENT_VERSION) get_npm_latest "oh-my-openagent" ;;
+        OH_MY_OPENCODE_SLIM_VERSION) get_npm_latest "oh-my-opencode-slim" ;;
         OPENSPEC_VERSION)        get_npm_latest "@fission-ai/openspec" ;;
         CODEGRAPH_VERSION)       get_npm_latest "@colbymchenry/codegraph" ;;
         *)                      echo "unknown" ;;
@@ -165,7 +165,7 @@ source_label() {
         PLAYWRIGHT_MCP_VERSION) echo "npm:@playwright/mcp" ;;
         GLAB_VERSION)           echo "gitlab:gitlab-org/cli" ;;
         LEANCTX_VERSION)        echo "github:yvgude/lean-ctx" ;;
-        OH_MY_OPENAGENT_VERSION) echo "npm:oh-my-openagent" ;;
+        OH_MY_OPENCODE_SLIM_VERSION) echo "npm:oh-my-opencode-slim" ;;
         OPENSPEC_VERSION)        echo "npm:@fission-ai/openspec" ;;
         CODEGRAPH_VERSION)       echo "npm:@colbymchenry/codegraph" ;;
         *)                      echo "?" ;;
@@ -177,7 +177,7 @@ source_label() {
 collect_rows() {
     while IFS=$'\t' read -r name pinned; do
         case "$name" in
-            DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|GH_VERSION|MARKSMAN_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|BUN_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GLAB_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION) ;;
+            DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|GH_VERSION|MARKSMAN_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|BUN_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GLAB_VERSION|LEANCTX_VERSION|OH_MY_OPENCODE_SLIM_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION) ;;
             *) continue ;;
         esac
         [[ -z "${pinned:-}" ]] && continue

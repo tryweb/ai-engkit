@@ -200,7 +200,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
 
   async function syncNativeAgentOverrides(): Promise<{ readonly ok: boolean; readonly error?: string }> {
     const op = "$HOME/.config/opencode/opencode.json";
-    const omo = "$HOME/.omo/omo.jsonc";
+    const omo = "$HOME/.config/opencode/oh-my-opencode-slim.json";
     const cmd = `tmp="${op}.native-agent-overrides.tmp"; if [ ! -f "${op}" ] || [ ! -f "${omo}" ]; then printf '%s\n' 'native override source file missing' >&2; exit 1; fi; if jq -s '.[0] as $opencode | .[1] as $omo | reduce ["general", "plan"][] as $name ($opencode; ($omo.agents[$name] // {}) as $override | if (($override.model | type) == "string" and ($override.model | test("^[^/[:space:]]+/[^[:space:]]+$"))) then .agent = (.agent // {}) | .agent[$name].model = $override.model | if (($override.variant | type) == "string" and ($override.variant | length) > 0) then .agent[$name].variant = $override.variant else del(.agent[$name].variant) end else del(.agent[$name]) end)' "${op}" "${omo}" > "$tmp" 2>/dev/null && mv "$tmp" "${op}"; then exit 0; else code=$?; rm -f "$tmp"; exit "$code"; fi`;
     try {
       const result = await deps.exec(cmd, 10_000);
@@ -235,7 +235,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
       }
       if (snapshot === null) {
         for (const change of changes) {
-          results.set(change.agent, { ok: false, status: "write_failed", error: "could not snapshot ~/.omo/omo.jsonc before applying the model" });
+          results.set(change.agent, { ok: false, status: "write_failed", error: "could not snapshot ~/.config/opencode/oh-my-opencode-slim.json before applying the model" });
         }
         return results;
       }

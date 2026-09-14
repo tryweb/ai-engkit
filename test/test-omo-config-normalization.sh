@@ -21,14 +21,13 @@ assert_eq() {
   fi
 }
 
-config="$TEMP_DIR/omo.jsonc"
-defaults="$ROOT_DIR/.opencode/omo.jsonc.default"
+config="$TEMP_DIR/oh-my-opencode-slim.json"
+defaults="$ROOT_DIR/.opencode/oh-my-opencode-slim.json.default"
 
-assert_eq "shipped defaults have no permission keys" "0" "$(jq '[.agents[] | select(has("permission"))] | length' "$defaults")"
+assert_eq "shipped defaults have no permission keys" "0" "$(jq '[.agents, .presets | .. | objects | select(has("permission"))] | length' "$defaults")"
+assert_eq "shipped defaults have no tools blocks" "0" "$(jq '[.agents, .presets | .. | objects | select(has("tools"))] | length' "$defaults")"
 assert_eq "shipped defaults have no stale migration agent layer" "false" "$(jq '.["[opencode]"] | type == "object" and has("agents")' "$defaults")"
-assert_eq "librarian default denies bash through tools" "false" "$(jq -r '.agents.librarian.tools.bash' "$defaults")"
-assert_eq "librarian default allows documentation lookup" "true" "$(jq -r '.agents.librarian.tools.webfetch' "$defaults")"
-assert_eq "execution defaults omit redundant allow-all tools" "false" "$(jq '.agents.sisyphus | has("tools")' "$defaults")"
+assert_eq "shipped defaults pin the opencode-go preset" "opencode-go" "$(jq -r '.preset // empty' "$defaults")"
 
 cat > "$config" <<'EOF'
 {

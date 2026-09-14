@@ -273,7 +273,7 @@ sequenceDiagram
 - `DOCKER_VERSION` / `COMPOSE_VERSION` / `BUILDX_VERSION`
 - `OPENCODE_VERSION` / `OPENCHAMBER_VERSION` / `GLAB_VERSION` / `GH_VERSION` / `MARKSMAN_VERSION`
 - `PLAYWRIGHT_VERSION` / `PLAYWRIGHT_MCP_VERSION`
-- `OH_MY_OPENAGENT_VERSION`（runtime 追蹤 latest）
+- `OH_MY_OPENCODE_SLIM_VERSION`（runtime 追蹤 latest）
 - `UPGRADE_PACKAGES=true`（build 時 `apt-get upgrade`）
 
 > 本文件**不再**硬編碼版本表 — 任何列出特定版本號的段落都會在 CI 升版後過時。

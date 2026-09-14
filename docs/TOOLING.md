@@ -93,7 +93,7 @@ AI-EngKit is designed for Docker socket passthrough, so containerized workflows 
 
 Default plugin setup:
 
-- `oh-my-openagent`
+- `oh-my-opencode-slim`
 - `superpowers@git+https://github.com/obra/superpowers.git`
 
 AI-EngKit also bakes in project-visible skills such as:

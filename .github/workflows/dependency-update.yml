@@ -219,7 +219,7 @@ jobs:
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|BUN_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|BUN_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|OH_MY_OPENCODE_SLIM_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
@@ -260,7 +260,7 @@ jobs:
               GLAB_VERSION)     source='gitlab-org/cli';   latest="$(get_gitlab_tag "$source")" ;;
               MARKSMAN_VERSION) source='artempyanykh/marksman'; latest="$(get_github_tag "$source")" ;;
               LEANCTX_VERSION)  source='yvgude/lean-ctx';  latest="$(get_github_tag "$source")"; if [[ "$latest" != "unknown" ]]; then _leanctx_latest="$latest"; fi ;;
-              OH_MY_OPENAGENT_VERSION) source='oh-my-openagent'; latest="$(get_npm_version "$source")" ;;
+              OH_MY_OPENCODE_SLIM_VERSION) source='oh-my-opencode-slim'; latest="$(get_npm_version "$source")" ;;
               OPENSPEC_VERSION) source='@fission-ai/openspec'; latest="$(get_npm_version "$source")" ;;
               CODEGRAPH_VERSION) source='@colbymchenry/codegraph'; latest="$(get_npm_version "$source")" ;;
               # LEANCTX_SHA256 removed — SHA integrity check dropped for consistency
@@ -484,7 +484,7 @@ jobs:
               image: ai-engkit:updated
               container_name: ci-test
               environment:
-                - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
+                - OPENCODE_PLUGINS=oh-my-opencode-slim,superpowers@git+https://github.com/obra/superpowers.git
               volumes:
                 - workspace-dev:/home/devuser/workspace
                 - opencode-data-dev:/home/devuser/.local/share/opencode
@@ -805,15 +805,16 @@ jobs:
             fi
           done < <(echo "$PINNED" | jq -c '.[]')
 
-          # Sync the baked OMO schema reference when OH_MY_OPENAGENT_VERSION changed.
-          # .opencode/omo.jsonc.default pins $schema to a versioned tag that is
-          # NOT tracked by check-versions.sh; keep it aligned with the Dockerfile ARG.
-          if echo "$PINNED" | jq -e 'any(.[]; .name == "OH_MY_OPENAGENT_VERSION")' >/dev/null 2>&1; then
-            OMO_LATEST="$(echo "$PINNED" | jq -r '.[] | select(.name == "OH_MY_OPENAGENT_VERSION") | .latest')"
+          # Sync the baked OMO schema reference when OH_MY_OPENCODE_SLIM_VERSION changed.
+          # .opencode/oh-my-opencode-slim.json.default pins $schema to a versioned
+          # unpkg URL that is NOT tracked by check-versions.sh; keep it aligned with
+          # the Dockerfile ARG.
+          if echo "$PINNED" | jq -e 'any(.[]; .name == "OH_MY_OPENCODE_SLIM_VERSION")' >/dev/null 2>&1; then
+            OMO_LATEST="$(echo "$PINNED" | jq -r '.[] | select(.name == "OH_MY_OPENCODE_SLIM_VERSION") | .latest')"
             OMO_SCHEMA_TAG="${OMO_LATEST#v}"
-            if [[ -n "$OMO_SCHEMA_TAG" && -f .opencode/omo.jsonc.default ]]; then
-              sed -i "s|https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v[0-9.]*/assets/omo.schema.json|https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v${OMO_SCHEMA_TAG}/assets/omo.schema.json|" .opencode/omo.jsonc.default
-              echo "::notice::Synced omo.jsonc.default schema to v${OMO_SCHEMA_TAG}"
+            if [[ -n "$OMO_SCHEMA_TAG" && -f .opencode/oh-my-opencode-slim.json.default ]]; then
+              sed -i "s|https://unpkg.com/oh-my-opencode-slim@[0-9.]*/oh-my-opencode-slim.schema.json|https://unpkg.com/oh-my-opencode-slim@${OMO_SCHEMA_TAG}/oh-my-opencode-slim.schema.json|" .opencode/oh-my-opencode-slim.json.default
+              echo "::notice::Synced oh-my-opencode-slim.json.default schema to v${OMO_SCHEMA_TAG}"
             fi
           fi
 
@@ -886,7 +887,7 @@ jobs:
                   'GH_VERSION': 'GitHub CLI',
                   'GLAB_VERSION': 'GitLab CLI',
                   'MARKSMAN_VERSION': 'Marksman',
-                  'OH_MY_OPENAGENT_VERSION': 'oh-my-openagent',
+                  'OH_MY_OPENCODE_SLIM_VERSION': 'oh-my-opencode-slim',
                   'CODEGRAPH_VERSION': '@colbymchenry/codegraph',
                    'LEANCTX_VERSION': 'lean-ctx',
                    # LEANCTX_SHA256 mapping removed — SHA integrity check dropped

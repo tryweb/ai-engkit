@@ -93,12 +93,12 @@ initialize_omo_permissions() {
 
   if [ -f "$config_file" ]; then
     if ! grep -q '"agents"' "$config_file"; then
-      echo "Merging default OMO agent permissions into omo.jsonc"
+      echo "Merging default OMO agent permissions into oh-my-opencode-slim.json"
       jq -s '.[0] * .[1]' "$defaults_file" "$config_file" > "${config_file}.tmp" \
         && mv "${config_file}.tmp" "$config_file"
     fi
   else
-    echo "Creating omo.jsonc with default agent permissions"
+    echo "Creating oh-my-opencode-slim.json with default agent permissions"
     cp "$defaults_file" "$config_file"
   fi
 }

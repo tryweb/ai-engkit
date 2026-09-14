@@ -355,7 +355,7 @@ graph TB
 
         subgraph "Application Layer"
             OC_SERVER["OpenCode Server"]
-            OC_PLUGINS["Plugin System<br/>oh-my-openagent"]
+            OC_PLUGINS["Plugin System<br/>oh-my-opencode-slim"]
             CH_SERVER["OpenChamber Server"]
         end
 
@@ -494,7 +494,7 @@ graph TB
         C_LC_STATE["~/.local/state/lean-ctx"]
         C_CONFIG["~/.config/opencode"]
         C_CACHE["~/.cache/opencode"]
-        C_OHMY["~/.cache/oh-my-opencode"]
+        C_OHMY["~/.cache/oh-my-opencode-slim"]
         C_CHAMBER["~/.config/openchamber"]
         C_GIT["~/.config/git<br/>~/.gitconfig"]
         C_SSH["~/.ssh"]
@@ -673,7 +673,7 @@ graph LR
 ### Plugin System
 
 | Plugin | Purpose | Description | Version Management |
-| `oh-my-openagent` | Core framework | Extends baseline OpenCode functionality | Supports build-time version pinning |
+| `oh-my-opencode-slim` | Core framework | Extends baseline OpenCode functionality | Supports build-time version pinning |
 
 ### Plugin Version Management (Development)
 
@@ -684,7 +684,7 @@ You can specify plugin versions when building the image:
 docker compose -p dev -f docker-compose.dev.yml build
 
 # Pin a specific version
-OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
+OH_MY_OPENCODE_SLIM_VERSION=2.2.20 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
   docker compose -p dev -f docker-compose.dev.yml build
 ```
 

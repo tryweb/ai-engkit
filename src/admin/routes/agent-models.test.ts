@@ -18,7 +18,7 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
       { match: /\/agent\b/, stdout: JSON.stringify([
         { name: "librarian", mode: "subagent", model: { modelID: "qwen3.7-plus", providerID: "opencode-go" } },
       ]) },
-      { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: '{"agents":{}}' },
+      { match: /cat ~\/\.config\/opencode\/oh-my-opencode-slim\.json/, stdout: '{"agents":{}}' },
       { match: /del\(\.agents\[\$agent\]\.model/, stdout: "" },
     ]);
     const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models/librarian", {
@@ -130,7 +130,7 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
       { match: /jq -c '\.agents/, stdout: '{"plan":{}}' },
       { match: /connected-providers\.json/, stdout: '{"connected":["opencode"]}' },
       { match: /provider-models\.json/, stdout: "opencode/big-pickle\n" },
-      { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: '{"agents":{}}' },
+      { match: /cat ~\/\.config\/opencode\/oh-my-opencode-slim\.json/, stdout: '{"agents":{}}' },
       { match: /\.agents\[\$agent\]\.model = \$model/, stdout: "" },
       { match: /\/agent\b/, stdout: JSON.stringify([
         { name: "plan", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } },
@@ -159,7 +159,7 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
       { match: /\/agent\b/, stdout: JSON.stringify([
         { name: "explore", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } },
       ]) },
-      { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: "/tmp/omo.jsonc.snapshot-test" },
+      { match: /cat ~\/\.config\/opencode\/oh-my-opencode-slim\.json/, stdout: "/tmp/omo.jsonc.snapshot-test" },
       { match: /\.agents\[\$agent\]\.model = \$model/, stdout: "", exitCode: 1, stderr: "jq: parse error" },
       { match: /cat '\/tmp\/omo\.jsonc\.snapshot-test'/, stdout: "" },
     ]);
@@ -310,7 +310,7 @@ describe("createAgentModelsRoutes — verification mode", () => {
       { match: /jq -c '\.agents/, stdout: '{"plan":{}}' },
       { match: /connected-providers\.json/, stdout: '{"connected":["opencode"]}' },
       { match: /provider-models\.json/, stdout: "opencode/big-pickle\n" },
-      { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: '{"agents":{}}' },
+      { match: /cat ~\/\.config\/opencode\/oh-my-opencode-slim\.json/, stdout: '{"agents":{}}' },
       { match: /\.agents\[\$agent\]\.model = \$model/, stdout: "" },
       { match: /\/agent\b/, stdout: JSON.stringify([{ name: "plan", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } }]) },
     ]);
@@ -469,7 +469,7 @@ describe("createAgentModelsRoutes — POST /api/agent-models/verify", () => {
     cleanup();
   });
 
-  test("is read-only: does not write config or restart and omo.jsonc is byte-identical before and after", async () => {
+  test("is read-only: does not write config or restart and oh-my-opencode-slim.json is byte-identical before and after", async () => {
     const beforeSnapshot = '{"plan":{"model":"opencode/big-pickle"}}';
     const { deps, calls, cleanup } = stubDeps([
       { match: /jq -c '\.agents/, stdout: beforeSnapshot },
@@ -480,7 +480,7 @@ describe("createAgentModelsRoutes — POST /api/agent-models/verify", () => {
         stdout: JSON.stringify([{ name: "plan", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } }]),
       },
       { match: /\$BASE\/session/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "big-pickle", providerID: "opencode", parts: [{ type: "text", text: "OK" }] } }) },
-      { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: beforeSnapshot },
+      { match: /cat ~\/\.config\/opencode\/oh-my-opencode-slim\.json/, stdout: beforeSnapshot },
     ]);
     let restarted = false;
     const guardedDeps = { ...deps, restart: async () => { restarted = true; return { ok: true as const }; } };
@@ -501,7 +501,7 @@ describe("createAgentModelsRoutes — POST /api/agent-models/verify", () => {
     for (const call of afterConfigCalls) {
       expect(call).not.toContain("write");
     }
-    const secondRead = await guardedDeps.exec("jq -c '.agents // {}' ~/.omo/omo.jsonc 2>/dev/null || echo '{}'", 10_000);
+    const secondRead = await guardedDeps.exec("jq -c '.agents // {}' ~/.config/opencode/oh-my-opencode-slim.json 2>/dev/null || echo '{}'", 10_000);
     expect(secondRead.stdout).toBe(beforeSnapshot);
     void beforeCalls;
     cleanup();

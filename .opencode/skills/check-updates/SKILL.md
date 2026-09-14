@@ -107,28 +107,28 @@ Compatibility between the MCP driver and that Chromium is verified ONLY by the
 integration tests (headless Chromium launch must pass) — do not skip them after
 any bump of either pin.
 
-`OH_MY_OPENAGENT_VERSION` is a Dockerfile pin and is included in the standard
+`OH_MY_OPENCODE_SLIM_VERSION` is a Dockerfile pin and is included in the standard
 `outdated` and `json` output. Update it with the same `ARG` replacement flow;
 do not use `--latest` for OMO because that flag is only for packages without a
 Dockerfile pin.
 
-**Also sync the baked OMO schema reference.** `.opencode/omo.jsonc.default`
+**Also sync the baked OMO schema reference.** `.opencode/oh-my-opencode-slim.json.default`
 pins the OMO JSON schema to a versioned tag in its `$schema` URL (e.g.
-`https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v4.19.3/assets/omo.schema.json`).
+`https://unpkg.com/oh-my-opencode-slim@2.2.20/oh-my-opencode-slim.schema.json`).
 This is NOT tracked by `check-versions.sh` — it must be updated manually with
-the same version every time `OH_MY_OPENAGENT_VERSION` is bumped, otherwise the
+the same version every time `OH_MY_OPENCODE_SLIM_VERSION` is bumped, otherwise the
 file's schema reference silently lags the installed plugin:
 
 ```bash
-# After updating ARG OH_MY_OPENAGENT_VERSION=<NEW_VERSION>:
+# After updating ARG OH_MY_OPENCODE_SLIM_VERSION=<NEW_VERSION>:
 OMO_SCHEMA_TAG="${LATEST#v}"
-sed -i "s|https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v[0-9.]*/assets/omo.schema.json|https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v${OMO_SCHEMA_TAG}/assets/omo.schema.json|" .opencode/omo.jsonc.default
+sed -i "s|https://unpkg.com/oh-my-opencode-slim@[0-9.]*/oh-my-opencode-slim.schema.json|https://unpkg.com/oh-my-opencode-slim@${OMO_SCHEMA_TAG}/oh-my-opencode-slim.schema.json|" .opencode/oh-my-opencode-slim.json.default
 ```
 
 Validate the result (the only `vX.Y.Z` left in the file should be the new one):
 
 ```bash
-grep -o 'oh-my-openagent/v[0-9.]*/assets/omo.schema.json' .opencode/omo.jsonc.default
+grep -o 'oh-my-opencode-slim@[0-9.]*/oh-my-opencode-slim.schema.json' .opencode/oh-my-opencode-slim.json.default
 ```
 
 The `$schema` field is editor-only (runtime merge ignores it), but keeping it

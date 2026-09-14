@@ -7,6 +7,7 @@ ARG COMPOSE_VERSION=5.5.1
 ARG BUILDX_VERSION=0.37.1
 ARG OPENCODE_VERSION=1.18.30
 ARG OPENCHAMBER_VERSION=1.23.1
+ARG OH_MY_OPENCODE_SLIM_VERSION=2.2.20
 ARG GLAB_VERSION=1.117.0
 ARG PLAYWRIGHT_VERSION=1.63.0
 ARG PLAYWRIGHT_MCP_VERSION=0.0.80
@@ -14,7 +15,6 @@ ARG BUN_VERSION=1.3.14
 ARG GH_VERSION=2.100.0
 ARG MARKSMAN_VERSION=2026-02-08
 ARG LEANCTX_VERSION=3.10.1
-ARG OH_MY_OPENAGENT_VERSION=4.19.4
 ARG OPENSPEC_VERSION=1.13.0
 ARG CODEGRAPH_VERSION=1.6.0
 ARG AI_ENGKIT_VERSION=dev
@@ -206,7 +206,7 @@ PY
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
-ENV OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION}
+ENV OH_MY_OPENCODE_SLIM_VERSION=${OH_MY_OPENCODE_SLIM_VERSION}
 RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
     bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
     rm -rf ~/.bun/install/cache
@@ -229,7 +229,7 @@ USER root
 RUN <<'EOF'
 mkdir -p /etc/opencode
 jq -n \
-  --arg agent_plugin "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" \
+  --arg agent_plugin "oh-my-opencode-slim@${OH_MY_OPENCODE_SLIM_VERSION}" \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
   '{
     autoupdate: false,
@@ -262,9 +262,9 @@ EOF
 # at container startup (appends to user's ~/.config/opencode/AGENTS.md).
 COPY .opencode/AGENTS.md.default /etc/opencode/AGENTS.md.default
 
-# omo.jsonc default — consumed by entrypoint.d/02-init-config.sh
-# at container startup (merges into user's ~/.omo/omo.jsonc).
-COPY .opencode/omo.jsonc.default /etc/opencode/omo.jsonc.default
+# oh-my-opencode-slim.json default — consumed by entrypoint.d/02-init-config.sh
+# at container startup (merges into user's ~/.config/opencode/oh-my-opencode-slim.json).
+COPY .opencode/oh-my-opencode-slim.json.default /etc/opencode/oh-my-opencode-slim.json.default
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
@@ -332,7 +332,7 @@ VOLUME [ \
     "/home/${USERNAME}/.local/state/lean-ctx", \
     "/home/${USERNAME}/.config/opencode", \
     "/home/${USERNAME}/.cache/opencode", \
-    "/home/${USERNAME}/.cache/oh-my-opencode", \
+    "/home/${USERNAME}/.cache/oh-my-opencode-slim", \
     "/home/${USERNAME}/.config/openchamber", \
     "/home/${USERNAME}/.ssh", \
     "/home/${USERNAME}/.config/git" \

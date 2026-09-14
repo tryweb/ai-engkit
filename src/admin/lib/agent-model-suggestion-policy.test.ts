@@ -618,15 +618,16 @@ describe("performance ranking", () => {
 
 
 describe("role-aware agent mappings", () => {
-  test("all eight roles map correctly plus unknown falls back to general", () => {
+  test("all roles map correctly plus unknown falls back to general", () => {
+    expect(_test.roleForAgent("orchestrator")).toBe("planning");
     expect(_test.roleForAgent("oracle")).toBe("deep-reasoning");
-    expect(_test.roleForAgent("metis")).toBe("deep-reasoning");
-    expect(_test.roleForAgent("plan")).toBe("planning");
-    expect(_test.roleForAgent("momus")).toBe("review");
-    expect(_test.roleForAgent("sisyphus-junior")).toBe("coding");
-    expect(_test.roleForAgent("explore")).toBe("exploration");
+    expect(_test.roleForAgent("councillor")).toBe("review");
+    expect(_test.roleForAgent("council")).toBe("review");
+    expect(_test.roleForAgent("fixer")).toBe("coding");
+    expect(_test.roleForAgent("designer")).toBe("coding");
+    expect(_test.roleForAgent("explorer")).toBe("exploration");
     expect(_test.roleForAgent("librarian")).toBe("research");
-    expect(_test.roleForAgent("multimodal-looker")).toBe("multimodal");
+    expect(_test.roleForAgent("observer")).toBe("multimodal");
     expect(_test.roleForAgent("general")).toBe("general");
     expect(_test.roleForAgent("unknown-agent-xyz")).toBe("general");
     expect(_test.roleForAgent("custom-bot")).toBe("general");
@@ -683,10 +684,10 @@ describe("role-aware agent mappings", () => {
       ["p/Vision-pro-model", { reasoning: true, toolcall: true, attachment: false }],
       ["p/real-multimodal", { reasoning: true, toolcall: true, attachment: true }],
     ]);
-    const input = baseInput({ mode: "performance", catalog, metadata, capabilities, agents: ["multimodal-looker"] });
-    expect(suggestForMode(input).suggestions.get("multimodal-looker")?.model).toBe("p/real-multimodal");
-    const input2 = baseInput({ mode: "economy", catalog: ["p/Vision-pro-model"], metadata: new Map([["p/Vision-pro-model", meta("p/Vision-pro-model",{contextLimit:100_000, outputLimit:32000})]]), capabilities: new Map([["p/Vision-pro-model", {toolcall:true, attachment:false}]]), agents: ["multimodal-looker"] });
-    expect(suggestForMode(input2).suggestions.has("multimodal-looker")).toBe(false);
+    const input = baseInput({ mode: "performance", catalog, metadata, capabilities, agents: ["observer"] });
+    expect(suggestForMode(input).suggestions.get("observer")?.model).toBe("p/real-multimodal");
+    const input2 = baseInput({ mode: "economy", catalog: ["p/Vision-pro-model"], metadata: new Map([["p/Vision-pro-model", meta("p/Vision-pro-model",{contextLimit:100_000, outputLimit:32000})]]), capabilities: new Map([["p/Vision-pro-model", {toolcall:true, attachment:false}]]), agents: ["observer"] });
+    expect(suggestForMode(input2).suggestions.has("observer")).toBe(false);
   });
 });
 

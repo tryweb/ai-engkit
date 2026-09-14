@@ -120,9 +120,9 @@ restore() {
     fi
   fi
   if [ -f "$BASELINE" ]; then
-    docker exec -i "$CONTAINER" sh -c 'cat > ~/.omo/omo.jsonc' < "$BASELINE" >/dev/null 2>&1 || fail "restore: writing baseline back"
+    docker exec -i "$CONTAINER" sh -c 'cat > ~/.config/opencode/oh-my-opencode-slim.json' < "$BASELINE" >/dev/null 2>&1 || fail "restore: writing baseline back"
     docker restart "$CONTAINER" >/dev/null 2>&1 || true
-    echo "  (restored baseline omo.jsonc and restarted ai-dev)"
+    echo "  (restored baseline oh-my-opencode-slim.json and restarted ai-dev)"
   fi
   rm -f "$BASELINE" "$AUTH_BASELINE" "$HEALTH_BASELINE"
 }
@@ -130,8 +130,8 @@ trap restore EXIT
 
 echo "== Native Agent Model E2E (container: $CONTAINER) =="
 
-in_container 'cat ~/.omo/omo.jsonc' > "$BASELINE" 2>/dev/null || { fail "baseline: could not read ~/.omo/omo.jsonc"; exit 1; }
-assert_contains "baseline omo.jsonc captured" 'agents' "$(cat "$BASELINE")"
+in_container 'cat ~/.config/opencode/oh-my-opencode-slim.json' > "$BASELINE" 2>/dev/null || { fail "baseline: could not read ~/.config/opencode/oh-my-opencode-slim.json"; exit 1; }
+assert_contains "baseline slim config captured" 'agents' "$(cat "$BASELINE")"
 
 # Credential-gated: skip cleanly without server password (readiness/inference distinction requires managed server)
 if ! in_container 'grep -q "OPENCODE_SERVER_PASSWORD" ~/.env 2>/dev/null && grep -q "OPENCODE_SERVER_PASSWORD=." ~/.env 2>/dev/null'; then
@@ -139,11 +139,15 @@ if ! in_container 'grep -q "OPENCODE_SERVER_PASSWORD" ~/.env 2>/dev/null && grep
   exit 0
 fi
 
-if ! in_container "jq -e '.models.opencode[]? | select(.id == \"big-pickle\")' ~/.cache/oh-my-opencode/provider-models.json >/dev/null"; then
+# Catalog guard uses the live managed-server /provider endpoint (slim does not write
+# a provider-models.json cache file). SKIP cleanly when either target model is absent.
+PROVIDER_SNAPSHOT="$(opencode_api GET /provider 2>/dev/null || true)"
+if ! printf '%s' "$PROVIDER_SNAPSHOT" | jq -e '.connected | index("opencode")' >/dev/null 2>&1 \
+  || ! printf '%s' "$PROVIDER_SNAPSHOT" | jq -e --arg id "big-pickle" '.all[]? | select(.id == "opencode") | .models | has($id)' >/dev/null 2>&1; then
   echo "  ${YELLOW}SKIP${NC} agent-model-e2e: $GENERAL_TARGET is absent from the environment catalog"
   exit 0
 fi
-if ! in_container "jq -e '.models.opencode[]? | select(.id == \"nemotron-3.5-lightning-free\")' ~/.cache/oh-my-opencode/provider-models.json >/dev/null"; then
+if ! printf '%s' "$PROVIDER_SNAPSHOT" | jq -e --arg id "nemotron-3.5-lightning-free" '.all[]? | select(.id == "opencode") | .models | has($id)' >/dev/null 2>&1; then
   echo "  ${YELLOW}SKIP${NC} agent-model-e2e: $LIBRARIAN_TARGET is absent from the environment catalog"
   exit 0
 fi
@@ -154,10 +158,10 @@ jq --arg general "$GENERAL_TARGET" --arg librarian "$LIBRARIAN_TARGET" '
   | .agents.librarian.model = $librarian
   | del(.agents.librarian.variant)
 ' "$BASELINE" \
-  | docker exec -i "$CONTAINER" sh -c 'cat > ~/.omo/omo.jsonc' \
+  | docker exec -i "$CONTAINER" sh -c 'cat > ~/.config/opencode/oh-my-opencode-slim.json' \
   || { fail "set: writing model failed"; exit 1; }
-assert_eq "set: persisted native model" "$GENERAL_TARGET" "$(in_container 'jq -r .agents.general.model ~/.omo/omo.jsonc')"
-assert_eq "set: persisted librarian model" "$LIBRARIAN_TARGET" "$(in_container 'jq -r .agents.librarian.model ~/.omo/omo.jsonc')"
+assert_eq "set: persisted native model" "$GENERAL_TARGET" "$(in_container 'jq -r .agents.general.model ~/.config/opencode/oh-my-opencode-slim.json')"
+assert_eq "set: persisted librarian model" "$LIBRARIAN_TARGET" "$(in_container 'jq -r .agents.librarian.model ~/.config/opencode/oh-my-opencode-slim.json')"
 
 docker restart "$CONTAINER" >/dev/null 2>&1 || { fail "restart: docker restart failed"; exit 1; }
 if wait_for_server 120; then
@@ -201,9 +205,9 @@ verify_child_model "general" "$GENERAL_TARGET"
 echo "  (OMO librarian child verification skipped: direct /session creation bypasses OMO delegate-task model resolution; readiness Apply does not send inference)"
 
 jq 'del(.agents.librarian.model, .agents.librarian.variant, .agents.librarian.models, .agents.librarian.fallback_models)' "$BASELINE" \
-  | docker exec -i "$CONTAINER" sh -c 'cat > ~/.omo/omo.jsonc' \
+  | docker exec -i "$CONTAINER" sh -c 'cat > ~/.config/opencode/oh-my-opencode-slim.json' \
   || { fail "clear: writing automatic-model config failed"; exit 1; }
-assert_eq "clear: persisted librarian model removed" "null" "$(in_container 'jq -r .agents.librarian.model ~/.omo/omo.jsonc')"
+assert_eq "clear: persisted librarian model removed" "null" "$(in_container 'jq -r .agents.librarian.model ~/.config/opencode/oh-my-opencode-slim.json')"
 
 docker restart "$CONTAINER" >/dev/null 2>&1 || { fail "clear: docker restart failed"; exit 1; }
 if wait_for_server 120; then
@@ -217,8 +221,8 @@ AUTOMATIC_LIBRARIAN_MODEL="$(get_agents_json | jq -r '.[] | select(.name == "lib
   || fail "clear: librarian automatic model is unavailable"
 echo "  (OMO librarian child verification skipped: direct /session creation bypasses OMO delegate-task model resolution)"
 
-docker exec -i "$CONTAINER" sh -c 'cat > ~/.omo/omo.jsonc' < "$BASELINE" >/dev/null 2>&1
-assert_eq "restore: file byte-identical to baseline" "0" "$(cmp -s <(in_container 'cat ~/.omo/omo.jsonc') "$BASELINE"; echo $?)"
+docker exec -i "$CONTAINER" sh -c 'cat > ~/.config/opencode/oh-my-opencode-slim.json' < "$BASELINE" >/dev/null 2>&1
+assert_eq "restore: file byte-identical to baseline" "0" "$(cmp -s <(in_container 'cat ~/.config/opencode/oh-my-opencode-slim.json') "$BASELINE"; echo $?)"
 docker restart "$CONTAINER" >/dev/null 2>&1
 RESTORED=1
 
@@ -254,11 +258,11 @@ else
   HEALTH_SNAPSHOT=1
 fi
 
-ROTATION_PROVIDER_A="$(in_container 'jq -r .agents.general.model ~/.omo/omo.jsonc' | cut -d/ -f1)"
+ROTATION_PROVIDER_A="$(in_container 'jq -r .agents.general.model ~/.config/opencode/oh-my-opencode-slim.json' | cut -d/ -f1)"
 ROTATION_PROVIDER_A="${ROTATION_PROVIDER_A:-opencode}"
 ROTATION_PROVIDER_B="provider-b"
 ROTATION_MODEL_B="${ROTATION_PROVIDER_B}/model-b"
-ROTATION_MODEL_A="${ROTATION_PROVIDER_A}/$(in_container 'jq -r .agents.general.model ~/.omo/omo.jsonc' | cut -d/ -f2-)"
+ROTATION_MODEL_A="${ROTATION_PROVIDER_A}/$(in_container 'jq -r .agents.general.model ~/.config/opencode/oh-my-opencode-slim.json' | cut -d/ -f2-)"
 OLD_PROVIDER_A_FINGERPRINT="$(docker exec "$CONTAINER" bash -lc 'source /opt/ai-engkit/scripts/agent-model-health.sh; credential_fingerprint "$1"' -- "$ROTATION_PROVIDER_A")"
 docker exec "$CONTAINER" bash -lc 'source /opt/ai-engkit/scripts/agent-model-health.sh; health_record "$1" healthy "rotation baseline"; health_record "$2" healthy "provider-b baseline"' -- "$ROTATION_MODEL_A" "$ROTATION_MODEL_B" >/dev/null 2>&1
 if ! docker exec "$CONTAINER" sh -c "tmp=\$(mktemp); jq --arg provider '$ROTATION_PROVIDER_A' '.[\$provider] = ((.[\$provider] // {}) + {credential:\"rotated-$$\"})' ~/.local/share/opencode/auth.json > \"\$tmp\" && mv \"\$tmp\" ~/.local/share/opencode/auth.json" >/dev/null 2>&1; then

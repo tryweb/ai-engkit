@@ -76,7 +76,7 @@ describe("snapshot / restore round-trip", () => {
     const snapshot = await lib.snapshotAgentModelsConfig();
     expect(snapshot).toBe(SNAPSHOT_FILE);
     expect(calls[0]).toContain("mktemp");
-    expect(calls[0]).toContain("~/.omo/omo.jsonc");
+    expect(calls[0]).toContain("~/.config/opencode/oh-my-opencode-slim.json");
 
     const restore = await lib.restoreAgentModelsConfig(SNAPSHOT_FILE);
     expect(restore.ok).toBe(true);
@@ -85,7 +85,7 @@ describe("snapshot / restore round-trip", () => {
     if (restoreCmd === undefined) return;
     expect(restoreCmd).toContain(`cat '${SNAPSHOT_FILE}'`);
     expect(restoreCmd).not.toContain("base64");
-    expect(restoreCmd).toContain("~/.omo/omo.jsonc");
+    expect(restoreCmd).toContain("~/.config/opencode/oh-my-opencode-slim.json");
   });
 });
 
@@ -552,8 +552,8 @@ describe("applyAndVerify", () => {
     const restartIndex = calls.indexOf("RESTART");
     const syncIndex = calls.findIndex((command) => command.includes(".native-agent-overrides.tmp"));
     expect(syncIndex).toBeGreaterThanOrEqual(0);
-    expect(calls[syncIndex]).toContain('"$HOME/.omo/omo.jsonc"');
-    expect(calls[syncIndex]).not.toContain('"~/.omo/omo.jsonc"');
+    expect(calls[syncIndex]).toContain('"$HOME/.config/opencode/oh-my-opencode-slim.json"');
+    expect(calls[syncIndex]).not.toContain('"~/.config/opencode/oh-my-opencode-slim.json"');
     expect(calls[syncIndex]).toContain('code=$?; rm -f "$tmp"; exit "$code"');
     expect(calls[syncIndex]).toContain('^[^/[:space:]]+/[^[:space:]]+$');
     expect(restartIndex).toBeGreaterThan(syncIndex);

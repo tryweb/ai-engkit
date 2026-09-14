@@ -13,7 +13,7 @@ services:
       - opencode-config:/home/devuser/.config/opencode
       - omo-config:/home/devuser/.omo
       - opencode-cache:/home/devuser/.cache/opencode
-      - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode
+      - ohmyopencode-cache:/home/devuser/.cache/oh-my-opencode-slim
       - openchamber-data:/home/devuser/.config/openchamber
       - git-config:/home/devuser/.config/git
       - ssh-keys:/home/devuser/.ssh

@@ -606,11 +606,11 @@ echo ""
 echo "--- OMO Unified Agent Permissions ---"
 
 # 8.3.1 Default file in image
-assert_file_exists "omo.jsonc.default in /etc/opencode" "/etc/opencode/omo.jsonc.default"
+assert_file_exists "oh-my-opencode-slim.json.default in /etc/opencode" "/etc/opencode/oh-my-opencode-slim.json.default"
 
-# 8.3.2 Runtime config in user OMO directory
-OMO_CONFIG_FILE="/home/devuser/.omo/omo.jsonc"
-assert_file_exists "omo.jsonc in user OMO directory" "$OMO_CONFIG_FILE"
+# 8.3.2 Runtime config in user opencode config directory
+OMO_CONFIG_FILE="/home/devuser/.config/opencode/oh-my-opencode-slim.json"
+assert_file_exists "oh-my-opencode-slim.json in user config directory" "$OMO_CONFIG_FILE"
 
 if docker exec "$CONTAINER" test ! -f /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null; then
   pass "legacy oh-my-openagent.json is not an active config"
@@ -618,28 +618,24 @@ else
   fail "legacy oh-my-openagent.json remains active"
 fi
 
-OMO_PLUGIN=$(docker exec "$CONTAINER" jq -r '.plugin[] | select(startswith("oh-my-openagent@"))' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
-OMO_VERSION=$(docker exec "$CONTAINER" sh -c 'printf "%s" "$OH_MY_OPENAGENT_VERSION"' 2>/dev/null || echo "")
+OMO_PLUGIN=$(docker exec "$CONTAINER" jq -r '.plugin[] | select(startswith("oh-my-opencode-slim@"))' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
+OMO_VERSION=$(docker exec "$CONTAINER" sh -c 'printf "%s" "$OH_MY_OPENCODE_SLIM_VERSION"' 2>/dev/null || echo "")
 if [[ "$OMO_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
   pass "OMO runtime version is pinned ($OMO_VERSION)"
 else
   fail "OMO runtime version is not an exact semver ('$OMO_VERSION')"
 fi
-assert_eq "OMO plugin declaration matches runtime pin" "oh-my-openagent@$OMO_VERSION" "$OMO_PLUGIN"
+assert_eq "OMO plugin declaration matches runtime pin" "oh-my-opencode-slim@$OMO_VERSION" "$OMO_PLUGIN"
 
-# 8.3.3 All 11 OMO agents present
-OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '.agents | keys | join(",")' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
-assert_contains "explore agent defined"  'explore'           "$OMO_AGENTS"
-assert_contains "oracle agent defined"   'oracle'            "$OMO_AGENTS"
-assert_contains "librarian agent defined" 'librarian'        "$OMO_AGENTS"
-assert_contains "multimodal-looker defined" 'multimodal-looker' "$OMO_AGENTS"
-assert_contains "metis agent defined"    'metis'             "$OMO_AGENTS"
-assert_contains "momus agent defined"    'momus'             "$OMO_AGENTS"
-assert_contains "prometheus agent defined" 'prometheus'      "$OMO_AGENTS"
-assert_contains "sisyphus agent defined" 'sisyphus'          "$OMO_AGENTS"
-assert_contains "hephaestus agent defined" 'hephaestus'      "$OMO_AGENTS"
-assert_contains "atlas agent defined"    'atlas'             "$OMO_AGENTS"
-assert_contains "sisyphus-junior defined" 'sisyphus-junior'  "$OMO_AGENTS"
+# 8.3.3 All slim agents present (preset agents + top-level overrides)
+OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '((.presets.opencode-go // {} | keys) + (.agents // {} | keys) | unique | join(","))' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
+assert_contains "orchestrator agent defined" 'orchestrator' "$OMO_AGENTS"
+assert_contains "explorer agent defined"    'explorer'      "$OMO_AGENTS"
+assert_contains "librarian agent defined"   'librarian'     "$OMO_AGENTS"
+assert_contains "oracle agent defined"      'oracle'        "$OMO_AGENTS"
+assert_contains "designer agent defined"    'designer'      "$OMO_AGENTS"
+assert_contains "fixer agent defined"       'fixer'         "$OMO_AGENTS"
+assert_contains "observer agent defined"    'observer'      "$OMO_AGENTS"
 
 # 8.3.4 Runtime config uses schema-valid tools and no stale migration layer
 OMO_PERMISSION_COUNT=$(docker exec "$CONTAINER" jq '[.agents[] | select(has("permission"))] | length' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")

@@ -23,12 +23,12 @@ assert_eq() {
 
 base_config() {
   cat <<'EOF'
-{"plugin":["oh-my-openagent"],"mcp":{"codegraph":{"enabled":true}},"agent":{"reviewer":{"model":"opencode/reviewer"},"general":{"model":"ollama/old","variant":"low"}}}
+{"plugin":["oh-my-opencode-slim"],"mcp":{"codegraph":{"enabled":true}},"agent":{"reviewer":{"model":"opencode/reviewer"},"general":{"model":"ollama/old","variant":"low"}}}
 EOF
 }
 
 opencode_config="$TEMP_DIR/opencode.json"
-omo_config="$TEMP_DIR/omo.jsonc"
+omo_config="$TEMP_DIR/oh-my-opencode-slim.json"
 
 base_config > "$opencode_config"
 cat > "$omo_config" <<'EOF'

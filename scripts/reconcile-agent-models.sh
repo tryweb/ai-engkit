@@ -12,7 +12,7 @@ log() { echo "[agent-models] $*" >&2; }
 # Keep opencode.json native agents in sync with persisted OMO after reconcile (G1 file equality).
 # Single-source helper: reuse entrypoint's merge_native_agent_overrides if available.
 sync_native_overrides() {
-  local op="$HOME/.config/opencode/opencode.json" omo="$HOME/.omo/omo.jsonc" lib=""
+  local op="$HOME/.config/opencode/opencode.json" omo="$HOME/.config/opencode/oh-my-opencode-slim.json" lib=""
   for lib in "/entrypoint.d/lib-native-agent-overrides.bash" "$(dirname "$0")/../entrypoint.d/lib-native-agent-overrides.bash" "/opt/ai-engkit/entrypoint.d/lib-native-agent-overrides.bash"; do
     if [ -f "$lib" ]; then
       # shellcheck source=/dev/null

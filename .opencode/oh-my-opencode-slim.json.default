@@ -1,0 +1,46 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@2.2.20/oh-my-opencode-slim.schema.json",
+  "preset": "opencode-go",
+  "disabled_agents": [],
+  "image_routing": "auto",
+  "presets": {
+    "opencode-go": {
+      "orchestrator": {
+        "model": "opencode-go/kimi-k3",
+        "variant": "max"
+      },
+      "oracle": {
+        "model": "opencode-go/qwen3.7-max",
+        "variant": "max"
+      },
+      "librarian": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "high",
+        "mcps": ["context7", "gh_grep"]
+      },
+      "explorer": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "high"
+      },
+      "designer": {
+        "model": "opencode-go/kimi-k2.7-code"
+      },
+      "fixer": {
+        "model": "opencode-go/deepseek-v4-flash",
+        "variant": "high"
+      },
+      "observer": {
+        "model": "opencode-go/mimo-v2.5"
+      }
+    }
+  },
+  "agents": {
+    "orchestrator": {
+      "model": "opencode-go/kimi-k3",
+      "variant": "max"
+    },
+    "observer": {
+      "model": "opencode-go/mimo-v2.5"
+    }
+  }
+}

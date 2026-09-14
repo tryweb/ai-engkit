@@ -186,14 +186,16 @@ const ROLE_PROFILES: Record<AgentRole, RoleProfile> = {
 };
 
 const AGENT_TO_ROLE: Record<string, AgentRole> = {
+  orchestrator: "planning",
   oracle: "deep-reasoning",
-  metis: "deep-reasoning",
-  plan: "planning",
-  momus: "review",
-  "sisyphus-junior": "coding",
-  explore: "exploration",
+  councillor: "review",
+  council: "review",
+  fixer: "coding",
+  designer: "coding",
+  explorer: "exploration",
   librarian: "research",
-  "multimodal-looker": "multimodal",
+  observer: "multimodal",
+  plan: "planning",
   general: "general",
 };
 

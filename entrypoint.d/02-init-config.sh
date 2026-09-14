@@ -221,8 +221,8 @@ normalize_omo_plugin_versions() {
   IFS=',' read -ra plugin_list <<< "$plugins"
   for plugin in "${plugin_list[@]}"; do
     plugin="${plugin//[[:space:]]/}"
-    if [ "$plugin" = "oh-my-openagent" ]; then
-      plugin="oh-my-openagent@${OH_MY_OPENAGENT_VERSION}"
+    if [ "$plugin" = "oh-my-opencode-slim" ]; then
+      plugin="oh-my-opencode-slim@${OH_MY_OPENCODE_SLIM_VERSION}"
     fi
     [ -n "$plugin" ] && normalized+=("$plugin")
   done
@@ -253,7 +253,7 @@ mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency
-PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
+PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-opencode-slim}")"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
 # Catalog of admin-controlled LSP servers (id -> command/extensions),
 # mirroring src/admin/lib/lsp-catalog.ts. Version pinning is applied via
@@ -329,10 +329,10 @@ if [ -n "${OPENCODE_PROVIDER:-}" ]; then
   fi
 fi
 
-# --- OMO unified configuration ---
-DEFAULT_OMO_CONFIG="/etc/opencode/omo.jsonc.default"
-OMO_CONFIG_DIR="$HOME/.omo"
-OMO_CONFIG_FILE="$OMO_CONFIG_DIR/omo.jsonc"
+# --- OMO slim unified configuration ---
+DEFAULT_OMO_CONFIG="/etc/opencode/oh-my-opencode-slim.json.default"
+OMO_CONFIG_DIR="$HOME/.config/opencode"
+OMO_CONFIG_FILE="$OMO_CONFIG_DIR/oh-my-opencode-slim.json"
 
 # Kept in a non-.sh file so the entrypoint runner does not execute it separately.
 source "$(dirname "$0")/lib-omo-model-defaults.bash"
@@ -341,7 +341,7 @@ source "$(dirname "$0")/lib-native-agent-overrides.bash"
 
 archive_legacy_omo_configs() {
   local legacy_name legacy_file backup_file
-  for legacy_name in oh-my-openagent.json oh-my-openagent.jsonc oh-my-opencode.json oh-my-opencode.jsonc; do
+  for legacy_name in oh-my-openagent.json oh-my-openagent.jsonc oh-my-opencode.json oh-my-opencode.jsonc omo.jsonc omo.json; do
     legacy_file="$OPCODE_CONFIG_DIR/$legacy_name"
     [ -f "$legacy_file" ] || continue
     backup_file="${legacy_file}.ai-engkit-legacy-backup"

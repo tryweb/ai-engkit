@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION:-4.19.4}
+        - OH_MY_OPENCODE_SLIM_VERSION=${OH_MY_OPENCODE_SLIM_VERSION:-2.2.20}
         - AI_ENGKIT_VERSION=dev
     container_name: ai-engkit-dev
     ports:
@@ -21,7 +21,7 @@ services:
       - opencode-config-dev:/home/devuser/.config/opencode
       - omo-config-dev:/home/devuser/.omo
       - opencode-cache-dev:/home/devuser/.cache/opencode
-      - ohmyopencode-cache-dev:/home/devuser/.cache/oh-my-opencode
+      - ohmyopencode-cache-dev:/home/devuser/.cache/oh-my-opencode-slim
       - openchamber-data-dev:/home/devuser/.config/openchamber
       - git-config-dev:/home/devuser/.config/git
       - ssh-keys-dev:/home/devuser/.ssh

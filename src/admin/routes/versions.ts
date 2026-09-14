@@ -230,7 +230,7 @@ versions.get("/api/versions", async (c) => {
     },
     plugin: {
       "superpowers": "jq -r .version /opt/opencode/baked-plugins/superpowers/package.json 2>/dev/null || echo 'unavailable'",
-      "oh-my-openagent": "bunx oh-my-openagent --version 2>/dev/null || echo 'unavailable'",
+      "oh-my-opencode-slim": "bunx oh-my-opencode-slim --version 2>/dev/null || echo 'unavailable'",
     },
   };
 
