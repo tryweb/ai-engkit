@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+## [1.18.13] - 2026-09-15
+
+### Added
+- Bump OpenCode 1.18.30 → 1.18.31, OpenChamber 1.23.1 → 1.23.2, @playwright/mcp 0.0.80 → 0.0.81
+
+### Documentation
+- Record the WebMCP default-disabled architecture decision
+- Record OMO fallback_models discriminating experiment results
+- Drop the OMO V2 gate and add the lean-ctx V2 assessment to the migration watch
+
+### Changed
+- Gate auto-tag on unreleased commits and fix dedup collision
+- Gate auto-release on unreleased commits
+- Upgrade OpenCode from 1.18.30 to 1.18.31.
+- Upgrade OpenChamber from 1.23.1 to 1.23.2.
+- Upgrade @playwright/mcp from 0.0.80 to 0.0.81.
+
 ## [1.18.12] - 2026-09-13
 
 ### Changed
@@ -2035,6 +2052,7 @@
 ## Format
 
 [Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...HEAD
+[1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2209,3 +2227,5 @@
 [1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
 [1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
 [1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...HEAD
+[1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
