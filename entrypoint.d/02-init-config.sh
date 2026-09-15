@@ -285,33 +285,62 @@ fi
 LSP_BLOCK=$(jq -n --argjson enabled "$ENABLED_LSP" \
   '{ marksman: { command: ["marksman", "server"], extensions: [".md", ".markdown"] } } * $enabled')
 
-OPCODE_CONFIG=$(jq -n \
-  --argjson plugins "$PLUGIN_JSON" \
-  --argjson lsp "$LSP_BLOCK" \
-  --arg playwright_version "${PLAYWRIGHT_VERSION}" \
-  --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
-  '{
-    "$schema": "https://opencode.ai/config.json",
-    plugin: $plugins,
-    lsp: $lsp,
-    mcp: {
-      codegraph: {
-        type: "local",
-        command: ["codegraph", "serve", "--mcp"],
-        enabled: true
+# Absolute image path; never the cache-relative OMO bundle path.
+# BEGIN FUNCTION: resolve_lsp_mcp_command
+resolve_lsp_mcp_command() {
+  local cli="${LSP_MCP_CLI:-/opt/ai-engkit/vendor/lsp-daemon/dist/cli.js}"
+  jq -cn --arg cli "$cli" '["node", $cli, "mcp"]'
+}
+# END FUNCTION: resolve_lsp_mcp_command
+
+# Args: 1=plugin JSON array, 2=native lsp block JSON, 3=lsp MCP command JSON.
+# `mcp.lsp` is the LSP bridge; the native `lsp` block is separate.
+# BEGIN FUNCTION: render_opencode_config
+render_opencode_config() {
+  local plugins_json="$1"
+  local lsp_json="$2"
+  local lsp_mcp_command_json="$3"
+
+  jq -n \
+    --argjson plugins "$plugins_json" \
+    --argjson lsp "$lsp_json" \
+    --argjson lsp_mcp_command "$lsp_mcp_command_json" \
+    '{
+      "$schema": "https://opencode.ai/config.json",
+      plugin: $plugins,
+      lsp: $lsp,
+      mcp: {
+        codegraph: {
+          type: "local",
+          command: ["codegraph", "serve", "--mcp"],
+          enabled: true
+        },
+        playwright: {
+          type: "local",
+          command: ["pw-mcp"],
+          enabled: true
+        },
+        "lean-ctx": {
+          type: "local",
+          command: ["lean-ctx"],
+          enabled: true
+        },
+        lsp: {
+          type: "local",
+          command: $lsp_mcp_command,
+          enabled: true,
+          timeout: 30000
+        }
       },
-      playwright: {
-        type: "local",
-        command: ["pw-mcp"],
-        enabled: true
-      },
-      "lean-ctx": {
-        type: "local",
-        command: ["lean-ctx"],
-        enabled: true
+      permission: {
+        websearch: "allow"
       }
-    }
-  }')
+    }'
+}
+# END FUNCTION: render_opencode_config
+
+LSP_MCP_COMMAND_JSON="$(resolve_lsp_mcp_command)"
+OPCODE_CONFIG=$(render_opencode_config "$PLUGIN_JSON" "$LSP_BLOCK" "$LSP_MCP_COMMAND_JSON")
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 

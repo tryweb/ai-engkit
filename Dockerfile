@@ -318,6 +318,13 @@ COPY --chown=${USERNAME}:${USERNAME} entrypoint.d/ /entrypoint.d/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh
 
+# ── Vendored OMO LSP MCP bridge (not on npm; see vendor/omo-lsp-daemon/README.md) ──
+# Absolute install path: generated opencode.json must not use a cache-relative command.
+COPY --chown=${USERNAME}:${USERNAME} vendor/omo-lsp-daemon /opt/ai-engkit/vendor/lsp-daemon
+RUN printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"build","version":"1.0"}}}' \
+    | node /opt/ai-engkit/vendor/lsp-daemon/dist/cli.js mcp \
+    | grep -q '"name":"lsp"'
+
 USER ${USERNAME}
 
 ENV HOME=/home/${USERNAME}
