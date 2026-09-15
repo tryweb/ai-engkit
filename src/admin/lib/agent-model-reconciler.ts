@@ -159,12 +159,13 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
   async function namesAndResolved(
     password: string,
     config: Readonly<Record<string, { readonly models?: readonly FallbackModelEntry[] }>>,
+    presetNames: readonly string[],
   ): Promise<{ readonly names: readonly string[]; readonly resolved: ReadonlyMap<string, ResolvedModel> }> {
     const [names, resolvedMap] = await Promise.all([
       lib.fetchSubagentNames(password),
       lib.fetchResolvedAgentModels(password),
     ]);
-    const knownKeys = new Set(Object.keys(config));
+    const knownKeys = new Set([...Object.keys(config), ...presetNames]);
     const configurable = new Set<string>();
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
@@ -182,10 +183,11 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     const password = lib.getServerPassword();
     if (password === null) return { changed: 0, applied: 0, failed: 0, agents: [], results: [] };
     const config = await lib.readAgentModelsConfig();
-    const [snapshot, state] = await Promise.all([
+    const [snapshot, presetNames] = await Promise.all([
       lib.fetchProviderSnapshot(password),
-      namesAndResolved(password, config),
+      lib.readPresetAgentNames(),
     ]);
+    const state = await namesAndResolved(password, config, presetNames);
     await Promise.all(snapshot.connectedProviders.map((providerID) => pruneStaleProbeCacheForProvider(deps, providerID)));
     const capabilities = await fetchCapabilityCatalog(deps, password);
     const connected = new Set(snapshot.connectedProviders);
@@ -286,15 +288,14 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
         suggestions: new Map(),
       };
     }
-    const [metadata, snapshot, state, capabilities] = await Promise.all([
+    const [metadata, snapshot, config, presetNames, capabilities] = await Promise.all([
       fetchModelMetadata(metadataOptions),
       lib.fetchProviderSnapshot(password),
-      (async () => {
-        const cfg = await lib.readAgentModelsConfig();
-        return namesAndResolved(password, cfg);
-      })(),
+      lib.readAgentModelsConfig(),
+      lib.readPresetAgentNames(),
       fetchCapabilityCatalog(deps, password),
     ]);
+    const state = await namesAndResolved(password, config, presetNames);
     const effectiveProviders: readonly string[] =
       selectedProviders === null || selectedProviders.length === 0
         ? [...snapshot.connectedProviders].sort()
@@ -329,10 +330,11 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     probes.clear();
     probeCount = 0;
     const config = await lib.readAgentModelsConfig();
-    const [snapshot, state] = await Promise.all([
+    const [snapshot, presetNames] = await Promise.all([
       lib.fetchProviderSnapshot(password),
-      namesAndResolved(password, config),
+      lib.readPresetAgentNames(),
     ]);
+    const state = await namesAndResolved(password, config, presetNames);
     const allowed = providers === null ? null : new Set(providers);
     const capabilities = await fetchCapabilityCatalog(deps, password);
     const suggestions = new Map<string, readonly FallbackModelEntry[]>();

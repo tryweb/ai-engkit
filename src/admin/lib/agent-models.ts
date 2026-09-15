@@ -55,6 +55,15 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     return result.exitCode === 0 ? parseAgentModelsConfig(result.stdout) : {};
   }
 
+  async function readPresetAgentNames(): Promise<readonly string[]> {
+    const result = await deps.exec(
+      `jq -r 'if (.preset | type) == "string" then (.presets[.preset] // {} | keys[]) else empty end' ${OMO_CONFIG} 2>/dev/null || true`,
+      10_000,
+    );
+    if (result.exitCode !== 0) return [];
+    return result.stdout.split("\n").map((name) => name.trim()).filter((name) => name.length > 0);
+  }
+
   async function writeAgentFallbackModels(
     agent: string,
     entries: readonly FallbackModelEntry[],
@@ -370,6 +379,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
 
   return {
     readAgentModelsConfig,
+    readPresetAgentNames,
     writeAgentFallbackModels,
     snapshotAgentModelsConfig,
     restoreAgentModelsConfig,
@@ -404,14 +414,15 @@ export async function collectAgentModelState(
   lib: AgentModelsLib,
   password: string | null,
 ): Promise<AgentModelsViewState> {
-  const [config, resolvedMap, providerSnapshot, subagentNames] = await Promise.all([
+  const [config, presetAgentNames, resolvedMap, providerSnapshot, subagentNames] = await Promise.all([
     lib.readAgentModelsConfig(),
+    lib.readPresetAgentNames(),
     password !== null ? lib.fetchResolvedAgentModels(password) : Promise.resolve(null),
     lib.fetchProviderSnapshot(password),
     password !== null ? lib.fetchSubagentNames(password) : Promise.resolve([]),
   ]);
 
-  const knownKeys = new Set(Object.keys(config));
+  const knownKeys = new Set([...Object.keys(config), ...presetAgentNames]);
   // /agent returns display names ("Sisyphus - ultraworker"); map them back to
   // config keys so configured rows and resolved models line up.
   const resolvedByKey = new Map<string, ResolvedModel>();

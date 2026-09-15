@@ -34,6 +34,18 @@ function fixture(config: string, provider: string, agents: string, probes: Recor
   return { deps, calls, applied, cleanup: () => {} };
 }
 
+function withPresetNames(base: Fixture, presetNames: readonly string[]): AgentModelsDeps {
+  return {
+    ...base.deps,
+    exec: async (command: string, timeout?: number): Promise<ExecResult> => {
+      if (command.includes(".presets[.preset]")) {
+        return { stdout: presetNames.join("\n"), stderr: "", exitCode: 0 };
+      }
+      return base.deps.exec(command, timeout);
+    },
+  };
+}
+
 const liveAgents = JSON.stringify([
   { name: "general", mode: "subagent", model: { providerID: "missing", modelID: "default" } },
   { name: "plan", mode: "subagent", model: { providerID: "missing", modelID: "default" } },
@@ -619,6 +631,53 @@ describe("agent model reconciler", () => {
     expect(result.changed).toBe(0);
     expect(probedModelIds(calls)).toHaveLength(12);
     expect(new Set(probedModelIds(calls)).size).toBe(12);
+    base.cleanup();
+  });
+
+  test("observes a preset-only healthy assigned subagent via reconcile and suggest", async () => {
+    const config = JSON.stringify({ general: {} });
+    const provider = JSON.stringify({
+      connected: ["p"],
+      all: [{ id: "p", models: { alpha: { capabilities: { toolcall: true } } } }],
+    });
+    const agents = JSON.stringify([
+      { name: "Preset-Only", mode: "subagent", model: { providerID: "p", modelID: "alpha" } },
+    ]);
+    const base = fixture(config, provider, agents, {});
+    const deps = withPresetNames(base, ["preset-only"]);
+
+    const suggestions = await createAgentModelReconciler(deps).suggest();
+    expect(suggestions.get("preset-only")).toEqual([{ model: "p/alpha" }]);
+
+    const logs: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logs.push(args.map(String).join(" "));
+    try {
+      const result = await createAgentModelReconciler(deps).reconcileAll();
+      expect(result.changed).toBe(0);
+      expect(
+        logs.some((line) => line.includes('"agent":"preset-only"') && line.includes('"decision":"keep_healthy_assigned"')),
+      ).toBe(true);
+    } finally {
+      console.error = originalError;
+      base.cleanup();
+    }
+  });
+
+  test("excludes a live subagent absent from config and presets", async () => {
+    const config = JSON.stringify({ general: {} });
+    const provider = JSON.stringify({
+      connected: ["p"],
+      all: [{ id: "p", models: { alpha: { capabilities: { toolcall: true } } } }],
+    });
+    const agents = JSON.stringify([
+      { name: "Mystery-Agent", mode: "subagent", model: { providerID: "p", modelID: "alpha" } },
+    ]);
+    const base = fixture(config, provider, agents, {});
+    const deps = withPresetNames(base, ["preset-only"]);
+
+    const suggestions = await createAgentModelReconciler(deps).suggest();
+    expect(suggestions.has("mystery-agent")).toBe(false);
     base.cleanup();
   });
 
