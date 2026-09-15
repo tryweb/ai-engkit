@@ -7,7 +7,7 @@ This document summarizes the tools that ship with AI-EngKit and where to extend 
 AI-EngKit combines four layers of tooling in one container:
 
 1. **AI workspace** — OpenCode, OpenChamber, OpenSpec, plugins, and baked skills
-2. **MCP integrations** — CodeGraph, lean-ctx, and Playwright
+2. **MCP integrations** — CodeGraph, lean-ctx, Playwright, and the LSP bridge
 3. **Developer CLI stack** — git, `gh`, `glab`, Docker CLI, Compose, Buildx, bun, Python, and shell tools
 4. **Runtime extension points** — extra apt, Homebrew, and bun packages installed at container startup
 
@@ -20,12 +20,22 @@ AI-EngKit preconfigures these MCP servers for OpenCode:
 | **CodeGraph** | Code graph, symbol relationships, dependency analysis | Installed as `@colbymchenry/codegraph` |
 | **lean-ctx** | Context-aware read/search/shell workflows | Includes persistent state and knowledge volumes |
 | **Playwright** | Browser automation and UI testing | Playwright-bundled Chromium; `pw-mcp` wrapper resolves the executable path and launches `@playwright/mcp` with `--executable-path --no-sandbox --headless` |
+| **LSP** (`mcp.lsp`) | Language-server tools over MCP: `diagnostics`, `goto_definition`, `find_references`, `symbols`, `prepare_rename`, `rename`, `status`, `install_decision` | Restored OMO LSP bridge, vendored from `@code-yeongyu/lsp-daemon@0.1.0` at `/opt/ai-engkit/vendor/lsp-daemon` (not published to npm). Separate from the native OpenCode `lsp` block |
 
 Related files:
 
 - `Dockerfile`
 - `entrypoint.d/02-init-config.sh`
+- `vendor/omo-lsp-daemon/README.md`
 - `docs/knowledge/tooling/lean-ctx-xdg-layout.md`
+
+### Native websearch (Exa)
+
+OpenCode's built-in `websearch` tool is **native**, not an MCP server. It is
+enabled by the `OPENCODE_ENABLE_EXA` environment variable (passed through
+`.env`) and granted by `permission.websearch: "allow"` in the generated
+`opencode.json`. `EXA_API_KEY` is optional and selects an authenticated Exa
+account.
 
 ## Authority and Routing
 

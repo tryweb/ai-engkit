@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+- Restore the OMO LSP MCP bridge as a vendored, absolute-path `mcp.lsp` server (`@code-yeongyu/lsp-daemon@0.1.0`), separate from the native `lsp` block
+- Enable native OpenCode Exa websearch via the `OPENCODE_ENABLE_EXA` env passthrough and `permission.websearch: "allow"` in the generated config
+
 ## [1.18.12] - 2026-09-13
 
 ### Changed

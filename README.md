@@ -50,7 +50,7 @@ The installer-generated `.env` is the source of truth for your ports and credent
 ### Core workspace
 
 - OpenCode AI agent (backend) with OpenChamber web UI (frontend); the CLI is available inside the container via `docker exec`
-- CodeGraph, lean-ctx, and Playwright MCP integrations
+- CodeGraph, lean-ctx, Playwright, and LSP MCP integrations
 - OpenSpec, Superpowers, baked skills, and OpenCode plugin support
 - `git`, `gh`, `glab`, Docker Compose, Buildx, Homebrew, bun, Python, ripgrep, jq, tmux, SSH, rsync, and common build tools
 - Bundled Playwright Chromium, resolved at runtime through the `pw-mcp` wrapper
@@ -109,6 +109,7 @@ Copy `.env.example` to `.env` when configuring a checkout manually. The installe
 | `ADMIN_PASSWORD` | **required** | Admin Dashboard password; installer prompts for it |
 | `OPENCODE_PLUGINS` | bundled plugin list | Comma-separated OpenCode plugins |
 | `OPENCODE_PROVIDER` | unset | Custom provider JSON injected into `opencode.json` |
+| `OPENCODE_ENABLE_EXA` | `1` | Enable native Exa-backed `websearch` (env passthrough; not an MCP server) |
 | `WORKSPACE_PATH` | named volume | Set a host path for a bind-mounted workspace |
 | `BACKUP_RETENTION` | `5` | Number of upgrade backups to retain |
 | `APT_PACKAGES` | unset | Extra apt packages installed at startup |
