@@ -63,8 +63,15 @@ else
   fail "runtime image executes host-only entrypoint test helpers"
 fi
 
+LSP_MCP_CONFIG_TEST="$(dirname "${BASH_SOURCE[0]}")/test-lsp-mcp-config.sh"
 if [ "${RUN_AGENTS_TESTS_ONLY:-0}" = "1" ]; then
   exit "$FAIL"
+fi
+
+if [ -x "$LSP_MCP_CONFIG_TEST" ] && "$LSP_MCP_CONFIG_TEST" >/dev/null 2>&1; then
+  pass "lsp MCP config and tools/list smoke tests pass"
+else
+  fail "lsp MCP config and tools/list smoke tests failed"
 fi
 
 RELIABILITY_GATE_TEST="$(dirname "${BASH_SOURCE[0]}")/leanctx-reliability-gate.sh"
@@ -456,6 +463,68 @@ if docker exec "$CONTAINER" sh -c 'command -v pw-mcp >/dev/null'; then
 else
   fail "pw-mcp wrapper not on PATH (playwright MCP cannot launch)"
 fi
+
+# --------------------------------------------------
+# 8.1b LSP MCP bridge + native Exa websearch
+# --------------------------------------------------
+echo ""
+echo "--- LSP MCP Bridge / Native Websearch ---"
+
+# Restored OMO LSP bridge, separate from the native `lsp` block.
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp.lsp.type == \"local\" and .mcp.lsp.enabled == true" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "lsp MCP server configured in opencode.json (.mcp.lsp)"
+else
+  fail "lsp MCP server not configured in opencode.json"
+fi
+
+assert_file_exists "vendored lsp bridge CLI in image" "/opt/ai-engkit/vendor/lsp-daemon/dist/cli.js"
+
+LSP_MCP_COMMAND=$(docker exec "$CONTAINER" sh -c 'jq -r ".mcp.lsp.command | join(\" \")" /home/devuser/.config/opencode/opencode.json 2>/dev/null')
+if [ "$LSP_MCP_COMMAND" = "node /opt/ai-engkit/vendor/lsp-daemon/dist/cli.js mcp" ]; then
+  pass "lsp MCP uses the vendored absolute command"
+else
+  fail "lsp MCP command is '${LSP_MCP_COMMAND}', expected the vendored absolute path"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp.lsp.command[1] | (startswith(\"/\") and (contains(\"/.cache/\") | not))" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "lsp MCP command is absolute and not cache-relative"
+else
+  fail "lsp MCP command is not an absolute non-cache path"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -e ".lsp.marksman.command[0] == \"marksman\"" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "native lsp block preserved alongside mcp.lsp"
+else
+  fail "native lsp block missing from opencode.json"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -e ".permission.websearch == \"allow\"" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "permission.websearch is allow in opencode.json"
+else
+  fail "permission.websearch is not allow in opencode.json"
+fi
+
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp | has(\"websearch\") | not" /home/devuser/.config/opencode/opencode.json >/dev/null 2>&1'; then
+  pass "websearch is not registered as an MCP block"
+else
+  fail "websearch must not be an MCP block"
+fi
+
+EXA_ENV=$(docker exec "$CONTAINER" sh -c 'printf "%s" "${OPENCODE_ENABLE_EXA:-}"' 2>/dev/null || echo "")
+assert_eq "OPENCODE_ENABLE_EXA is passed into ai-dev" "1" "$EXA_ENV"
+
+LSP_MCP_TOOLS=$(docker exec "$CONTAINER" sh -c '
+  {
+    printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"ai-engkit-tests\",\"version\":\"1.0\"}}}"
+    printf "%s\n" "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+    sleep 1
+    printf "%s\n" "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}"
+    sleep 2
+  } | timeout 20 node /opt/ai-engkit/vendor/lsp-daemon/dist/cli.js mcp 2>/dev/null
+' 2>/dev/null)
+for tool in diagnostics goto_definition find_references symbols prepare_rename rename; do
+  assert_contains "lsp MCP tools/list exposes $tool" "\"name\":\"$tool\"" "$LSP_MCP_TOOLS"
+done
 
 # --------------------------------------------------
 # 8.2 LeanCTX (Context Runtime)

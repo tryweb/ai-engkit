@@ -76,6 +76,9 @@ jobs:
       - name: Compose isolation guard
         run: bash test/test-compose-isolation.sh
 
+      - name: LSP MCP config tests
+        run: bash test/test-lsp-mcp-config.sh
+
       - name: Admin unit tests
         run: docker run --rm ai-engkit:ci bun --cwd /opt/admin test
 
