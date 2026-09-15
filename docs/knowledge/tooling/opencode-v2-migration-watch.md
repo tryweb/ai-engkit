@@ -2,6 +2,7 @@
 
 ## Context
 
+- Follow-up (2026-09-15): the slim-branch replacement evaluation led to a recommendation to pause active V2/slim validation and maintain V1 on `main`; no branch switch or runtime restoration was performed during that discussion. See [the evaluation disposition](../architecture/omo-slim-evaluation-disposition.md). The observations below are the dated 2026-09-14 baseline, not a description of the slim branch or a fresh upstream check.
 - AI-EngKit pins OpenCode V1 (`Dockerfile: ARG OPENCODE_VERSION=1.18.30`, installed via `bun install -g opencode-ai@${OPENCODE_VERSION}`) with `oh-my-openagent@4.19.4` as the only `plugin[]` entry, plus `OPENCHAMBER_VERSION=1.23.1` (`bun install -g @openchamber/web@${OPENCHAMBER_VERSION}`).
 - OpenCode V2 package split: git tags `v2.0.0`–`v2.0.3` exist, but V2 never publishes as `opencode-ai@2.x` — it ships as `@opencode/cli@2.0.3` (npm `latest`), `@opencode/client@2.0.3`, `@opencode/sdk@2.0.3`; `@opencode-ai/cli@beta` stays `0.0.0-beta-*`. Docs still say "OpenCode 2.0 is in beta", contradicting npm `latest=2.0.3`; treat 2.0.x as beta-until-officially-GA'd.
 - OpenChamber released `v2-preview` (2026-09-14): test builds rebuilt on OpenCode v2 (`2.0.0-preview.4`, bundling OpenCode 2.0.3), explicitly "not a release", desktop binaries only (no container image), files replaced on every build, self-update to stable disabled.
