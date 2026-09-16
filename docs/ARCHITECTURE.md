@@ -7,6 +7,7 @@ This document explains the AI-EngKit system architecture, the relationships betw
 - [System Overview](#system-overview)
 - [Service Architecture](#service-architecture)
 - [ai-admin Dashboard](#ai-admin-dashboard)
+- [Domain Compose Overlay](#domain-compose-overlay)
 - [Admin Agent (center connection)](#admin-agent-center-connection)
 - [Container Architecture](#container-architecture)
 - [Data Flow](#data-flow)
@@ -130,9 +131,11 @@ graph TB
 
     BROWSER -->|"HTTP :8080"| AIADMIN
     AIADMIN -->|"docker exec"| AIDEV
-    AIADMIN -->|"read/write"| ENV_FILE["/opt/.env"]
-    AIADMIN -->|"read/write"| COMPOSE_FILE["docker-compose.yml"]
-    AIADMIN -->|"backup/restore"| BACKUPS["/opt/backups/"]
+    AIADMIN -->|"read/write"| ENV_FILE["/opt/ai-engkit/.env"]
+    AIADMIN -->|"read/write"| COMPOSE_FILE["/opt/ai-engkit/compose.yml"]
+    AIADMIN -->|"stage"| STAGED_BASE["/opt/ai-engkit/compose-upgrade-base.yml"]
+    AIADMIN -->|"read-only"| OVERLAY["/opt/ai-engkit/extensions/"]
+    AIADMIN -->|"backup/restore"| BACKUPS["/opt/ai-engkit/backups/"]
 
     style AIADMIN fill:#e8f5e9
     style AIDEV fill:#fff3e0
@@ -147,7 +150,8 @@ graph TB
 | Setup | `GET /setup`, `POST /api/setup` | First-run password setup with redirect |
 | Version Dashboard | `GET /api/versions` | CLI and runtime version table |
 | Env Config Editor | `GET /api/env`, `PUT /api/env/:key` | Inline .env editing with masked secrets |
-| Upgrade Engine | `POST /api/upgrade`, `GET /api/upgrade/log` | 6-step upgrade pipeline with SSE log stream |
+| Upgrade Engine | `POST /api/upgrade`, `GET /api/upgrade/log` | 7-step upgrade pipeline with SSE log stream |
+| Upgrade Status | `GET /api/upgrade/status` | Upgrade state and domain overlay status |
 | Project Init | `GET /api/projects`, `POST /api/projects` | Project scaffold with subdomain validation |
 | GitHub Auth | `POST /api/auth/gh/start`, `GET /api/auth/gh/status` | Device code flow for `gh` CLI auth |
 | GitLab Auth | `POST /api/auth/glab/start`, `GET /api/auth/glab/status` | Device code flow for `glab` CLI auth |
@@ -164,20 +168,40 @@ graph TB
 ```mermaid
 flowchart LR
     A["Trigger Upgrade"] --> B["Digest Compare"]
-    B -->|"changed"| C["Backup .env + compose.yml"]
+    B -->|"changed"| C["Backup .env + Compose inputs + settings"]
     C --> D["Merge .env (preserve user values)"]
-    D --> E["docker compose up -d --force-recreate"]
-    E --> F["Health Poll<br/>(retry 30×1s)"]
-    F -->|"healthy"| G["Cleanup old backups"]
-    F -->|"unhealthy"| H["Rollback restore"]
-    H --> I["Notify failure"]
-    B -->|"unchanged"| J["Skip (no-op)"]
+    D --> E["Stage target base and resolve overlay"]
+    E --> F["Validate effective base + overlay"]
+    F --> G["docker compose up -d --force-recreate"]
+    G --> H["Health Poll<br/>(retry 30×1s)"]
+    H -->|"healthy"| I["Cleanup old backups"]
+    H -->|"unhealthy"| J["Rollback effective config"]
+    J --> K["Notify failure"]
+    B -->|"unchanged"| L["Skip (no-op)"]
 
     style A fill:#fff3e0
-    style G fill:#e8f5e9
-    style J fill:#e3f2fd
-    style H fill:#ffcdd2
+    style I fill:#e8f5e9
+    style L fill:#e3f2fd
+    style J fill:#ffcdd2
+    style K fill:#ffcdd2
 ```
+
+### Domain Compose Overlay
+
+The Admin sidecar keeps the upstream Compose file as the Admin-owned base and
+optionally applies one domain-owned overlay configured by
+`AI_ENGKIT_COMPOSE_OVERLAY`. The overlay is resolved beneath
+`/opt/ai-engkit/extensions/`, validated on its own and again after merging with
+the staged base, then used for Admin upgrade, ai-dev restart, database
+maintenance, and other Admin-managed ai-dev recreates. With no overlay, these
+paths use the historical single-file Compose flow.
+
+Only `ai-dev` integration fields are allowed: environment, networks, named
+volumes, labels, and healthcheck. The overlay cannot change the image,
+container identity, ports, privilege/security settings, Docker socket mounts,
+Admin service, or domain worker lifecycle. The Admin API reports overlay
+status; the detailed ownership and validation contract is in
+[Domain Compose Overlay](./DOMAIN_COMPOSE_OVERLAY.md).
 
 ### Key Decisions
 
@@ -189,7 +213,7 @@ flowchart LR
 | HMAC session cookies over JWT | No dependency on JWK/JWKS; ADMIN_PASSWORD as shared secret |
 | SSE over WebSocket logs | Simpler server-sent protocol, no bidirectional channel needed |
 | DooD (Docker-out-of-Docker) | Reuses the host Docker socket already passed to the container |
-| `/opt/ai-engkit/` host paths | Isolates operational files (`.env`, `compose.yml`, `backups/`) from user workspace |
+| `/opt/ai-engkit/` host paths | Isolates operational files (`.env`, `compose.yml`, staged base, overlay, and `backups/`) from user workspace |
 
 ### Environment Variables
 
@@ -198,6 +222,7 @@ flowchart LR
 | `ADMIN_PORT` | `8080` | Host port for the admin dashboard |
 | `ADMIN_DEV_PORT` | `8081` | Dev mode port (with `--watch`) |
 | `ADMIN_PASSWORD` | *(required)* | Admin login password (prompted by `install.sh`) |
+| `AI_ENGKIT_COMPOSE_OVERLAY` | *(empty — disabled)* | One operator-controlled overlay beneath `/opt/ai-engkit/extensions/` |
 | `CENTER_URL` | *(empty — disabled)* | WebSocket URL of the AI-EngKit-Manager center |
 | `CENTER_TOKEN` | *(empty)* | Registration token for center authentication |
 | `AGENT_ID` | *(auto-generated)* | Agent identifier sent during handshake |
@@ -281,7 +306,7 @@ The center sends **commands**; the agent dispatches them to shared libraries alr
 
 | Command | Description |
 |---------|-------------|
-| `upgrade` | Trigger the 6-step upgrade pipeline |
+| `upgrade` | Trigger the 7-step upgrade pipeline |
 | `reconfigure` | Restart ai-dev with updated config |
 | `restart` | Restart ai-dev container |
 | `providers.key.add` | Add an API key for a provider |
@@ -458,6 +483,11 @@ graph TB
     style CONTAINER_8080 fill:#e8f5e9
 ```
 
+When `AI_ENGKIT_COMPOSE_OVERLAY` is configured, `ai-dev` may also attach to
+domain-owned external networks declared by the overlay. The domain project
+creates and manages those networks and its worker services; AI-EngKit only
+recreates `ai-dev` with the effective base-plus-overlay configuration.
+
 ### Environment Variables
 
 | Variable | Purpose | Default | Scope |
@@ -465,6 +495,7 @@ graph TB
 | `CHAMBER_PORT` | Web UI port | 8000 | Host |
 | `OPENCODE_SERVER_PASSWORD` | API authentication | `devonly` | Application |
 | `OPENCHAMBER_UI_PASSWORD` | Web UI authentication | `chamber` | Application |
+| `AI_ENGKIT_COMPOSE_OVERLAY` | Domain Compose overlay | *(empty — disabled)* | Admin / Compose |
 
 ## Storage Architecture
 
@@ -673,18 +704,24 @@ graph LR
 ### Plugin System
 
 | Plugin | Purpose | Description | Version Management |
-| `oh-my-openagent` | Core framework | Extends baseline OpenCode functionality | Supports build-time version pinning |
+| `oh-my-openagent` | Core framework | Extends baseline OpenCode functionality | Build-time pin via `OH_MY_OPENAGENT_VERSION` |
 
 ### Plugin Version Management (Development)
 
-You can specify plugin versions when building the image:
+`AI_ENGKIT_VERSION` and `OH_MY_OPENAGENT_VERSION` control different things:
+`AI_ENGKIT_VERSION` selects the deployed AI-EngKit image and remains `latest`
+by default in the production Compose file. `OH_MY_OPENAGENT_VERSION` selects
+the OMO plugin version baked into a development image's default OpenCode
+configuration; the Dockerfile default is `4.19.4`.
+
+You can override the OMO version when building the development image:
 
 ```bash
-# Use the latest version (default)
+# Use the Dockerfile default (`4.19.4`)
 docker compose -p dev -f docker-compose.dev.yml build
 
-# Pin a specific version
-OH_MY_OPENAGENT_VERSION=3.15.0 LANCEDB_OPENCODE_PRO_VERSION=0.7.0 \
+# Pin a specific OMO version
+OH_MY_OPENAGENT_VERSION=3.15.0 \
   docker compose -p dev -f docker-compose.dev.yml build
 ```
 
