@@ -15,7 +15,7 @@ A separate `upgrade.sh` with these design properties:
 | Property | Implementation |
 |----------|---------------|
 | **Non-interactive** | No `read` prompts. Assumes existing `.env` is correct. |
-| **Backup-first** | `cp docker-compose.yml backup_<ts>/` and `cp .env backup_<ts>/` before any write. |
+| **Backup-first** | Back up `docker-compose.yml`, `.env`, and configured overlay inputs before any write. |
 | **Merge-only env** | Parse `.env.example` for new keys; only append keys missing from `.env`. |
 | **Explicit pull** | `docker compose pull` before `docker compose up -d --force-recreate`. |
  | **Self-update** | Downloads and replaces itself before any other operation (skipped when piped to shell). Guarded by `UPGRADE_SELF_UPDATED` env var to prevent re-exec loops. |
@@ -32,7 +32,7 @@ A separate `upgrade.sh` with these design properties:
 ## Side Effects / Tradeoffs
 
 - **Duplicated code**: `check_system` and `check_docker` are copied verbatim. A shared lib would require a separate file download, adding complexity. Tradeoff accepted.
-- **Overwrites `docker-compose.yml`**: If users customized their compose file (e.g., extra services, different ports), those changes are lost. The backup preserves the original.
+- **Refreshes the upstream base**: Supported domain integrations belong in the local single overlay and survive upgrades; unsupported changes to protected Compose fields are not preserved. The backup preserves the previous effective inputs.
 - **No dry-run mode**: Could be added later with `--dry-run` flag that skips `docker compose` commands.
 
 ## Evidence
@@ -40,7 +40,7 @@ A separate `upgrade.sh` with these design properties:
 - `bash -n upgrade.sh` — shell syntax clean.
 - `upgrade.sh` follows the same `REPO_URL` convention and `set -euo pipefail` discipline as `install.sh`.
 - Tested on a fresh clone: backup, download, env merge, pull, recreate all succeed.
-- Rollback instructions verified by manual `cp` + `docker compose up -d`.
+- Rollback instructions verified by the exact commands printed by the script, including the base-plus-overlay command when configured.
 
 ## Related Files
 
