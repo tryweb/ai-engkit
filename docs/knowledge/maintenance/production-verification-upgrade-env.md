@@ -193,11 +193,12 @@ curl -s -b <session> http://localhost:8080/api/upgrade/status | jq .
 | Step | Expected event | Expected duration |
 |------|---------------|-------------------|
 | **1. digest_compare** | `docker pull ghcr.io/...` → success/fail | ~10-60s |
-| **2. backup** | `.env` + `compose.yml` copied to `/opt/ai-engkit/backups/pre-<ts>/` | ~1s |
+| **2. backup** | `.env` + Compose inputs + settings copied to `/opt/ai-engkit/backups/pre-<ts>/`; overlay inputs included when configured | ~1s |
 | **3. merge_env** | Upstream `.env.example` fetched, new keys appended | ~3-5s |
-| **4. recreate** | `docker compose up -d --force-recreate ai-dev` | ~10-30s |
+| **4. recreate** | Effective base-plus-overlay validated, then `docker compose up -d --force-recreate ai-dev` | ~10-30s |
 | **5. poll_health** | ai-dev container becomes "Up" | ~5-30s |
-| **6. cleanup** | `docker image prune -f` | ~2-5s |
+| **6. reconcile** | Missing OpenChamber project registrations restored (add-only) | ~1-5s |
+| **7. cleanup** | `docker image prune -f` | ~2-5s |
 
 ### 4.5 Verify events
 
@@ -206,7 +207,7 @@ curl -s -b <session> http://localhost:8080/api/upgrade/status | jq .
 - [ ] Step 1: pull output mentions image digest
 - [ ] Step 2: backup path includes timestamp
 - [ ] Step 4: container is recreated (new container ID)
-- [ ] Step 6: any dangling images removed
+- [ ] Step 7: any dangling images removed
 
 ### 4.6 Verify upgrade status on completion
 
@@ -216,7 +217,7 @@ curl -s -b <session> http://localhost:8080/api/upgrade/status | jq .
 
 - [ ] **Expected**: `{"state":"completed", ...}` (or `"failed"` if errors)
 - [ ] `progress_pct` is `100` for completed
-- [ ] `events` array contains all 6 steps
+- [ ] `events` array contains all 7 steps
 
 ### 4.7 Verify post-upgrade version
 
@@ -235,7 +236,8 @@ ls -la /opt/ai-engkit/backups/
 ```
 
 - [ ] Backup directory exists with timestamp name
-- [ ] Contains `.env` and `compose.yml`
+- [ ] Contains `.env`, `compose.yml`, and OpenChamber settings
+- [ ] Overlay installations also contain the staged base and overlay backup data
 
 ### 4.9 Verify rollback on failure (negative test)
 
