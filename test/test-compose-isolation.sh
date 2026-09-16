@@ -20,6 +20,20 @@ command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 project_name="$(docker compose -p dev -f docker-compose.dev.yml config --format json | jq -r '.name')"
 [ "$project_name" = "dev" ] || fail "docker-compose.dev.yml resolves to project '$project_name', expected 'dev'"
 
+# Dev ai-admin must expose the same overlay contract mounts as production.
+admin_volumes="$(docker compose -p dev -f docker-compose.dev.yml config --format json | jq -c '[.services["ai-admin"].volumes[]?]')"
+printf '%s' "$admin_volumes" | jq -e 'any(.[]; .target == "/opt/ai-engkit/extensions" and .read_only == true and (.source | endswith("/extensions")))' >/dev/null \
+  || fail "dev ai-admin is missing the read-only ./extensions:/opt/ai-engkit/extensions mount"
+printf '%s' "$admin_volumes" | jq -e 'any(.[]; .target == "/opt/ai-engkit/compose-upgrade-base.yml" and (.read_only != true) and (.source | endswith("/admin-data/upgrade-base.yml")))' >/dev/null \
+  || fail "dev ai-admin is missing the read-write ./admin-data/upgrade-base.yml mount"
+[ -f admin-data/upgrade-base.yml ] || fail "./admin-data/upgrade-base.yml must exist as a regular file before Compose starts"
+
+if rg -n 'chown -R devuser:devuser /opt/ai-engkit' docker-compose.dev.yml; then
+  fail "dev ai-admin recursively chowns the read-only extensions mount"
+fi
+rg -n 'find /opt/ai-engkit -path /opt/ai-engkit/extensions -prune -o -exec chown devuser:devuser' docker-compose.dev.yml >/dev/null \
+  || fail "dev ai-admin does not prune the read-only extensions mount during ownership setup"
+
 # Dev Compose invocations must pin the project explicitly; an unscoped
 # '-f docker-compose.dev.yml' resolves the project from the directory name
 # and can attach to (or clobber) the production stack.

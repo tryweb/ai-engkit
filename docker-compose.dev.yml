@@ -50,7 +50,7 @@ services:
       - -c
       - |
         set -e
-        sudo chown -R devuser:devuser /opt/ai-engkit
+        sudo find /opt/ai-engkit -path /opt/ai-engkit/extensions -prune -o -exec chown devuser:devuser {} +
         mkdir -p /opt/ai-engkit/backups
         [ -f /opt/ai-engkit/VERSION ] || echo dev > /opt/ai-engkit/VERSION
          [ -f /opt/ai-engkit/.env ] || env | grep -v -E '^(HOME|PATH|BUN_|NODE_|npm_|HOSTNAME|PWD|SHLVL|TERM|TZ|LS_COLORS|LESS[ _]|PAGER|EDITOR|LC_|LANG|SHELL|USER|SUDO_|TMPDIR|OLDPWD|_|LOGNAME|PLAYWRIGHT_|DEBIAN_|CLAUDE_)' > /opt/ai-engkit/.env
@@ -66,6 +66,8 @@ services:
            mv "$$env_tmp" /opt/ai-engkit/.env
          fi
          mkdir -p /opt/ai-engkit/admin-data
+         mkdir -p /opt/ai-engkit/extensions
+         [ -f /opt/ai-engkit/compose-upgrade-base.yml ] || : > /opt/ai-engkit/compose-upgrade-base.yml
         if [ -d /opt/ai-engkit/provider-state/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/provider-state/provider-keys.json.legacy.$$(date +%s); fi
         if [ -f /opt/ai-engkit/provider-state/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
         if [ -f /opt/ai-engkit/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
@@ -76,6 +78,8 @@ services:
       - "${ADMIN_DEV_PORT:-8081}:8080"
     volumes:
       - admin-data-dev:/opt/ai-engkit
+      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
+      - ./extensions:/opt/ai-engkit/extensions:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - ADMIN_PORT=8080
