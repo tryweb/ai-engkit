@@ -44,6 +44,75 @@ download() {
     fi
 }
 
+# Resolve a WORKSPACE_PATH value read from .env without invoking a shell.
+# Only plain paths and a leading "~/" are expanded, so command substitution and
+# other shell syntax in .env are treated as literal text, never executed.
+expand_workspace_path() {
+    local path="$1"
+    case "$path" in
+        "~")   printf '%s' "$HOME" ;;
+        "~/"*) printf '%s/%s' "$HOME" "${path:2}" ;;
+        *)     printf '%s' "$path" ;;
+    esac
+}
+
+# ──────────────────────────────────────────────────────────
+# Domain overlay state (set by detect_overlay_configuration)
+# ──────────────────────────────────────────────────────────
+OVERLAY_ACTIVE=0
+OVERLAY_REF=""
+OVERLAY_HOST=""
+OVERLAY_STAGING_BASE=""
+OVERLAY_VALIDATION_ERROR=""
+# Empty for base-only installs so `dc` stays `docker compose`; set to
+# `--project-directory <install> -f <staged base> -f <overlay>` for overlay runs.
+COMPOSE_ARGS=()
+
+# Single-overlay allowlist policy, mirrored from the Admin resolver. Named
+# volumes are allowed; every bind mount is rejected, with the Docker socket
+# keeping its own explicit message. Emits "ok" on success or a sanitized reason
+# (never overlay values) on rejection.
+OVERLAY_ALLOWLIST_JQ='
+  if (type != "object") then "overlay config is not an object"
+  else
+    (["name","services","networks","volumes"]) as $top
+    | (keys_unsorted - $top) as $bad
+    | if ($bad | length) > 0 then "unsupported top-level key: \($bad[0])"
+      elif ([.networks, .volumes] | map(select(. != null and (type != "object"))) | length) > 0 then "overlay network/volume declarations must be mappings"
+      elif ((.services | type) != "object") then "overlay must declare a services mapping"
+      else
+        (.services | keys_unsorted) as $names
+        | ($names - ["ai-dev"]) as $foreign
+        | if ($foreign | length) > 0 then "overlay must not define service: \($foreign[0])"
+          elif (($names | index("ai-dev")) == null) then "overlay must define the ai-dev service"
+          elif ((.services["ai-dev"] | type) != "object") then "overlay ai-dev service must be a mapping"
+          else
+            ([.services["ai-dev"] | to_entries[] | . as $e
+              | if (["environment","networks","volumes","labels","healthcheck"] | index($e.key)) then empty
+                elif (($e.key == "command" or $e.key == "entrypoint") and ($e.value == null)) then empty
+                else "unsupported ai-dev field: \($e.key)"
+                end] | .[0] // "") as $svc
+            | if $svc != "" then $svc
+              elif ([.services["ai-dev"].volumes[]? | select((type == "object") and (.type == "bind") and ((.source | type) == "string") and (.source | endswith("/docker.sock")))] | length) > 0
+                then "overlay must not mount the Docker socket"
+              elif ([.services["ai-dev"].volumes[]? | select((type == "object") and (.type == "bind"))] | length) > 0
+                then "overlay must not bind-mount host paths"
+              else "ok"
+              end
+          end
+      end
+  end
+'
+
+# Run `docker compose` with the effective (base-only or base+overlay) arguments.
+dc() {
+    if [ "${#COMPOSE_ARGS[@]}" -gt 0 ]; then
+        docker compose "${COMPOSE_ARGS[@]}" "$@"
+    else
+        docker compose "$@"
+    fi
+}
+
 # ──────────────────────────────────────────────────────────
 # System requirement checks (shared with install.sh)
 # ──────────────────────────────────────────────────────────
@@ -150,15 +219,36 @@ backup_files() {
 
     local backup_dir="backup_${TIMESTAMP}"
     mkdir -p "$backup_dir"
+    chmod 700 "$backup_dir"
 
     for f in docker-compose.yml .env; do
         if [ -f "$f" ]; then
             cp "$f" "${backup_dir}/${f}"
+            chmod 600 "${backup_dir}/${f}"
             ok "${f} → ${backup_dir}/${f}"
         else
             info "${f} does not exist, skipping backup"
         fi
     done
+
+    if [ "$OVERLAY_ACTIVE" = "1" ]; then
+        if [ -s "./admin-data/upgrade-base.yml" ]; then
+            cp "./admin-data/upgrade-base.yml" "${backup_dir}/compose-upgrade-base.yml"
+            chmod 600 "${backup_dir}/compose-upgrade-base.yml"
+            ok "admin-data/upgrade-base.yml → ${backup_dir}/compose-upgrade-base.yml"
+        fi
+        if [ -n "$OVERLAY_HOST" ] && [ -f "$OVERLAY_HOST" ]; then
+            local overlay_dir="${backup_dir}/overlay" overlay_name
+            overlay_name="$(basename "$OVERLAY_HOST")"
+            mkdir -p "$overlay_dir"
+            chmod 700 "$overlay_dir"
+            cp "$OVERLAY_HOST" "${overlay_dir}/${overlay_name}"
+            chmod 600 "${overlay_dir}/${overlay_name}"
+            printf '%s\n%s\n' "$OVERLAY_REF" "$OVERLAY_HOST" > "${backup_dir}/overlay-reference.txt"
+            chmod 600 "${backup_dir}/overlay-reference.txt"
+            ok "overlay ${OVERLAY_REF} → ${backup_dir}/overlay/"
+        fi
+    fi
 
     # ── Snapshot OpenChamber registration list (pre-upgrade state) ──
     local dev_ref
@@ -326,21 +416,184 @@ ensure_provider_state() {
 }
 
 # ──────────────────────────────────────────────────────────
+# Prepare host paths for the overlay-aware upgrade contract
+# ──────────────────────────────────────────────────────────
+prepare_overlay_paths() {
+    mkdir -p ./extensions
+    chmod 755 ./extensions
+    ok "./extensions ready"
+
+    mkdir -p ./admin-data
+    if [ ! -f ./admin-data/upgrade-base.yml ]; then
+        : > ./admin-data/upgrade-base.yml
+    fi
+    chmod 600 ./admin-data/upgrade-base.yml
+    chown 1000:1000 ./admin-data/upgrade-base.yml 2>/dev/null || true
+    ok "./admin-data/upgrade-base.yml ready"
+}
+
+# ──────────────────────────────────────────────────────────
+# Detect and validate a configured domain Compose overlay
+# ──────────────────────────────────────────────────────────
+detect_overlay_configuration() {
+    OVERLAY_ACTIVE=0
+    OVERLAY_REF=""
+    [ -f ".env" ] || return 0
+    local line value
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        case "$line" in
+            AI_ENGKIT_COMPOSE_OVERLAY=*) value="${line#AI_ENGKIT_COMPOSE_OVERLAY=}" ;;
+            "export "*AI_ENGKIT_COMPOSE_OVERLAY=*)
+                value="${line#export }"
+                value="${value#AI_ENGKIT_COMPOSE_OVERLAY=}"
+                ;;
+            *) continue ;;
+        esac
+        case "$value" in
+            \"*\") value="${value#\"}"; value="${value%\"}" ;;
+            \'*\') value="${value#\'}"; value="${value%\'}" ;;
+        esac
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        if [ -n "$value" ]; then
+            OVERLAY_ACTIVE=1
+            OVERLAY_REF="$value"
+        fi
+    done < .env
+}
+
+require_jq_for_overlay() {
+    [ "$OVERLAY_ACTIVE" = "1" ] || return 0
+    if ! command -v jq >/dev/null 2>&1; then
+        fail "jq is required to validate the domain Compose overlay declared by AI_ENGKIT_COMPOSE_OVERLAY.
+   Install jq on the host (for example: apt-get install jq) and re-run upgrade.sh.
+   No files were changed."
+    fi
+}
+
+canonicalize_path() {
+    local path="$1"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$path" 2>/dev/null && return 0
+    fi
+    if readlink -f "$path" >/dev/null 2>&1; then
+        readlink -f "$path" && return 0
+    fi
+    local dir base dir_real
+    dir="$(dirname "$path")"
+    base="$(basename "$path")"
+    dir_real="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+    printf '%s/%s\n' "$dir_real" "$base"
+}
+
+overlay_resolve_host_path() {
+    local ref="$OVERLAY_REF" candidate
+    case "$ref" in
+        /opt/ai-engkit/extensions/*) candidate="./extensions/${ref#/opt/ai-engkit/extensions/}" ;;
+        /*) fail "AI_ENGKIT_COMPOSE_OVERLAY must resolve beneath ./extensions (got ${ref})" ;;
+        *) candidate="./extensions/${ref}" ;;
+    esac
+
+    [ -d "./extensions" ] || fail "./extensions is missing; create it and place the overlay before upgrading"
+
+    local canonical extensions_real
+    canonical="$(canonicalize_path "$candidate")" \
+        || fail "AI_ENGKIT_COMPOSE_OVERLAY could not be resolved (got ${ref})"
+    extensions_real="$(canonicalize_path "./extensions")" \
+        || fail "./extensions could not be resolved"
+
+    case "$canonical" in
+        "${extensions_real}"/*) : ;;
+        *) fail "AI_ENGKIT_COMPOSE_OVERLAY must resolve beneath ./extensions (got ${ref})" ;;
+    esac
+
+    [ -f "$canonical" ] || fail "AI_ENGKIT_COMPOSE_OVERLAY is not a regular file: ${ref}"
+    [ -r "$canonical" ] || fail "AI_ENGKIT_COMPOSE_OVERLAY is not readable: ${ref}"
+    OVERLAY_HOST="$canonical"
+}
+
+overlay_assert_allowlist() {
+    local json="$1" result
+    result="$(printf '%s' "$json" | jq -r "$OVERLAY_ALLOWLIST_JQ" 2>/dev/null)" || result=""
+    if [ "$result" != "ok" ]; then
+        OVERLAY_VALIDATION_ERROR="${result:-overlay config could not be parsed}"
+        return 1
+    fi
+    return 0
+}
+
+overlay_staging_fail() {
+    [ -n "$OVERLAY_STAGING_BASE" ] && rm -f "$OVERLAY_STAGING_BASE"
+    fail "$1"
+}
+
+overlay_download_staging() {
+    header "4. Staging Overlay-Aware Upgrade"
+
+    mkdir -p ./admin-data
+    OVERLAY_STAGING_BASE="./admin-data/upgrade-base.yml.staging"
+    echo "  Downloading upstream base to ${OVERLAY_STAGING_BASE}..."
+    if ! download "$REPO_URL/docker-compose.yml" "$OVERLAY_STAGING_BASE" || [ ! -s "$OVERLAY_STAGING_BASE" ]; then
+        overlay_staging_fail "Failed to download docker-compose.yml, please check network connection"
+    fi
+
+    local project_dir
+    project_dir="$(pwd)"
+
+    echo "  Validating overlay-only configuration..."
+    local overlay_json
+    if ! overlay_json="$(docker compose --project-directory "$project_dir" -f "$OVERLAY_HOST" config --no-consistency --format json 2>/dev/null)"; then
+        overlay_staging_fail "Overlay validation failed: docker compose could not render ${OVERLAY_REF}"
+    fi
+    if ! overlay_assert_allowlist "$overlay_json"; then
+        overlay_staging_fail "Overlay validation failed: ${OVERLAY_VALIDATION_ERROR}"
+    fi
+
+    echo "  Validating effective base+overlay configuration..."
+    local merged_json
+    if ! merged_json="$(docker compose --project-directory "$project_dir" -f "$OVERLAY_STAGING_BASE" -f "$OVERLAY_HOST" config --format json 2>/dev/null)"; then
+        overlay_staging_fail "Effective base+overlay validation failed: docker compose could not render the merged configuration"
+    fi
+    printf '%s' "$merged_json" | jq -e '.services["ai-dev"] != null' >/dev/null 2>&1 \
+        || overlay_staging_fail "Effective base+overlay configuration has no ai-dev service"
+
+    # The new base must carry the Admin mounts that make the overlay visible to
+    # a future Admin-managed upgrade; otherwise this bootstrap would not stick.
+    printf '%s' "$merged_json" | jq -e '[.services["ai-admin"].volumes[]?.target] | index("/opt/ai-engkit/extensions") != null' >/dev/null 2>&1 \
+        || overlay_staging_fail "Target base is missing the ai-admin ./extensions mount required for overlay-aware upgrades"
+    printf '%s' "$merged_json" | jq -e '[.services["ai-admin"].volumes[]?.target] | index("/opt/ai-engkit/compose-upgrade-base.yml") != null' >/dev/null 2>&1 \
+        || overlay_staging_fail "Target base is missing the ai-admin ./admin-data/upgrade-base.yml mount required for overlay-aware upgrades"
+
+    ok "Overlay ${OVERLAY_REF} validated and target base mounts verified"
+}
+
+overlay_switch_base() {
+    mv "$OVERLAY_STAGING_BASE" ./admin-data/upgrade-base.yml
+    chmod 600 ./admin-data/upgrade-base.yml
+    chown 1000:1000 ./admin-data/upgrade-base.yml 2>/dev/null || true
+    COMPOSE_ARGS=(--project-directory "$(pwd)" -f ./admin-data/upgrade-base.yml -f "$OVERLAY_HOST")
+    ok "Effective base switched to ./admin-data/upgrade-base.yml + ${OVERLAY_REF}"
+}
+
+# ──────────────────────────────────────────────────────────
 # Prepare host volumes for admin container
 # ──────────────────────────────────────────────────────────
 prepare_volumes() {
     header "7. Preparing Volume Directories"
 
     mkdir -p ./backups
-    chmod 777 ./backups
+    chmod 700 ./backups
+    chown 1000:1000 ./backups 2>/dev/null || true
     ok "./backups ready"
 
     ensure_provider_state
+    prepare_overlay_paths
 
     local ws_path
     ws_path=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | cut -d= -f2- || true)
     if [ -n "$ws_path" ]; then
-        ws_path=$(eval echo "$ws_path" 2>/dev/null || true)
+        ws_path=$(expand_workspace_path "$ws_path")
         if [ ! -d "$ws_path" ]; then
             mkdir -p "$ws_path"
             ok "workspace directory created: ${ws_path}"
@@ -358,7 +611,7 @@ recreate_containers() {
         local ws_path
         ws_path=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | head -1 | cut -d= -f2- || true)
         if [ -n "$ws_path" ]; then
-            ws_path=$(eval echo "$ws_path" 2>/dev/null || true)
+            ws_path=$(expand_workspace_path "$ws_path")
             if [ ! -d "$ws_path" ]; then
                 warn "WORKSPACE_PATH=${ws_path} directory does not exist, will create automatically"
                 mkdir -p "$ws_path"
@@ -367,14 +620,14 @@ recreate_containers() {
     fi
 
     echo "  Executing docker compose up -d --force-recreate..."
-    docker compose up -d --force-recreate 2>&1 || {
+    dc up -d --force-recreate 2>&1 || {
         fail "Container startup failed, please check docker compose ps"
     }
 
     echo -n "  Waiting for service startup"
     for _ in {1..15}; do
-        if docker compose ps --format json 2>/dev/null | grep -q '"Status":"running"' 2>/dev/null || \
-           docker compose ps 2>/dev/null | grep -q "Up"; then
+        if dc ps --format json 2>/dev/null | grep -q '"Status":"running"' 2>/dev/null || \
+           dc ps 2>/dev/null | grep -q "Up"; then
             break
         fi
         echo -n "."
@@ -382,8 +635,46 @@ recreate_containers() {
     done
     echo
 
-    docker compose ps
+    dc ps
     ok "Containers restarted"
+}
+
+# ──────────────────────────────────────────────────────────
+# Recreate ai-admin and ai-dev with base + overlay
+# ──────────────────────────────────────────────────────────
+recreate_containers_overlay() {
+    header "8. Recreating Containers (base + overlay)"
+
+    if [ -f ".env" ]; then
+        local ws_path
+        ws_path=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | head -1 | cut -d= -f2- || true)
+        if [ -n "$ws_path" ]; then
+            ws_path=$(expand_workspace_path "$ws_path")
+            if [ ! -d "$ws_path" ]; then
+                warn "WORKSPACE_PATH=${ws_path} directory does not exist, will create automatically"
+                mkdir -p "$ws_path"
+            fi
+        fi
+    fi
+
+    echo "  Executing docker compose (base + ${OVERLAY_REF}) up -d --force-recreate ai-admin ai-dev..."
+    dc up -d --force-recreate ai-admin ai-dev 2>&1 || {
+        fail "Container startup failed, please check docker compose ps"
+    }
+
+    echo -n "  Waiting for service startup"
+    for _ in {1..15}; do
+        if dc ps --format json 2>/dev/null | grep -q '"Status":"running"' 2>/dev/null || \
+           dc ps 2>/dev/null | grep -q "Up"; then
+            break
+        fi
+        echo -n "."
+        sleep 2
+    done
+    echo
+
+    dc ps
+    ok "Containers restarted with base + overlay"
 }
 
 # ──────────────────────────────────────────────────────────
@@ -393,7 +684,7 @@ reconcile_openchamber_projects() {
     header "9. Reconciling OpenChamber Project Registrations"
 
     local dev_ref out added
-    dev_ref=$(docker compose ps -q ai-dev 2>/dev/null | head -1 || true)
+    dev_ref=$(dc ps -q ai-dev 2>/dev/null | head -1 || true)
     dev_ref="${dev_ref:-ai-engkit}"
 
     if ! out=$(docker exec "$dev_ref" /opt/ai-engkit/scripts/reconcile-openchamber-projects.sh 2>/dev/null); then
@@ -472,13 +763,23 @@ show_info() {
     fi
     echo
     echo -e "  ${YELLOW}ℹ${NC}  Backup directory: backup_${TIMESTAMP}/"
-    echo "     (contains pre-upgrade docker-compose.yml and .env)"
-    echo
-    echo -e "  ${YELLOW}ℹ${NC}  To rollback:"
-    echo "     docker compose down"
-    echo "     cp backup_${TIMESTAMP}/docker-compose.yml docker-compose.yml"
-    echo "     cp backup_${TIMESTAMP}/.env .env"
-    echo "     docker compose up -d"
+    if [ "$OVERLAY_ACTIVE" = "1" ]; then
+        echo "     (contains pre-upgrade compose upgrade base, overlay, and .env)"
+        echo
+        echo -e "  ${YELLOW}ℹ${NC}  To rollback:"
+        echo "     docker compose down"
+        echo "     cp backup_${TIMESTAMP}/compose-upgrade-base.yml admin-data/upgrade-base.yml"
+        echo "     cp backup_${TIMESTAMP}/.env .env"
+        echo "     docker compose --project-directory \"\$(pwd)\" -f admin-data/upgrade-base.yml -f ${OVERLAY_HOST} up -d"
+    else
+        echo "     (contains pre-upgrade docker-compose.yml and .env)"
+        echo
+        echo -e "  ${YELLOW}ℹ${NC}  To rollback:"
+        echo "     docker compose down"
+        echo "     cp backup_${TIMESTAMP}/docker-compose.yml docker-compose.yml"
+        echo "     cp backup_${TIMESTAMP}/.env .env"
+        echo "     docker compose up -d"
+    fi
     echo
     echo -e "${BOLD}========================================${NC}"
 }
@@ -549,6 +850,8 @@ main() {
     cd "$(dirname "$0")"
 
     verify_installed_environment
+    detect_overlay_configuration
+    require_jq_for_overlay
 
     # Self-update before any operations (skipped when piped to shell)
     self_update "$@"
@@ -561,15 +864,30 @@ main() {
 
     check_system
     check_docker
-    backup_files
-    update_compose
-    merge_env
-    pull_image
-    prepare_volumes
-    recreate_containers
+
+    if [ "$OVERLAY_ACTIVE" = "1" ]; then
+        overlay_resolve_host_path
+        backup_files
+        overlay_download_staging
+        merge_env
+        pull_image
+        prepare_volumes
+        overlay_switch_base
+        recreate_containers_overlay
+    else
+        backup_files
+        update_compose
+        merge_env
+        pull_image
+        prepare_volumes
+        recreate_containers
+    fi
+
     reconcile_openchamber_projects
     cleanup_images
     show_info
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
