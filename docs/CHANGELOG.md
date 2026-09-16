@@ -1,5 +1,39 @@
 ## [Unreleased]
 
+
+## [1.19.0] - 2026-09-16
+
+### Added
+- Bump Docker 29.8.0 → 29.8.1, glab 1.117.0 → 1.118.0, gh 2.100.0 → 2.101.0
+- Wire overlay host paths
+- Preserve domain compose overlays
+- Expose overlay status
+- Make upgrades overlay aware
+- Preserve overlay across lifecycle restarts
+- Add compose overlay resolver
+
+### Fixed
+- Ship compose overlay fixtures in image so admin tests pass
+
+### Documentation
+- Sync overlay requirements
+- Archive overlay specification
+- Archive overlay design tasks
+- Archive overlay proposal metadata
+- Add compose overlay ownership guide
+- Document compose overlay configuration
+
+### Changed
+- Verify overlay runtime after recreation
+- Add compose overlay fixtures
+- Enforce dev compose isolation
+- Cover lifecycle overlay restarts
+
+### Changed
+- Upgrade Docker Engine from 29.8.0 to 29.8.1.
+- Upgrade GitHub CLI from 2.100.0 to 2.101.0.
+- Upgrade GitLab CLI from 1.117.0 to 1.118.0.
+
 ## [1.18.13] - 2026-09-15
 
 ### Added
@@ -2045,14 +2079,11 @@
 
 ### Changed
 - Improve the `README.md` document structure.
-
-
 ---
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...HEAD
-[1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2227,5 +2258,5 @@
 [1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
 [1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
 [1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...HEAD
 [1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
+[1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
