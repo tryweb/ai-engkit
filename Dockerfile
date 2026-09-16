@@ -294,6 +294,15 @@ RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 COPY src/admin/ /opt/admin/
 RUN bun install --cwd /opt/admin --no-cache 2>/dev/null || true
 
+# ── Admin test fixtures (compose-overlay integration suite) ──
+# compose-overlay.integration.test.ts shells out to real `docker compose`
+# using repo-relative paths resolved from /opt/admin/lib: the fixtures land
+# at /test/fixtures/compose-overlay/ and the production compose at /
+# (repo root for that test). Ship both so the suite runs from the image in
+# every CI step (docker run / docker exec) without a host checkout or daemon.
+COPY test/fixtures/compose-overlay/ /test/fixtures/compose-overlay/
+COPY docker-compose.yml /docker-compose.yml
+
 # 目錄預建（確保 volume mount 前所有人都正確）
 RUN mkdir -p \
     /home/${USERNAME}/workspace \

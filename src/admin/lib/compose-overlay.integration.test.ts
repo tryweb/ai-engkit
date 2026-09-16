@@ -90,8 +90,10 @@ describe.skipIf(!DOCKER_AVAILABLE)("compose overlay validation against real Dock
 describe.skipIf(!DOCKER_AVAILABLE)("production compose DooD mount contract", () => {
   test("mounts extensions read-only and the staged base rw while preserving /opt/ai-engkit", () => {
     const repoRoot = join(import.meta.dir, "../../..");
+    // Explicit -p keeps the project name stable when the suite runs from the
+    // image at / (basename is empty) while matching the checkout's inferred name.
     const result = Bun.spawnSync(
-      ["docker", "compose", "-f", join(repoRoot, "docker-compose.yml"), "config", "--format", "json"],
+      ["docker", "compose", "-p", "ai-engkit", "-f", join(repoRoot, "docker-compose.yml"), "config", "--format", "json"],
       { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
     );
     expect(result.exitCode).toBe(0);
