@@ -11,7 +11,7 @@ Observed 2026-08-08 on prod: a plain `docker compose up -d` (no upgrade, same im
 - The prune trigger is a **boot-time race**, not a version change. Any restart (plain `up -d`, host reboot, crash-recovery restart) can hit it; upgrades are just one restart flavor.
 - The failure window is short (~seconds): OpenChamber boots, workspace mount lags, the first projects-bearing persist stats paths, gets `ENOENT`, and writes a pruned list back into the volume. By the time a human checks, the mount is visible and the dirs are intact — the loss looks inexplicable.
 - Manual sync (admin `/api/projects/sync`) repairs the list after the fact but requires a human to notice; the window can reopen on every future restart.
-- The admin upgrade backup (`src/admin/lib/upgrade.ts`) snapshots only `compose.yml` + `.env`, not the settings volume — no automatic pre-restart registry snapshot exists.
+- The historical admin upgrade backup snapshot only `compose.yml` + `.env`, not the settings volume. Current upgrades snapshot the OpenChamber settings before recreation, but a plain restart still has no upgrade backup step.
 
 ## Solution
 
