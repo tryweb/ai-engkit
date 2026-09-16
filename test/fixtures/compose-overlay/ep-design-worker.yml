@@ -1,0 +1,15 @@
+# Domain worker project for the integration fixture. It is a separate Compose
+# project that joins the same external network but is never managed by
+# AI-EngKit; the overlay contract only exposes ai-dev to it.
+services:
+  ep-design-worker:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - "for i in 1 2 3 4 5; do wget -qO- -T2 http://ai-dev:4095/ >/dev/null 2>&1 && echo REACHABLE && exit 0; sleep 1; done; echo UNREACHABLE"
+    networks:
+      - ep-design_interop
+networks:
+  ep-design_interop:
+    external: true

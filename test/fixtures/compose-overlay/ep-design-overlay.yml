@@ -1,0 +1,19 @@
+# Domain-owned overlay for the external-network integration fixture.
+# Uses only the V1 allowed ai-dev surface: environment, networks, labels,
+# healthcheck. The shared network must be created by the domain project
+# (external: true) before Compose can attach ai-dev to it.
+services:
+  ai-dev:
+    environment:
+      OPENCHAMBER_OPENCODE_HOSTNAME: 0.0.0.0
+      OPENCHAMBER_OPENCODE_PORT: "4095"
+    networks:
+      - ep-design_interop
+    labels:
+      com.example.owner: domain
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+networks:
+  ep-design_interop:
+    external: true

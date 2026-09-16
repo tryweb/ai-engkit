@@ -1,0 +1,13 @@
+# Upstream-equivalent base for the external-network integration fixture.
+# Stands in for the AI-EngKit base Compose file: it owns the ai-dev service and
+# serves the internal OpenCode API port (4095) with a minimal HTTP reply.
+services:
+  ai-dev:
+    image: alpine:latest
+    command:
+      - sh
+      - -c
+      - "while true; do printf 'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok' | nc -l -p 4095; done"
+    stop_signal: SIGKILL
+    stop_grace_period: 1s
+    restart: unless-stopped
