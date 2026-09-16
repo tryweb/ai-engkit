@@ -1,6 +1,5 @@
 import {
   execInAiDev,
-  composeCommand,
   dockerCommand,
   getAiDevContainerRef,
   getComposeProject,
@@ -8,11 +7,25 @@ import {
   isAiDevRunning,
   type ExecResult,
 } from "./docker";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, statSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, statSync, readdirSync, chmodSync } from "node:fs";
+import { basename, join } from "node:path";
 import { readEnvFile, writeEnvFile, type EnvVars } from "./env";
 import { KEYS_PATH } from "./provider-keys";
 import { resolveImageRef } from "./image-ref";
+import {
+  UPGRADE_BASE_FILE,
+  buildRecreateSubcommand,
+  getOverlayStatus,
+  overlayLabel,
+  resolveEffectiveCompose,
+  resolveOverlay,
+  validateEffectiveCompose,
+  type EffectiveCompose,
+  type OverlayConfigDeps,
+  type OverlayResolution,
+  type ValidateEffectiveOptions,
+  type ValidationResult,
+} from "./compose-overlay";
 
 const BACKUP_DIR = "/opt/ai-engkit/backups";
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
@@ -127,7 +140,15 @@ function emit(step: UpgradeStep, status: StepStatus, message: string): void {
   }
 }
 
-export function getStatus(): { state: UpgradeState; events: UpgradeEvent[]; current_step: UpgradeStep | ""; progress_pct: number } {
+export function getStatus(
+  overlayDeps: OverlayConfigDeps = {},
+): {
+  state: UpgradeState;
+  events: UpgradeEvent[];
+  current_step: UpgradeStep | "";
+  progress_pct: number;
+  overlay: ReturnType<typeof getOverlayStatus>;
+} {
   const steps: UpgradeStep[] = ["digest_compare", "backup", "merge_env", "recreate", "poll_health", "reconcile", "cleanup"];
   const lastRunning = [...eventLog].reverse().find((e) => e.status === "running");
   const lastFailed = [...eventLog].reverse().find((e) => e.status === "failure");
@@ -139,6 +160,7 @@ export function getStatus(): { state: UpgradeState; events: UpgradeEvent[]; curr
     events: [...eventLog],
     current_step: currentStep,
     progress_pct: Math.round((doneSteps / totalSteps) * 100),
+    overlay: getOverlayStatus({ readEnv: readEnvFile, ...overlayDeps }),
   };
 }
 
@@ -181,6 +203,7 @@ export interface PollHealthDeps {
 export interface UpgradeDeps extends MergeEnvDeps, PollHealthDeps {
   backupDir?: string;
   composeFile?: string;
+  stagedBaseFile?: string;
   envFile?: string;
   keysFile?: string;
   versionFile?: string;
@@ -192,8 +215,11 @@ export interface UpgradeDeps extends MergeEnvDeps, PollHealthDeps {
   snapshotSettings?: (containerRef: string, destPath: string) => Promise<ExecResult>;
   fetchComposeText?: () => Promise<string | null>;
   writeComposeText?: (content: string) => void;
+  writeStagedBase?: (content: string) => void;
   getProject?: () => Promise<string>;
-  composeUp?: (project: string) => Promise<ExecResult>;
+  composeUp?: (subcommand: string) => Promise<ExecResult>;
+  resolveOverlayState?: () => OverlayResolution;
+  validateOverlay?: (options: ValidateEffectiveOptions) => Promise<ValidationResult>;
   reconcile?: () => Promise<ExecResult>;
   pruneOld?: (backupRoot: string, retention: number) => string[];
   pruneImages?: () => Promise<ExecResult>;
@@ -246,6 +272,7 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
 
   const backupDir = deps.backupDir ?? BACKUP_DIR;
   const composeFile = deps.composeFile ?? COMPOSE_FILE;
+  const stagedBaseFile = deps.stagedBaseFile ?? UPGRADE_BASE_FILE;
   const envFile = deps.envFile ?? ENV_FILE;
   const keysFile = deps.keysFile ?? KEYS_PATH;
   const versionFile = deps.versionFile ?? "/opt/ai-engkit/VERSION";
@@ -260,11 +287,12 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
       dockerCommand(`cp ${ref}:/home/devuser/.config/openchamber/settings.json ${dest}`, 30_000));
   const fetchComposeText = deps.fetchComposeText ?? fetchLatestCompose;
   const writeComposeText = deps.writeComposeText ?? ((content: string) => writeFileSync(composeFile, content));
+  const writeStagedBase = deps.writeStagedBase ?? ((content: string) => writeFileSync(stagedBaseFile, content));
   const getProject = deps.getProject ?? getComposeProject;
-  const composeUp =
-    deps.composeUp ??
-    ((project: string) =>
-      composeCommand(`-p ${project} --env-file ${envFile} -f ${composeFile} up -d --force-recreate ai-dev`, 300_000));
+  const composeUp = deps.composeUp ?? ((subcommand: string) => dockerCommand(subcommand, 300_000));
+  const resolveOverlayState =
+    deps.resolveOverlayState ?? (() => resolveOverlay({ readEnv: deps.readEnv ?? readEnvFile }));
+  const validateOverlay = deps.validateOverlay ?? validateEffectiveCompose;
   const reconcile =
     deps.reconcile ?? (() => execInAiDev("/opt/ai-engkit/scripts/reconcile-openchamber-projects.sh", 60_000));
   const pruneOld = deps.pruneOld ?? pruneOldBackups;
@@ -286,8 +314,19 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
   // Rollback tracking: only recreate/poll_health failures roll back, using the
   // backup created by this run. Digest/backup/merge failures never roll back.
   let backupPath: string | null = null;
+  let overlay: OverlayResolution = { active: false };
+  let validationFailed = false;
 
   try {
+    try {
+      overlay = resolveOverlayState();
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      emit("backup", "failure", `Domain overlay configuration is invalid: ${detail}`);
+      currentState = "failed";
+      return false;
+    }
+
     // Step 1: Digest compare
     emit("digest_compare", "running", "Fetching latest image digest...");
     const pullResult = await pullImage(resolveImage());
@@ -300,29 +339,55 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
     emit("backup", "running", "Creating pre-upgrade backup...");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     backupPath = join(backupDir, `pre-${timestamp}`);
-    mkdirSync(backupPath, { recursive: true });
+    mkdirSync(backupPath, { recursive: true, mode: 0o700 });
+    chmodSync(backupPath, 0o700);
     if (existsSync(envFile)) {
-      cpSync(envFile, join(backupPath, ".env"));
+      copySensitive(envFile, join(backupPath, ".env"));
     }
     if (existsSync(composeFile)) {
       try {
         const st = statSync(composeFile);
-        if (!st.isDirectory()) cpSync(composeFile, join(backupPath, "compose.yml"));
+        if (!st.isDirectory()) copySensitive(composeFile, join(backupPath, "compose.yml"));
       } catch (err: unknown) {
         void err;
       }
     }
+    if (overlay.active) {
+      try {
+        const st = statSync(stagedBaseFile);
+        if (!st.isDirectory()) copySensitive(stagedBaseFile, join(backupPath, "compose-upgrade-base.yml"));
+      } catch (err: unknown) {
+        void err;
+      }
+      const overlayBackupDir = join(backupPath, "overlay");
+      mkdirSync(overlayBackupDir, { recursive: true, mode: 0o700 });
+      chmodSync(overlayBackupDir, 0o700);
+      try {
+        copySensitive(overlay.canonicalPath, join(overlayBackupDir, basename(overlay.canonicalPath)));
+      } catch (err: unknown) {
+        void err;
+      }
+      writeSensitive(join(backupPath, "overlay-reference.txt"), `${overlay.reference}\n${overlay.canonicalPath}\n`);
+    }
     if (existsSync(keysFile)) {
-      cpSync(keysFile, join(backupPath, "provider-keys.json"));
+      copySensitive(keysFile, join(backupPath, "provider-keys.json"));
     }
     const backupNotes: string[] = [];
     // Snapshot the registration list while the old image still runs; the new
     // image may start with a fresh list that needs reconciling against it.
     const devRef = await getContainerRef();
     const snapshot = await snapshotSettings(devRef, join(backupPath, "openchamber-settings.json"));
+    if (snapshot.exitCode === 0) {
+      try {
+        chmodSync(join(backupPath, "openchamber-settings.json"), 0o600);
+      } catch (err: unknown) {
+        void err;
+      }
+    }
     backupNotes.push(
       snapshot.exitCode === 0 ? "OpenChamber settings snapshot saved" : "OpenChamber settings not found, snapshot skipped",
     );
+    if (overlay.active) backupNotes.push(`domain overlay ${overlayLabel(overlay)} preserved`);
     emit(
       "backup",
       "success",
@@ -335,23 +400,68 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
     emit("merge_env", "success", "Environment variables merged");
 
     // Step 4: Recreate ai-dev
-    emit("recreate", "running", "Fetching latest docker-compose.yml, then recreating ai-dev with new image...");
+    emit(
+      "recreate",
+      "running",
+      overlay.active
+        ? `Domain overlay ${overlayLabel(overlay)} active: staging upstream base and validating the effective configuration before recreating ai-dev...`
+        : "Fetching latest docker-compose.yml, then recreating ai-dev with new image...",
+    );
     // Apply the latest compose file from upstream so services added since the
     // last deploy take effect. Fail closed when unreachable: throwing before
     // writeComposeText/composeUp leaves the live compose file untouched, and
     // rollback below restores the backed-up file, so forward progress must
     // never run on stale compose content. Cleanup/pruning only runs on success.
+    // With an overlay the upstream content is staged as the base file instead of
+    // overwriting the domain-owned active file, then the effective base+overlay
+    // configuration is validated before any container is recreated.
     const latestCompose = await fetchComposeText();
     if (latestCompose === null) throw new Error("Failed to fetch latest docker-compose.yml");
-    writeComposeText(latestCompose);
     const project = await getProject();
-    const recreateResult = await composeUp(project);
+    let effective: EffectiveCompose = {
+      overlayActive: false,
+      files: [composeFile],
+      overlayReference: null,
+    };
+    if (overlay.active) {
+      // Validate the new upstream base against the overlay before committing it,
+      // so a validation failure never replaces the effective configuration.
+      const stagingPath = `${stagedBaseFile}.staging`;
+      writeFileSync(stagingPath, latestCompose, { mode: 0o600 });
+      let validationError: string | null = null;
+      try {
+        const validation = await validateOverlay({ overlay, baseFile: stagingPath, project, envFile });
+        if (!validation.ok) {
+          validationError = "error" in validation ? validation.error : "unknown validation failure";
+        }
+      } finally {
+        rmSync(stagingPath, { force: true });
+      }
+      if (validationError !== null) {
+        validationFailed = true;
+        throw new Error(`Effective Compose validation failed: ${validationError}`);
+      }
+      writeStagedBase(latestCompose);
+      effective = resolveEffectiveCompose(overlay, {
+        paths: { activeFile: composeFile, stagedBaseFile },
+      });
+      emit("recreate", "running", `Effective base+overlay configuration validated (${overlayLabel(overlay)}); recreating ai-dev...`);
+    } else {
+      writeComposeText(latestCompose);
+    }
+    const recreateSubcommand = buildRecreateSubcommand({
+      project,
+      envFile,
+      effective,
+      action: "up -d --force-recreate ai-dev",
+    });
+    const recreateResult = await composeUp(recreateSubcommand);
     if (recreateResult.exitCode !== 0) {
       throw new Error(
         `Failed to recreate ai-dev: ${recreateResult.stderr || recreateResult.stdout || `exit code ${recreateResult.exitCode}`}`,
       );
     }
-    emit("recreate", "success", "ai-dev container recreated");
+    emit("recreate", "success", overlay.active ? "ai-dev recreated with base+overlay configuration" : "ai-dev container recreated");
 
     // Step 5: Poll health
     emit("poll_health", "running", "Waiting for ai-dev to become healthy...");
@@ -398,7 +508,15 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
     if (failedStep) {
       let failureMessage = msg;
       if (backupPath !== null && (failedStep === "recreate" || failedStep === "poll_health")) {
-        const rollbackSummary = await rollbackToBackup(backupPath, { envFile, composeFile, getProject, composeUp });
+        const rollbackSummary = await rollbackToBackup(backupPath, {
+          envFile,
+          composeFile,
+          stagedBaseFile,
+          overlay,
+          getProject,
+          composeUp,
+          skipCompose: validationFailed,
+        });
         failureMessage = `${msg} (rollback: ${rollbackSummary})`;
       }
       emit(failedStep, "failure", failureMessage);
@@ -408,36 +526,121 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
   }
 }
 
+/** Copy one configuration input into a backup directory with owner-only mode. */
+function copySensitive(source: string, destination: string): void {
+  cpSync(source, destination);
+  chmodSync(destination, 0o600);
+}
+
+/** Write sensitive backup metadata with owner-only mode. */
+function writeSensitive(destination: string, content: string): void {
+  writeFileSync(destination, content, { mode: 0o600 });
+  chmodSync(destination, 0o600);
+}
+
+interface RollbackOps {
+  readonly envFile: string;
+  readonly composeFile: string;
+  readonly stagedBaseFile: string;
+  readonly overlay: OverlayResolution;
+  readonly getProject: () => Promise<string>;
+  readonly composeUp: (subcommand: string) => Promise<ExecResult>;
+  /** True when validation failed before compose up, so nothing needs re-running. */
+  readonly skipCompose?: boolean;
+}
+
+/** Same usable-base rule as resolveEffectiveCompose: exists, a regular file, size > 0. */
+function isUsableComposeBase(path: string): boolean {
+  try {
+    const st = statSync(path);
+    return st.isFile() && st.size > 0;
+  } catch (err: unknown) {
+    void err;
+    return false;
+  }
+}
+
+function effectiveAfterRestore(
+  ops: RollbackOps,
+  stagedBaseRestored: boolean,
+): { readonly effective: EffectiveCompose; readonly note: string } {
+  if (ops.overlay.active) {
+    if (stagedBaseRestored && isUsableComposeBase(ops.stagedBaseFile)) {
+      return {
+        effective: {
+          overlayActive: true,
+          files: [ops.stagedBaseFile, ops.overlay.canonicalPath],
+          overlayReference: ops.overlay.reference,
+        },
+        note: "",
+      };
+    }
+    // Fresh installs stage a zero-byte base: a restored-but-empty staged file
+    // is unusable, so fall back to the active Compose file as the overlay base
+    // (matching resolveEffectiveCompose) instead of recomposing against it.
+    if (isUsableComposeBase(ops.composeFile)) {
+      return {
+        effective: {
+          overlayActive: true,
+          files: [ops.composeFile, ops.overlay.canonicalPath],
+          overlayReference: ops.overlay.reference,
+        },
+        note: "",
+      };
+    }
+    return {
+      effective: { overlayActive: false, files: [ops.composeFile], overlayReference: null },
+      note: "overlay was not previously staged, restored base-only configuration",
+    };
+  }
+  return { effective: { overlayActive: false, files: [ops.composeFile], overlayReference: null }, note: "" };
+}
+
 /**
- * Restore .env and compose.yml byte-for-byte from this run's backup, then
- * re-run compose up so the previous container is live again. Returns a short
- * human-readable summary; never throws, so the original failure stays visible.
+ * Restore the prior effective configuration inputs from this run's backup and
+ * re-run Compose so the previous deployment is live again. Returns a short
+ * summary and never throws, so the original failure stays visible. Overlay
+ * content lives on a read-only mount and is never modified, so it is not
+ * rewritten; an incompletely restorable overlay is reported as a partial result.
  */
-async function rollbackToBackup(
-  backupPath: string,
-  ops: {
-    envFile: string;
-    composeFile: string;
-    getProject: () => Promise<string>;
-    composeUp: (project: string) => Promise<ExecResult>;
-  },
-): Promise<string> {
+async function rollbackToBackup(backupPath: string, ops: RollbackOps): Promise<string> {
   const restored: string[] = [];
   const errors: string[] = [];
-  for (const [backupName, target] of [[".env", ops.envFile], ["compose.yml", ops.composeFile]] as const) {
+  const pairs: Array<readonly [string, string]> = [
+    [".env", ops.envFile],
+    ["compose.yml", ops.composeFile],
+    ["compose-upgrade-base.yml", ops.stagedBaseFile],
+  ];
+  let stagedBaseRestored = false;
+  for (const [backupName, target] of pairs) {
     const source = join(backupPath, backupName);
     try {
       if (!existsSync(source)) continue;
       const bytes = readFileSync(source);
       writeFileSync(target, bytes);
       restored.push(backupName);
+      if (backupName === "compose-upgrade-base.yml") stagedBaseRestored = true;
     } catch (err: unknown) {
       errors.push(`${backupName}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+  const { effective, note } = effectiveAfterRestore(ops, stagedBaseRestored);
+  if (note) errors.push(`overlay restore incomplete (${note})`);
+  if (ops.skipCompose === true) {
+    if (errors.length > 0) {
+      return `partial (restored: ${restored.length > 0 ? restored.join(", ") : "none"}; errors: ${errors.join("; ")})`;
+    }
+    return `restored ${restored.length > 0 ? restored.join(", ") : "nothing to restore"}; validation failed before recreate, running configuration unchanged`;
+  }
   try {
     const project = await ops.getProject();
-    const recompose = await ops.composeUp(project);
+    const subcommand = buildRecreateSubcommand({
+      project,
+      envFile: ops.envFile,
+      effective,
+      action: "up -d --force-recreate ai-dev",
+    });
+    const recompose = await ops.composeUp(subcommand);
     if (recompose.exitCode !== 0) {
       errors.push(
         `compose up: ${recompose.stderr || recompose.stdout || `exit code ${recompose.exitCode}`}`,
