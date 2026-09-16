@@ -2,12 +2,21 @@ import { Hono } from "hono";
 import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSelfContainerRef } from "../lib/docker";
 import type { ExecResult } from "../lib/docker";
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { readEnvFile } from "../lib/env";
+import {
+  resolveEffectiveCompose,
+  resolveOverlay,
+  UPGRADE_BASE_FILE,
+  type EffectiveCompose,
+} from "../lib/compose-overlay";
 
 export interface AdminRoutesDeps {
   readonly getComposeProject: () => Promise<string>;
   readonly getSelfBindSource: (destination: string) => Promise<string | null>;
   readonly runCommand: (args: string[], timeoutMs: number) => Promise<ExecResult>;
   readonly schedule: (fn: () => void, delayMs: number) => void;
+  readonly resolveEffectiveAiAdmin: () => EffectiveCompose;
 }
 
 const REAL_DEPS: AdminRoutesDeps = {
@@ -17,7 +26,17 @@ const REAL_DEPS: AdminRoutesDeps = {
   schedule: (fn, delayMs) => {
     setTimeout(fn, delayMs);
   },
+  resolveEffectiveAiAdmin: () => resolveEffectiveCompose(resolveOverlay({ readEnv: readEnvFile })),
 };
+
+/**
+ * Host installation root for a Compose base bind source. A staged upgrade base
+ * lives under `admin-data/`, so its host root is two levels up; the active
+ * compose file sits directly in the installation root.
+ */
+function hostProjectDirectory(baseFile: string, baseSource: string): string {
+  return baseFile === UPGRADE_BASE_FILE ? dirname(dirname(baseSource)) : dirname(baseSource);
+}
 
 async function getAdminVersion(): Promise<string> {
   try {
@@ -76,23 +95,29 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
   admin.post("/api/admin/restart", async (c) => {
     let project: string;
     let envSource: string | null;
-    let composeSource: string | null;
+    let baseSource: string | null;
+    let baseFile: string | undefined;
+    let overlayActive: boolean;
     try {
       project = await deps.getComposeProject();
       envSource = await deps.getSelfBindSource("/opt/ai-engkit/.env");
-      composeSource = await deps.getSelfBindSource("/opt/ai-engkit/compose.yml");
+      const effective = deps.resolveEffectiveAiAdmin();
+      overlayActive = effective.overlayActive;
+      baseFile = effective.files[0];
+      baseSource = baseFile === undefined ? null : await deps.getSelfBindSource(baseFile);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({ ok: false, error: message }, 500);
     }
 
-    if (envSource === null || composeSource === null) {
+    if (envSource === null || baseSource === null || baseFile === undefined) {
       return c.json({ ok: false, error: "Failed to resolve host bind sources for ai-admin restart" }, 500);
     }
 
     const resolvedEnv = envSource;
-    const resolvedCompose = composeSource;
+    const resolvedBase = baseSource;
     const resolvedProject = project;
+    const projectDirectory = overlayActive ? hostProjectDirectory(baseFile, resolvedBase) : null;
 
     deps.schedule(() => {
       // Run compose in a separate container so it survives admin being killed.
@@ -109,22 +134,27 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
         "-v",
         `${resolvedEnv}:${resolvedEnv}:ro`,
         "-v",
-        `${resolvedCompose}:${resolvedCompose}:ro`,
+        `${resolvedBase}:${resolvedBase}:ro`,
         "-v",
         "/var/run/docker.sock:/var/run/docker.sock",
         "ghcr.io/tryweb/ai-engkit:latest",
         "compose",
         "-p",
         resolvedProject,
+      ];
+      if (projectDirectory !== null) {
+        dockerArgs.push("--project-directory", projectDirectory);
+      }
+      dockerArgs.push(
         "--env-file",
         resolvedEnv,
         "-f",
-        resolvedCompose,
+        resolvedBase,
         "up",
         "-d",
         "--force-recreate",
         "ai-admin",
-      ];
+      );
       const resultPromise = deps.runCommand(dockerArgs, 120_000);
       resultPromise
         .then((result) => {

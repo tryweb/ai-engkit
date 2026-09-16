@@ -1,15 +1,23 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { createAdminRoutes, type AdminRoutesDeps } from "./admin";
 import type { ExecResult } from "../lib/docker";
+import type { EffectiveCompose } from "../lib/compose-overlay";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const noOverlayEffective: EffectiveCompose = {
+  overlayActive: false,
+  files: ["/opt/ai-engkit/compose.yml"],
+  overlayReference: null,
+};
+
 type DepsState = {
   project: string;
   envSource: string | null;
-  composeSource: string | null;
+  baseSource: string | null;
+  effective: EffectiveCompose;
   throwOnProject: Error | null;
   throwOnBind: Error | null;
   runCommandResults: ExecResult[];
@@ -21,7 +29,8 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
   const state: DepsState = {
     project: "test-proj",
     envSource: "/host/.env",
-    composeSource: "/host/compose.yml",
+    baseSource: "/host/compose.yml",
+    effective: noOverlayEffective,
     throwOnProject: null,
     throwOnBind: null,
     runCommandResults: [],
@@ -37,7 +46,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
     getSelfBindSource: async (dest: string) => {
       if (state.throwOnBind) throw state.throwOnBind;
       if (dest === "/opt/ai-engkit/.env") return state.envSource;
-      if (dest === "/opt/ai-engkit/compose.yml") return state.composeSource;
+      if (dest === state.effective.files[0]) return state.baseSource;
       return null;
     },
     runCommand: async (args: string[], timeout: number) => {
@@ -50,6 +59,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
       state.scheduleCalls.push({ delay });
       fn();
     },
+    resolveEffectiveAiAdmin: () => state.effective,
     ...overrides,
   };
 
@@ -100,7 +110,32 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     const fIdx = args.indexOf("-f");
     expect(args[fIdx + 1]).toBe("/host/compose.yml");
     expect(args).toContain("ai-admin");
+    expect(args).not.toContain("--project-directory");
     expect(state.runCommandCalls[0].timeout).toBe(120_000);
+  });
+
+  test("Given an active overlay and staged base, When POST, Then the helper recreates from the staged base with --project-directory", async () => {
+    const { deps, state } = createDeps();
+    state.effective = {
+      overlayActive: true,
+      files: ["/opt/ai-engkit/compose-upgrade-base.yml", "/opt/ai-engkit/extensions/ep-design.yml"],
+      overlayReference: "ep-design.yml",
+    };
+    state.baseSource = "/host/admin-data/upgrade-base.yml";
+    const app = createAdminRoutes(deps);
+
+    const res = await app.request("http://localhost/api/admin/restart", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(state.runCommandCalls).toHaveLength(1);
+    const args = state.runCommandCalls[0].args;
+    const envFileIdx = args.indexOf("--env-file");
+    expect(args[envFileIdx + 1]).toBe("/host/.env");
+    const fIdx = args.indexOf("-f");
+    expect(args[fIdx + 1]).toBe("/host/admin-data/upgrade-base.yml");
+    const projectDirIdx = args.indexOf("--project-directory");
+    expect(projectDirIdx).toBeGreaterThan(-1);
+    expect(args[projectDirIdx + 1]).toBe("/host");
   });
 
   test("Given env bind source is null, When POST, Then returns 500 with ok:false and does not schedule helper", async () => {
@@ -129,7 +164,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
   test("Given compose bind source is null, When POST, Then returns 500", async () => {
     // Given
     const { deps, state } = createDeps();
-    state.composeSource = null;
+    state.baseSource = null;
     const app = createAdminRoutes(deps);
 
     // When
@@ -211,6 +246,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
       schedule: (fn: () => void, _delay: number) => {
         fn();
       },
+      resolveEffectiveAiAdmin: () => noOverlayEffective,
     };
     const app = createAdminRoutes(rejectingDeps);
 
@@ -230,7 +266,8 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     const state: DepsState = {
       project: "test-proj",
       envSource: "/host/.env",
-      composeSource: "/host/compose.yml",
+      baseSource: "/host/compose.yml",
+      effective: noOverlayEffective,
       throwOnProject: null,
       throwOnBind: null,
       runCommandResults: [],
@@ -241,7 +278,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
       getComposeProject: async () => state.project,
       getSelfBindSource: async (dest: string) => {
         if (dest === "/opt/ai-engkit/.env") return state.envSource;
-        return state.composeSource;
+        return state.baseSource;
       },
       runCommand: async (args: string[], timeout: number) => {
         helperStarted = true;
@@ -254,6 +291,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
         // Do NOT invoke fn — verify response returned before helper starts
         void fn;
       },
+      resolveEffectiveAiAdmin: () => state.effective,
     };
     const app = createAdminRoutes(deps);
 
