@@ -95,6 +95,10 @@ docker compose up -d
 
 This restores configuration files only; it does not restore Docker images or persistent volume data. To deploy a previous image as well, set `AI_ENGKIT_VERSION` to the desired release tag before starting the services.
 
+### Domain Compose overlay
+
+Domain deployments can preserve one local Compose overlay across upgrades, restarts, and maintenance recreates by setting `AI_ENGKIT_COMPOSE_OVERLAY` in `.env`. The overlay is validated before any recreate and may only extend the `ai-dev` service (environment, networks, volumes, labels, healthchecks); it cannot change the image, ports, privilege settings, Docker socket mounts, or the Admin/domain worker services. The host `upgrade.sh` path is overlay-aware: it requires `jq`, validates the target base and overlay on the host, backs up the current effective inputs, and then recreates `ai-admin` and `ai-dev` from the base-plus-overlay configuration without silently falling back to base-only. See [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md).
+
 ## Configuration
 
 Copy `.env.example` to `.env` when configuring a checkout manually. The installer normally creates it for you. The optional package variables below can be added to `.env` even when they are not present in the example file.
@@ -164,6 +168,7 @@ The Admin Dashboard **Providers** page (`/providers`) edits `OPENCODE_PROVIDER` 
 ## Documentation
 
 - [Architecture](./docs/ARCHITECTURE.md) — services, data flow, storage, and startup behavior
+- [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md) — one local overlay for domain `ai-dev` integrations
 - [Tooling](./docs/TOOLING.md) — MCP servers, CLI tools, package managers, and extension points
 - [Security policy](./SECURITY.md) — threat model, trust assumptions, and reporting
 - [Troubleshooting](./docs/TROUBLESHOOTING.md) — known issues and fixes
