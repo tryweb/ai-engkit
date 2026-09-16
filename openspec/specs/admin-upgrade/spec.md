@@ -74,7 +74,7 @@ The pre-upgrade OpenChamber registration snapshots SHALL be subject to the same 
 
 The system SHALL support one explicitly configured local domain Compose overlay that is merged after the upstream AI-EngKit base. The effective configuration SHALL be used for Admin upgrade, ai-dev restart, and every Admin-managed ai-dev recreate path. The overlay SHALL be applied only to the supported AI-EngKit service integration surface and SHALL NOT manage the domain worker lifecycle or Admin service configuration.
 
-The overlay path SHALL be configured by `AI_ENGKIT_COMPOSE_OVERLAY` and SHALL resolve to a canonical path beneath the mounted `/opt/ai-engkit/extensions/` directory. The supported overlay surface SHALL be limited to `ai-dev` environment, networks, named volumes, labels, and healthchecks. Host bind mounts, including Docker socket mounts, are forbidden. The overlay SHALL NOT change the image, container identity, command, entrypoint, published ports, privilege settings, Admin service, or domain worker services. The upstream base SHALL be staged under the `/opt/ai-engkit` Compose project directory before validation.
+The overlay path SHALL be configured by `AI_ENGKIT_COMPOSE_OVERLAY` and SHALL resolve to a canonical path beneath the mounted `/opt/ai-engkit/extensions/` directory. The supported overlay surface SHALL be limited to `ai-dev` environment, networks, named volumes, labels, and `healthcheck`. Host bind mounts, including Docker socket mounts, are forbidden. The overlay SHALL NOT change the image, container identity, command, entrypoint, published ports, privilege settings, Admin service, or domain worker services. The upstream base SHALL be staged at `/opt/ai-engkit/compose-upgrade-base.yml` before validation.
 
 #### Scenario: Upgrade preserves a domain network integration
 
@@ -131,7 +131,7 @@ The Admin upgrade status and outcome SHALL indicate whether a local overlay is a
 #### Scenario: Active overlay is reported before upgrade
 
 - **WHEN** an upgrade is requested with a configured readable overlay
-- **THEN** the Admin status identifies that an overlay is active and warns that the effective base-plus-overlay configuration will be recreated
+- **THEN** the Admin status identifies that an overlay is active, and upgrade events report validation failures without exposing secret values
 
 #### Scenario: Validation error is actionable
 
