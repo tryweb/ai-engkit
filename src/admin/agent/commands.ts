@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import {
   dockerCommand,
   execInAiDev,
@@ -65,6 +66,14 @@ import {
 import { collectStatus } from "../lib/status";
 import { restartAiDev as restartRealAiDev } from "../lib/restart-ai-dev";
 import { getState, runUpgrade as runRealUpgrade } from "../lib/upgrade";
+import {
+  buildRecreateSubcommand,
+  resolveEffectiveCompose,
+  resolveOverlay,
+  resolveValidatedEffectiveCompose,
+  UPGRADE_BASE_FILE,
+  type EffectiveCompose,
+} from "../lib/compose-overlay";
 import { buildStatusReport, getComponentVersions, type StatusReport } from "./heartbeat";
 import { getUpdateCheck } from "../routes/versions";
 import {
@@ -160,6 +169,17 @@ interface RealRestartDeps {
   getSelfBindSource: typeof getSelfBindSource;
   dockerCommand: typeof dockerCommand;
   runCommand: typeof runCommand;
+  resolveEffectiveAiDev?: (project: string) => Promise<EffectiveCompose>;
+  resolveEffectiveAiAdmin?: () => EffectiveCompose;
+}
+
+/**
+ * Host installation root for a Compose base bind source. A staged upgrade base
+ * lives under `admin-data/`, so its host root is two levels up; the active
+ * compose file sits directly in the installation root.
+ */
+function hostProjectDirectory(baseFile: string, baseSource: string): string {
+  return baseFile === UPGRADE_BASE_FILE ? dirname(dirname(baseSource)) : dirname(baseSource);
 }
 
 /** Restart modes accepted by provider key commands (default: graceful). */
@@ -1702,6 +1722,9 @@ export function createRealCommandDeps(
     getSelfBindSource: resolveSelfBindSource = getSelfBindSource,
     dockerCommand: runDockerCommand = dockerCommand,
     runCommand: runHostCommand = runCommand,
+    resolveEffectiveAiDev = (project: string) =>
+      resolveValidatedEffectiveCompose({ readEnv: readEnvFile, project }),
+    resolveEffectiveAiAdmin = () => resolveEffectiveCompose(resolveOverlay({ readEnv: readEnvFile })),
   } = restartDeps;
   return {
     isUpgradeRunning: () => getState() === "running",
@@ -1732,35 +1755,50 @@ export function createRealCommandDeps(
             // recreate below applies the newest published image. Best-effort:
             // a registry outage must not block the restart itself.
             await runDockerCommand(`pull ${resolveImageRef()} 2>&1`, 120_000);
+            // Overlay-aware host upgrades stage the new base without rewriting
+            // docker-compose.yml, so recreate from the effective base (staged
+            // base when active and non-empty) instead of the stale active file.
+            const effective = resolveEffectiveAiAdmin();
+            const baseFile = effective.files[0];
+            const envSource = await resolveSelfBindSource(ENV_FILE);
+            const baseSource = baseFile === undefined ? null : await resolveSelfBindSource(baseFile);
+            if (!envSource || !baseSource || baseFile === undefined) {
+              return { success: false, message: "Failed to resolve host bind sources for ai-admin restart" };
+            }
             // Recreate ai-admin from a helper container (mirroring
             // POST /api/admin/restart): compose run in-place stops the very
             // container executing it, killing the agent mid-recreate.
-            const envSource = await resolveSelfBindSource(ENV_FILE);
-            const composeSource = await resolveSelfBindSource(COMPOSE_FILE);
-            if (!envSource || !composeSource) {
-              return { success: false, message: "Failed to resolve host bind sources for ai-admin restart" };
+            const helperArgs = [
+              "docker", "run", "--rm", "--user", "0",
+              "--entrypoint", "/usr/local/bin/docker",
+              "-v", `${envSource}:${envSource}:ro`,
+              "-v", `${baseSource}:${baseSource}:ro`,
+              "-v", "/var/run/docker.sock:/var/run/docker.sock",
+              resolveImageRef(),
+              "compose", "-p", project,
+            ];
+            if (effective.overlayActive) {
+              helperArgs.push("--project-directory", hostProjectDirectory(baseFile, baseSource));
             }
-            const helperResult = await runHostCommand(
-              [
-                "docker", "run", "--rm", "--user", "0",
-                "--entrypoint", "/usr/local/bin/docker",
-                "-v", `${envSource}:${envSource}:ro`,
-                "-v", `${composeSource}:${composeSource}:ro`,
-                "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                resolveImageRef(),
-                "compose", "-p", project,
-                "--env-file", envSource,
-                "-f", composeSource,
-                "up", "-d", "--force-recreate", "ai-admin",
-              ],
-              120_000,
+            helperArgs.push(
+              "--env-file", envSource,
+              "-f", baseSource,
+              "up", "-d", "--force-recreate", "ai-admin",
             );
+            const helperResult = await runHostCommand(helperArgs, 120_000);
             return helperResult.exitCode === 0
               ? { success: true }
               : { success: false, message: helperResult.stderr || helperResult.stdout || "ai-admin compose recreate failed" };
           }
+          const effective = await resolveEffectiveAiDev(project);
           const result = await runDockerCommand(
-            `compose -p ${project} --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up -d --force-recreate ai-dev 2>&1`,
+            buildRecreateSubcommand({
+              project,
+              envFile: ENV_FILE,
+              effective,
+              action: "up -d --force-recreate ai-dev",
+              trace: " 2>&1",
+            }),
             120_000,
           );
           return result.exitCode === 0
