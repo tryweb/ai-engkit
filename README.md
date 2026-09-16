@@ -82,22 +82,33 @@ Upgrade an existing installation with the same supported release flow:
 curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/upgrade.sh | bash
 ```
 
-The upgrade script backs up the compose file and `.env`, downloads the latest compose configuration, merges newly introduced variables without overwriting custom values, pulls the image, recreates the service, waits for the container to be running, and removes dangling images. Re-running `install.sh` on an existing installation delegates to this upgrade flow.
+The upgrade script backs up the Compose inputs and `.env`, downloads the latest Compose configuration, merges newly introduced variables without overwriting custom values, pulls the image, recreates the service, waits for the container to be running, and removes dangling images. When a domain overlay is configured, the base, overlay, and environment inputs are backed up together and the effective base-plus-overlay configuration is recreated. Re-running `install.sh` on an existing installation delegates to this upgrade flow.
 
-To restore the backed-up Compose and environment settings:
+To restore the backed-up Compose and environment settings, stop the services first. For an Admin-managed backup, use the files under `backups/pre-<timestamp>/`:
 
 ```bash
 docker compose down
-cp backup_<timestamp>/docker-compose.yml docker-compose.yml
-cp backup_<timestamp>/.env .env
+cp backups/pre-<timestamp>/.env .env
+cp backups/pre-<timestamp>/compose.yml docker-compose.yml
+# No overlay: start the restored base-only configuration.
 docker compose up -d
 ```
 
-This restores configuration files only; it does not restore Docker images or persistent volume data. To deploy a previous image as well, set `AI_ENGKIT_VERSION` to the desired release tag before starting the services.
+For an overlay installation, restore the staged base and the backed-up overlay
+before starting services. Do not run the base-only command above:
+
+```bash
+cp backups/pre-<timestamp>/compose-upgrade-base.yml admin-data/upgrade-base.yml
+cp backups/pre-<timestamp>/overlay/<name> extensions/<name>
+docker compose --project-directory . \
+  -f admin-data/upgrade-base.yml -f extensions/<name> up -d
+```
+
+Host `upgrade.sh` backups use `backup_<TIMESTAMP>/` and print the corresponding restore paths. Restoring configuration files does not restore Docker images or persistent volume data. To deploy a previous image as well, set `AI_ENGKIT_VERSION` to the desired release tag before starting the services.
 
 ### Domain Compose overlay
 
-Domain deployments can preserve one local Compose overlay across upgrades, restarts, and maintenance recreates by setting `AI_ENGKIT_COMPOSE_OVERLAY` in `.env`. The overlay is validated before any recreate and may only extend the `ai-dev` service (environment, networks, volumes, labels, healthchecks); it cannot change the image, ports, privilege settings, Docker socket mounts, or the Admin/domain worker services. The host `upgrade.sh` path is overlay-aware: it requires `jq`, validates the target base and overlay on the host, backs up the current effective inputs, and then recreates `ai-admin` and `ai-dev` from the base-plus-overlay configuration without silently falling back to base-only. See [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md).
+Domain deployments can preserve one local Compose overlay across upgrades, restarts, and maintenance recreates by setting `AI_ENGKIT_COMPOSE_OVERLAY` in `.env`. The overlay is validated before any recreate and may only extend the `ai-dev` service (environment, networks, named volumes, labels, healthcheck); it cannot change the image, ports, privilege settings, Docker socket mounts, or the Admin/domain worker services. The host `upgrade.sh` path is overlay-aware: it requires `jq`, validates the target base and overlay on the host, backs up the current effective inputs, and then recreates `ai-admin` and `ai-dev` from the base-plus-overlay configuration without silently falling back to base-only. The Admin API reports overlay status; there is no overlay editor or UI warning flow. See [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md).
 
 ## Configuration
 
@@ -111,6 +122,7 @@ Copy `.env.example` to `.env` when configuring a checkout manually. The installe
 | `OPENCODE_SERVER_PASSWORD` | `devonly` in example | OpenCode API password; replace it |
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` in example | OpenChamber password; installer prompts for it |
 | `ADMIN_PASSWORD` | **required** | Admin Dashboard password; installer prompts for it |
+| `AI_ENGKIT_COMPOSE_OVERLAY` | unset (disabled) | One local overlay for the `ai-dev` service |
 | `OPENCODE_PLUGINS` | bundled plugin list | Comma-separated OpenCode plugins |
 | `OPENCODE_PROVIDER` | unset | Custom provider JSON injected into `opencode.json` |
 | `WORKSPACE_PATH` | named volume | Set a host path for a bind-mounted workspace |
