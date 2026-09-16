@@ -11,7 +11,7 @@ Observed 2026-08-06: after upgrading to v1.11.6 (image built 09:24:56Z, containe
 ## Problem
 
 - The registration list and the project data are **two different things**. A version change can re-initialize `settings.json` — a fresh 1.18-era file contains only `{"defaultModel": ..., "showOpenCodeUpdateNotifications": false}` with **no `projects` array** — so the UI project count drops while every project directory on disk stays untouched. The drop looks like data loss; it is not.
-- The admin upgrade backup (`src/admin/lib/upgrade.ts`) snapshots only `compose.yml` + `.env`, **not** the openchamber settings volume. Without a pre-upgrade snapshot of `settings.json`, the exact component that reset the registrations cannot be proven — only correlated.
+- At the time of this incident, the admin upgrade backup (`src/admin/lib/upgrade.ts`) snapshot only `compose.yml` + `.env`, **not** the OpenChamber settings volume. Current upgrades also snapshot `settings.json` before recreation, but this historical incident predates that safeguard.
 - Host reboot and compose recreate can both look like "the upgrade". Pin the event with `docker inspect <ctr> --format '{{.State.StartedAt}}'` and image `Created` before blaming a version.
 
 ## Solution
@@ -32,7 +32,7 @@ Observed 2026-08-06: after upgrading to v1.11.6 (image built 09:24:56Z, containe
    ```
    If both lists are empty, do nothing. Never remove `staleInOC` entries without manually validating each path — a stale entry may be a renamed or temporarily unmounted project the user still wants.
 4. **Refresh the OpenChamber UI** (host 8000 → container 3000). Entries appear without a restart.
-5. **Before the next upgrade**: snapshot `settings.json` (with checksum), the image digest, and the mount list; record the pre-upgrade registration count.
+5. **Before the next upgrade**: verify the automatic `settings.json` snapshot, image digest, and mount list; record the pre-upgrade registration count.
 
 ## Why It Works
 
@@ -54,14 +54,14 @@ Observed 2026-08-06: after upgrading to v1.11.6 (image built 09:24:56Z, containe
 - Entries with `addedAt` ≈ 10:02:08Z (86 s after recreate) consistent with re-registration after the upgrade; `everplast-it`'s entry predates the upgrade (`lastOpenedAt` 07:08Z) → **partial** registration loss, not a total wipe.
 - A minimal fresh settings.json (no `projects` array) observed in the admin container's anonymous config volume — the 1.18-era shape.
 - `compose.yml`/`.env` byte-identical to the 2026-08-05 backup → not a config change.
-- Repo Dockerfile/entrypoint do not touch `settings.json`; the admin upgrade backup covers only compose + `.env`.
+- Repo Dockerfile/entrypoint do not touch `settings.json`; the historical backup at incident time covered only compose + `.env`.
 
 ## Related Files
 
 - `src/admin/lib/openchamber-projects.ts` — atomic `projects[]` merge (add/remove, shape-validated)
 - `src/admin/routes/project-sync.ts` — GET/POST `/api/projects/sync`
 - `src/admin/lib/docker.ts` — `execInAiDev()` sibling container targeting
-- `src/admin/lib/upgrade.ts` — upgrade backup contents (compose + `.env` only)
+- `src/admin/lib/upgrade.ts` — current upgrade backup contents, including OpenChamber settings and overlay inputs
 - `docs/knowledge/troubleshooting/openchamber-projects-sync-container-targeting.md` — prod vs dev admin targeting; older timestamp-gap note
 - `docs/knowledge/tooling/openchamber-project-data-architecture.md` — where OpenChamber state lives
 - `docs/knowledge/patterns/openchamber-project-auto-registration.md` — create-endpoint registration with timestamps
