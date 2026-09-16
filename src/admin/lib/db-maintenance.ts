@@ -10,6 +10,12 @@ import {
   type ExecResult,
 } from "./docker";
 import { readRetentionPolicy, type RetentionPolicy } from "./retention-policy";
+import { readEnvFile } from "./env";
+import {
+  buildRecreateSubcommand,
+  resolveValidatedEffectiveCompose,
+  type EffectiveCompose,
+} from "./compose-overlay";
 import {
   probeIdleViaOpenCodeServer,
   waitForIdleSessions,
@@ -247,19 +253,29 @@ async function defaultStopAiDev(): Promise<ExecResult> {
   }
 }
 
-async function defaultStartAiDev(): Promise<ExecResult> {
+interface StartAiDevOverrides {
+  getProjectFn?: typeof getComposeProject;
+  dockerCommandFn?: typeof dockerCommand;
+  resolveEffectiveFn?: (project: string) => Promise<EffectiveCompose>;
+}
+
+export async function defaultStartAiDev(overrides: StartAiDevOverrides = {}): Promise<ExecResult> {
+  const getProjectFn = overrides.getProjectFn ?? getComposeProject;
+  const dockerFn = overrides.dockerCommandFn ?? dockerCommand;
+  const resolveEffectiveFn =
+    overrides.resolveEffectiveFn ??
+    ((project: string) => resolveValidatedEffectiveCompose({ readEnv: readEnvFile, project }));
   try {
-    const project = await getComposeProject();
-    const composeFile = "/opt/ai-engkit/compose.yml";
+    const project = await getProjectFn();
     const envFile = "/opt/ai-engkit/.env";
-    // Use compose up for restart
-    const result = await dockerCommand(
-      `compose -p ${project} --env-file ${envFile} -f ${composeFile} up -d ai-dev`,
+    const effective = await resolveEffectiveFn(project);
+    const result = await dockerFn(
+      buildRecreateSubcommand({ project, envFile, effective, action: "up -d ai-dev" }),
       120_000,
     );
     if (result.exitCode === 0) return result;
     const ref = await getAiDevContainerRef();
-    return await dockerCommand(`start ${ref}`, 30_000);
+    return await dockerFn(`start ${ref}`, 30_000);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     return { stdout: "", stderr: msg, exitCode: 1 };

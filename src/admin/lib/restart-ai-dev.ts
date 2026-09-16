@@ -7,6 +7,12 @@ import {
   type ExecResult,
 } from "./docker";
 import { readEnvFile } from "./env";
+import {
+  buildRecreateSubcommand,
+  resolveOverlay,
+  resolveValidatedEffectiveCompose,
+  type EffectiveCompose,
+} from "./compose-overlay";
 import { MANAGED_OPENCODE_DIR } from "./agent-model-types";
 
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
@@ -17,6 +23,8 @@ export interface AiDevRestartDeps {
   readonly getAiDevContainerRef: () => Promise<string>;
   readonly getComposeProject: () => Promise<string>;
   readonly dockerCommand: (command: string, timeoutMs: number) => Promise<ExecResult>;
+  /** Effective base(+overlay) Compose inputs; defaults to validated resolution from the .env. */
+  readonly resolveEffective?: (project: string) => Promise<EffectiveCompose>;
 }
 
 export interface ManagedRestartDeps {
@@ -40,10 +48,24 @@ export async function restartAiDev(
   deps: AiDevRestartDeps = REAL_DEPS,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }> {
   try {
-    if (deps.composeFileExists(COMPOSE_FILE)) {
+    // A configured overlay must never silently fall back to a plain container
+    // restart, so resolve its state (which fails closed when invalid) before
+    // deciding whether the compose path applies. No overlay and no compose file
+    // keeps the historical direct-restart path, which needs no project.
+    const composeApplicable = deps.composeFileExists(COMPOSE_FILE) || resolveOverlay({ readEnv: readEnvFile }).active;
+    if (composeApplicable) {
       const project = await deps.getComposeProject();
+      const effective = deps.resolveEffective
+        ? await deps.resolveEffective(project)
+        : await resolveValidatedEffectiveCompose({ readEnv: readEnvFile, project });
       const result = await deps.dockerCommand(
-        `compose -p ${project} --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up -d --force-recreate ai-dev 2>&1`,
+        buildRecreateSubcommand({
+          project,
+          envFile: ENV_FILE,
+          effective,
+          action: "up -d --force-recreate ai-dev",
+          trace: " 2>&1",
+        }),
         120_000,
       );
       if (result.exitCode === 0) return { ok: true };
