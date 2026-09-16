@@ -16,6 +16,18 @@ download() {
     fi
 }
 
+# Resolve a WORKSPACE_PATH value read from .env without invoking a shell.
+# Only plain paths and a leading "~/" are expanded, so command substitution and
+# other shell syntax in .env are treated as literal text, never executed.
+expand_workspace_path() {
+    local path="$1"
+    case "$path" in
+        "~")   printf '%s' "$HOME" ;;
+        "~/"*) printf '%s/%s' "$HOME" "${path:2}" ;;
+        *)     printf '%s' "$path" ;;
+    esac
+}
+
 set_env_value() {
     local key="$1"
     local value="$2"
@@ -304,6 +316,24 @@ ensure_provider_state() {
     echo "  ✅ provider registry ready"
 }
 
+prepare_overlay_paths() {
+    # The overlay-aware upgrade mounts ./extensions read-only into ai-admin and
+    # stages the upstream base at ./admin-data/upgrade-base.yml. Create both host
+    # paths before `docker compose up`: a missing bind-mount source for a file
+    # would otherwise be auto-created as a directory by Docker.
+    mkdir -p ./extensions
+    chmod 755 ./extensions
+    echo "  ✅ ./extensions ready"
+
+    mkdir -p ./admin-data
+    if [ ! -f ./admin-data/upgrade-base.yml ]; then
+        : > ./admin-data/upgrade-base.yml
+    fi
+    chmod 600 ./admin-data/upgrade-base.yml
+    chown 1000:1000 ./admin-data/upgrade-base.yml 2>/dev/null || true
+    echo "  ✅ ./admin-data/upgrade-base.yml ready"
+}
+
 prepare_volumes() {
     echo
     echo "========================================"
@@ -312,15 +342,17 @@ prepare_volumes() {
 
     echo "  Creating ./backups (for admin container backups)..."
     mkdir -p ./backups
-    chmod 777 ./backups
+    chmod 700 ./backups
+    chown 1000:1000 ./backups 2>/dev/null || true
     echo "  ✅ ./backups ready"
 
     ensure_provider_state
+    prepare_overlay_paths
 
     echo "  Creating ./workspace (for code editing)..."
     WS_PATH=$(grep -E "^WORKSPACE_PATH=" .env 2>/dev/null | cut -d= -f2- || echo "")
     if [ -n "$WS_PATH" ]; then
-        WS_PATH=$(eval echo "$WS_PATH" 2>/dev/null || true)
+        WS_PATH=$(expand_workspace_path "$WS_PATH")
         if [ ! -d "$WS_PATH" ]; then
             mkdir -p "$WS_PATH"
         fi

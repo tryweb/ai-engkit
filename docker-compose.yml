@@ -41,6 +41,8 @@ services:
       - ./.env:/opt/ai-engkit/.env:rw
       - ./docker-compose.yml:/opt/ai-engkit/compose.yml:rw
       - ./admin-data:/opt/ai-engkit/admin-data:rw
+      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
+      - ./extensions:/opt/ai-engkit/extensions:ro
       - ./backups:/opt/ai-engkit/backups:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
