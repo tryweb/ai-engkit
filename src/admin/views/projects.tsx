@@ -139,6 +139,7 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         <div id="drawer-remote" class="drawer__section"></div>
         <div id="drawer-caps" class="drawer__section"></div>
         <div id="drawer-codegraph" class="drawer__section"></div>
+        <div id="drawer-leanctx" class="drawer__section"></div>
         <div id="drawer-actions" class="drawer__actions"></div>
       </div>
     </aside>

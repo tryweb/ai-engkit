@@ -523,6 +523,7 @@ fi
 
 PROJECTS_HTML=$(curl -s -b "$COOKIE_JAR" "$BASE/projects" 2>/dev/null || echo "")
 assert_contains "Projects page renders CodeGraph column" "CodeGraph" "$PROJECTS_HTML"
+assert_contains "Projects page renders LeanCTX Knowledge drawer section" 'id="drawer-leanctx"' "$PROJECTS_HTML"
 # The shared Layout sidebar always carries a "LeanCTX Config" nav link, so a
 # whole-page absence check would false-fail. Tool columns surface as filter
 # selects; a leanCTX column would add an id="filter-leanctx" select here.

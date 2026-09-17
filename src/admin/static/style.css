@@ -484,7 +484,7 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .project-remote:hover { color: var(--accent); }
-.cap-badges { display: flex; align-items: center; gap: 4px; }
+.cap-badges { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .cap-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 26px; height: 22px; padding: 0 6px; border-radius: 6px;
@@ -497,6 +497,8 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
 .cap-badge--cg { color: var(--accent); border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.12); }
 .cap-badge--cg-stale { color: var(--warning); border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.12); }
 .cap-badge--cg-off { color: var(--text-muted); border-color: var(--border); background: rgba(161,161,170,0.1); }
+.cap-badge--lk { color: var(--accent); border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.12); }
+.cap-badge--lk-off { color: var(--text-muted); border-color: var(--border); background: rgba(161,161,170,0.1); }
 .row-menu-wrap { position: relative; }
 .btn-menu {
   background: transparent; border: 1px solid transparent; border-radius: 6px;

@@ -62,6 +62,37 @@ function codegraphTooltip(data) {
   return parts.join(" · ");
 }
 
+function countLabel(n, singular, plural) {
+  return n + " " + (n === 1 ? singular : plural);
+}
+
+function leanctxState(data) {
+  const lc = data && data.leanctx;
+  if (!lc || typeof lc !== "object") return "unknown";
+  if (lc.state === "empty") return "empty";
+  if (lc.state !== "available") return "unknown";
+  for (const key of ["activeFacts", "archivedFacts", "patterns", "history"]) {
+    if (!Number.isInteger(lc[key]) || lc[key] < 0) return "unknown";
+  }
+  return "available";
+}
+
+function leanctxTooltip(data) {
+  const lc = data.leanctx;
+  return [
+    countLabel(lc.activeFacts, "active fact", "active facts"),
+    countLabel(lc.archivedFacts, "archived fact", "archived facts"),
+    countLabel(lc.patterns, "pattern", "patterns"),
+    countLabel(lc.history, "history entry", "history entries"),
+  ].join(" · ");
+}
+
+function leanctxLastUpdated(value) {
+  if (typeof value !== "string" || !value) return "unknown";
+  if (isNaN(new Date(value).getTime())) return "unknown";
+  return formatWhen(value);
+}
+
 function projectNames() { return Object.keys(overviewData); }
 
 function sortedNames() {
@@ -111,6 +142,30 @@ function updateSummary() {
   document.getElementById("sum-total").textContent = String(projectNames().length);
   document.getElementById("sum-active").textContent = String(active);
   document.getElementById("sum-disabled").textContent = String(disabled);
+}
+
+function appendLeanCtxBadge(badges, name, data) {
+  const btn = document.createElement("button");
+  btn.className = "cap-badge";
+  const state = leanctxState(data);
+  if (state === "available") {
+    btn.classList.add("cap-badge--lk");
+    btn.textContent = "LK";
+    btn.title = "LeanCTX Knowledge (project-scoped) — " + leanctxTooltip(data) + " — view details";
+    btn.setAttribute("aria-label", "LeanCTX Knowledge for " + name + " (project-scoped): " + countLabel(data.leanctx.activeFacts, "active fact", "active facts") + " — view details");
+  } else if (state === "empty") {
+    btn.classList.add("cap-badge--lk-off");
+    btn.textContent = "no knowledge";
+    btn.title = "LeanCTX Knowledge (project-scoped) — no knowledge stored — view details";
+    btn.setAttribute("aria-label", "LeanCTX Knowledge for " + name + " (project-scoped): no knowledge — view details");
+  } else {
+    btn.classList.add("cap-badge--lk-off");
+    btn.textContent = "LK unknown";
+    btn.title = "LeanCTX Knowledge (project-scoped) — status unknown — view details";
+    btn.setAttribute("aria-label", "LeanCTX Knowledge for " + name + " (project-scoped): status unknown — view details");
+  }
+  btn.addEventListener("click", () => openDrawer(name));
+  badges.appendChild(btn);
 }
 
 function buildRow(name) {
@@ -198,6 +253,7 @@ function buildRow(name) {
   }
   cgBtn.addEventListener("click", () => openDrawer(name));
   badges.appendChild(cgBtn);
+  appendLeanCtxBadge(badges, name, data);
   meta.appendChild(badges);
 
   nameWrap.appendChild(meta);
@@ -301,6 +357,39 @@ function closeDrawer() {
   drawerName = null;
   document.getElementById("drawer-overlay").style.display = "none";
   document.getElementById("project-drawer").style.display = "none";
+}
+
+function renderLeanCtxSection(data) {
+  const sec = document.getElementById("drawer-leanctx");
+  if (!sec) return;
+  sec.innerHTML = "";
+  const heading = document.createElement("h4");
+  heading.textContent = "LeanCTX Knowledge";
+  sec.appendChild(heading);
+  const row = document.createElement("div");
+  row.className = "drawer-cap";
+  const body = document.createElement("div");
+  body.style.flex = "1";
+  body.style.minWidth = "0";
+  const stats = document.createElement("div");
+  stats.className = "drawer-cap__stats";
+  const state = leanctxState(data);
+  const lines = [];
+  if (state === "available") {
+    const lc = data.leanctx;
+    lines.push(countLabel(lc.activeFacts, "active fact", "active facts") + " · " + countLabel(lc.archivedFacts, "archived fact", "archived facts"));
+    lines.push(countLabel(lc.patterns, "pattern", "patterns") + " · " + countLabel(lc.history, "history entry", "history entries"));
+    lines.push("Last updated " + leanctxLastUpdated(lc.lastUpdated));
+  } else if (state === "empty") {
+    lines.push("No knowledge stored for this project");
+  } else {
+    lines.push("Status unknown");
+  }
+  lines.push("Project-scoped counts · site totals on Dashboard");
+  stats.textContent = lines.join("\n");
+  body.appendChild(stats);
+  row.appendChild(body);
+  sec.appendChild(row);
 }
 
 function renderDrawer() {
@@ -413,6 +502,8 @@ function renderDrawer() {
   cgRow.appendChild(reindexBtn);
   
   cgSec.appendChild(cgRow);
+
+  renderLeanCtxSection(data);
 
   const act = document.getElementById("drawer-actions");
   act.innerHTML = "";
