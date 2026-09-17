@@ -77,6 +77,12 @@ One container replacing the former separate full-width value panels. Fixed subse
 - `.progress-bar` / `.fill` — upgrade progress.
 - `.log-viewer` / `.log-entry` — upgrade event log.
 
+### Projects capability badges — `.cap-badges` + `.cap-badge`
+Project-row capability cluster (Knowledge, Maintenance, OpenSpec, SuperPower, CodeGraph, LeanCTX Knowledge); each badge is a focusable button that opens the project drawer. CodeGraph keeps its existing copy and tones: `CG` indexed/stale/not-indexed, `CG?` unknown. LeanCTX Knowledge states carry visible text: available shows `LK {activeFacts}`, empty shows `no knowledge`, a failed probe shows `LK unknown`; every badge names its capability and state in `aria-label` and `title`, so meaning is never color-only. The cluster wraps at narrow widths.
+
+### Project drawer — `.drawer` + `__section` / `.drawer-cap`
+Right-side project detail drawer (`min(420px, 100vw)`; capped to `min(360px, calc(100vw - var(--sidebar)))` at 768–1024px so it never covers the sidebar). Section order: Git remote, Capabilities, CodeGraph (with Reindex), LeanCTX Knowledge, project actions. The LeanCTX Knowledge section is a read-only summary of active/archived facts, patterns, history, and last update time, labeled project-scoped; it exposes no fact mutation, import, restore, removal, consolidation, or configuration controls.
+
 ### Provider key registry row — `.key-row` + `__select` / `__value` / `__note` / `__actions`
 Registry key entry on the Providers page. Flex-wrap row that fits 320px
 without horizontal overflow: radio select, masked value (ellipsis-truncated),
