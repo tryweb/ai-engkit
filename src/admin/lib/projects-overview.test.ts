@@ -11,6 +11,7 @@ import {
   type ProjectCommand,
   type ProjectFeatures,
 } from "./projects-overview";
+import type { LeanCtxProjectStatus } from "./leanctx-project-status";
 
 async function shellCommand(source: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const process = Bun.spawn(["sh", "-c", source], { stdout: "pipe", stderr: "pipe" });
@@ -154,6 +155,106 @@ describe("collectProjectOverviews", () => {
 
       expect(byName.get("alpha")?.codegraph).toEqual({ initialized: false });
       expect(byName.get("beta")?.codegraph).toEqual({ initialized: false });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("attaches a batched LeanCTX projection once per overview", async () => {
+    const f = await fixture();
+    try {
+      const command = createCommand(f.workspaceRoot);
+      const calls: Array<readonly string[]> = [];
+      const available: LeanCtxProjectStatus = {
+        state: "available",
+        activeFacts: 2,
+        archivedFacts: 1,
+        patterns: 0,
+        history: 1,
+        lastUpdated: "2026-09-17T00:00:00Z",
+      };
+      const empty: LeanCtxProjectStatus = {
+        state: "empty",
+        activeFacts: 0,
+        archivedFacts: 0,
+        patterns: 0,
+        history: 0,
+        lastUpdated: null,
+      };
+      const toolStatus = {
+        probe: async () => ({ codegraph: { initialized: false } }),
+        probeLeanCtx: async (projectRoots: readonly string[]) => {
+          calls.push(projectRoots);
+          return new Map<string, LeanCtxProjectStatus | null>([
+            [`${f.workspaceRoot}/alpha`, available],
+            [`${f.workspaceRoot}/beta`, empty],
+          ]);
+        },
+        probeSite: async () => null,
+        probeGain: async () => null,
+        probeValueReport: async () => null,
+        probeProveReport: async () => null,
+        probeSavingsReport: async () => null,
+        invalidate: () => {},
+      };
+
+      const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath, toolStatus);
+      const byName = new Map(overviews.map((o) => [o.name, o]));
+
+      expect(byName.get("alpha")?.leanctx).toEqual(available);
+      expect(byName.get("beta")?.leanctx).toEqual(empty);
+      expect(calls).toHaveLength(1);
+      expect([...calls[0]].sort()).toEqual([`${f.workspaceRoot}/alpha`, `${f.workspaceRoot}/beta`]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("reports null leanctx and keeps every project when the batched scan rejects", async () => {
+    const f = await fixture();
+    try {
+      const command = createCommand(f.workspaceRoot);
+      const toolStatus = {
+        probe: async () => ({ codegraph: { initialized: false } }),
+        probeLeanCtx: async () => { throw new Error("scan boom"); },
+        probeSite: async () => null,
+        probeGain: async () => null,
+        probeValueReport: async () => null,
+        probeProveReport: async () => null,
+        probeSavingsReport: async () => null,
+        invalidate: () => {},
+      };
+
+      const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath, toolStatus);
+      const byName = new Map(overviews.map((o) => [o.name, o]));
+
+      expect(byName.get("alpha")?.leanctx).toBeNull();
+      expect(byName.get("beta")?.leanctx).toBeNull();
+      expect(byName.get("alpha")?.features.knowledge).toBe(true);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("omits leanctx when the provider exposes no batched scan", async () => {
+    const f = await fixture();
+    try {
+      const command = createCommand(f.workspaceRoot);
+      const toolStatus = {
+        probe: async () => ({ codegraph: { initialized: false } }),
+        probeSite: async () => null,
+        probeGain: async () => null,
+        probeValueReport: async () => null,
+        probeProveReport: async () => null,
+        probeSavingsReport: async () => null,
+        invalidate: () => {},
+      };
+
+      const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath, toolStatus);
+      const alpha = overviews.find((o) => o.name === "alpha");
+
+      expect(alpha?.leanctx).toBeUndefined();
+      expect(alpha?.codegraph).toEqual({ initialized: false });
     } finally {
       await f.cleanup();
     }

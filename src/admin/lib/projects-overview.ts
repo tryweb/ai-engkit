@@ -1,4 +1,5 @@
 import { readDisabledProjects, type SettingsCommand } from "./openchamber-projects";
+import type { LeanCtxProjectStatus } from "./leanctx-project-status";
 import type { CodegraphStatus, ProjectToolStatusProvider } from "./project-tool-status";
 
 export type ProjectCommand = SettingsCommand;
@@ -47,6 +48,8 @@ export interface ProjectOverview {
   disabled: boolean;
   /** Present only when the caller supplies a tool status provider. */
   codegraph?: CodegraphStatus | null;
+  /** Present only when the caller supplies a provider with a LeanCTX project scan. */
+  leanctx?: LeanCtxProjectStatus | null;
   /** Present only when the caller supplies a tool status provider. */
   stats?: ProjectFeatureStats | null;
 }
@@ -185,6 +188,15 @@ export async function collectProjectOverviews(
   void settingsPath;
   const names = await listProjects(command, workspaceRoot);
   const disabled = new Set(await readDisabledProjects(command, disabledPath));
+  const projectRoots = names.map((name) => `${workspaceRoot}/${name}`);
+  let leanCtxByRoot: Map<string, LeanCtxProjectStatus | null> | undefined;
+  if (toolStatus?.probeLeanCtx !== undefined) {
+    try {
+      leanCtxByRoot = await toolStatus.probeLeanCtx(projectRoots);
+    } catch {
+      leanCtxByRoot = new Map(projectRoots.map((root) => [root, null]));
+    }
+  }
   const results = await Promise.allSettled(names.map(async (name) => {
     const feats = await Promise.all([
       checkFeature(command, workspaceRoot, name, "docs/knowledge/README.md"),
@@ -209,6 +221,7 @@ export async function collectProjectOverviews(
     };
     if (tools !== undefined) {
       overview.codegraph = tools.codegraph;
+      if (leanCtxByRoot !== undefined) overview.leanctx = leanCtxByRoot.get(`${workspaceRoot}/${name}`) ?? null;
       if (stats !== null) overview.stats = stats;
     }
     return overview;
