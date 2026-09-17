@@ -62,6 +62,7 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
       remote: string | null;
       disabled: boolean;
       codegraph: ProjectOverview["codegraph"];
+      leanctx: ProjectOverview["leanctx"];
       stats: ProjectOverview["stats"];
     }> = {};
     for (const overview of overviews) {
@@ -70,6 +71,7 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
         remote: overview.remote,
         disabled: overview.disabled,
         codegraph: overview.codegraph ?? null,
+        leanctx: overview.leanctx ?? null,
         stats: overview.stats ?? null,
       };
     }

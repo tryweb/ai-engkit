@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProjectRoutes, type ProjectCommand } from "./projects";
+import type { LeanCtxProjectStatus } from "../lib/leanctx-project-status";
 
 async function shellCommand(source: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const process = Bun.spawn(["sh", "-c", source], { stdout: "pipe", stderr: "pipe" });
@@ -355,6 +356,162 @@ describe("GET /api/projects/overview tool status", () => {
       expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false });
       expect(demo.disabled).toBe(false);
       expect(demo.remote).toBeNull();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("passes the batched leanctx projection through with the exact wire shape", async () => {
+    const f = await fixture();
+    const available: LeanCtxProjectStatus = {
+      state: "available",
+      activeFacts: 3,
+      archivedFacts: 1,
+      patterns: 0,
+      history: 2,
+      lastUpdated: "2026-09-17T00:00:00Z",
+    };
+    const toolStatus = {
+      probe: async () => ({ codegraph: null }),
+      probeLeanCtx: async (projectRoots: readonly string[]) =>
+        new Map<string, LeanCtxProjectStatus | null>(projectRoots.map((root) => [root, available])),
+      probeSite: async () => null,
+      probeGain: async () => null,
+      probeValueReport: async () => null,
+      probeProveReport: async () => null,
+      probeSavingsReport: async () => null,
+      invalidate: () => {},
+    };
+    try {
+      await mkdir(join(f.workspaceRoot, "demo"), { recursive: true });
+      const app = createProjectRoutes({
+        command: overviewCommand(),
+        settingsPath: f.settingsPath,
+        disabledPath: f.disabledPath,
+        workspaceRoot: f.workspaceRoot,
+        toolStatus,
+      });
+
+      const res = await app.request("http://localhost/api/projects/overview");
+      expect(res.status).toBe(200);
+      const body = await res.json() as Record<string, Record<string, unknown>>;
+      expect(body["demo"]?.leanctx).toEqual(available);
+      expect(Object.keys(body["demo"]?.leanctx as object).sort()).toEqual([
+        "activeFacts",
+        "archivedFacts",
+        "history",
+        "lastUpdated",
+        "patterns",
+        "state",
+      ]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("passes an empty leanctx projection and a null unknown projection through", async () => {
+    const f = await fixture();
+    const states: Record<string, LeanCtxProjectStatus | null> = {
+      alpha: { state: "empty", activeFacts: 0, archivedFacts: 0, patterns: 0, history: 0, lastUpdated: null },
+      beta: null,
+    };
+    const toolStatus = {
+      probe: async () => ({ codegraph: null }),
+      probeLeanCtx: async (projectRoots: readonly string[]) =>
+        new Map<string, LeanCtxProjectStatus | null>(projectRoots.map((root) => [root, states[root.slice(root.lastIndexOf("/") + 1)] ?? null])),
+      probeSite: async () => null,
+      probeGain: async () => null,
+      probeValueReport: async () => null,
+      probeProveReport: async () => null,
+      probeSavingsReport: async () => null,
+      invalidate: () => {},
+    };
+    try {
+      await mkdir(join(f.workspaceRoot, "alpha"), { recursive: true });
+      await mkdir(join(f.workspaceRoot, "beta"), { recursive: true });
+      const app = createProjectRoutes({
+        command: overviewCommand(),
+        settingsPath: f.settingsPath,
+        disabledPath: f.disabledPath,
+        workspaceRoot: f.workspaceRoot,
+        toolStatus,
+      });
+
+      const res = await app.request("http://localhost/api/projects/overview");
+      expect(res.status).toBe(200);
+      const body = await res.json() as Record<string, Record<string, unknown>>;
+      expect(body["alpha"]?.leanctx).toEqual(states["alpha"]);
+      expect(body["beta"]?.leanctx).toBeNull();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("never falls back to the site-level leanCTX aggregate for an unknown project", async () => {
+    const f = await fixture();
+    const toolStatus = {
+      probe: async () => ({ codegraph: null }),
+      probeLeanCtx: async (projectRoots: readonly string[]) =>
+        new Map<string, LeanCtxProjectStatus | null>(projectRoots.map((root) => [root, null])),
+      probeSite: async () => ({ projectsWithFacts: 9, totalMemoryFacts: 99, activeProjects24h: 8, healthCoverage: 3 }),
+      probeGain: async () => null,
+      probeValueReport: async () => null,
+      probeProveReport: async () => null,
+      probeSavingsReport: async () => null,
+      invalidate: () => {},
+    };
+    try {
+      await mkdir(join(f.workspaceRoot, "demo"), { recursive: true });
+      const app = createProjectRoutes({
+        command: overviewCommand(),
+        settingsPath: f.settingsPath,
+        disabledPath: f.disabledPath,
+        workspaceRoot: f.workspaceRoot,
+        toolStatus,
+      });
+
+      const res = await app.request("http://localhost/api/projects/overview");
+      expect(res.status).toBe(200);
+      const body = await res.json() as Record<string, Record<string, unknown>>;
+      expect(body["demo"]?.leanctx).toBeNull();
+      expect(JSON.stringify(body["demo"])).not.toContain("totalMemoryFacts");
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("handles a crafted project name without failing the overview", async () => {
+    const f = await fixture();
+    const name = "evil; touch pwned (x)";
+    let seenRoots: readonly string[] = [];
+    const toolStatus = {
+      probe: async () => ({ codegraph: null }),
+      probeLeanCtx: async (projectRoots: readonly string[]) => {
+        seenRoots = projectRoots;
+        return new Map<string, LeanCtxProjectStatus | null>(projectRoots.map((root) => [root, null]));
+      },
+      probeSite: async () => null,
+      probeGain: async () => null,
+      probeValueReport: async () => null,
+      probeProveReport: async () => null,
+      probeSavingsReport: async () => null,
+      invalidate: () => {},
+    };
+    try {
+      await mkdir(join(f.workspaceRoot, name), { recursive: true });
+      const app = createProjectRoutes({
+        command: overviewCommand(),
+        settingsPath: f.settingsPath,
+        disabledPath: f.disabledPath,
+        workspaceRoot: f.workspaceRoot,
+        toolStatus,
+      });
+
+      const res = await app.request("http://localhost/api/projects/overview");
+      expect(res.status).toBe(200);
+      const body = await res.json() as Record<string, Record<string, unknown>>;
+      expect(body[name]?.leanctx).toBeNull();
+      expect(seenRoots).toContain(`${f.workspaceRoot}/${name}`);
     } finally {
       await f.cleanup();
     }
