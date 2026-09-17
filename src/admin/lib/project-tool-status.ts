@@ -1,4 +1,10 @@
 import type { ProjectCommand } from "./projects-overview";
+import {
+  buildLeanCtxProjectScanCommand,
+  isScannableProjectRoot,
+  parseLeanCtxProjectScan,
+  type LeanCtxProjectStatus,
+} from "./leanctx-project-status";
 
 /**
  * Per-project tool status probes for the Admin projects overview.
@@ -43,8 +49,8 @@ export interface CodegraphStatus {
 
 /**
  * Site-level leanCTX statistics aggregated across every knowledge dir.
- * Per-project leanCTX is intentionally not surfaced: session activity is
- * global and health scores are sparse, so per-project values would mislead.
+ * These remain the Dashboard aggregate; per-project fact-store metadata is
+ * surfaced separately through `probeLeanCtx` and is never derived from this.
  */
 export interface LeanCtxSiteStats {
   /** Number of projects with at least one stored memory fact. */
@@ -163,6 +169,12 @@ export interface ProjectToolStatus {
 
 export interface ProjectToolStatusProvider {
   probe(name: string): Promise<ProjectToolStatus>;
+  /**
+   * One batched, cached, read-only LeanCTX scan keyed by canonical project
+   * root. `null` means unknown (failure/malformed/duplicate/mismatch); a zeroed
+   * `empty` object means no matching store. Optional for backward compatibility.
+   */
+  probeLeanCtx?(projectRoots: readonly string[]): Promise<Map<string, LeanCtxProjectStatus | null>>;
   probeSite(): Promise<LeanCtxSiteStats | null>;
   probeGain(): Promise<GainStats | null>;
   probeValueReport(): Promise<ValueReportStats | null>;
@@ -436,6 +448,8 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
   const cache = new Map<string, CacheEntry>();
   const semaphore = createSemaphore(concurrency);
   let siteCache: { at: number; value: LeanCtxSiteStats | null } | null = null;
+  let leanCtxCache: { at: number; rootsKey: string; value: Map<string, LeanCtxProjectStatus | null> } | null = null;
+  const leanCtxInFlight = new Map<string, Promise<Map<string, LeanCtxProjectStatus | null>>>();
   let gainCache: { at: number; value: GainStats | null } | null = null;
   let valueReportCache: { at: number; value: ValueReportStats | null } | null = null;
   let proveReportCache: { at: number; value: ProveReportStats | null } | null = null;
@@ -455,6 +469,54 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
     } catch {
       return null;
     }
+  }
+
+  async function runLeanCtxProjectScan(
+    projectRoots: readonly string[],
+  ): Promise<Map<string, LeanCtxProjectStatus | null>> {
+    const result = new Map<string, LeanCtxProjectStatus | null>();
+    try {
+      const exec = await command(buildLeanCtxProjectScanCommand(projectRoots), probeTimeoutMs);
+      const parsed = exec.exitCode === 0 ? parseLeanCtxProjectScan(exec.stdout, projectRoots) : null;
+      for (const root of projectRoots) result.set(root, parsed?.get(root) ?? null);
+    } catch {
+      for (const root of projectRoots) result.set(root, null);
+    }
+    return result;
+  }
+
+  async function probeLeanCtx(
+    projectRoots: readonly string[],
+  ): Promise<Map<string, LeanCtxProjectStatus | null>> {
+    const result = new Map<string, LeanCtxProjectStatus | null>();
+    const scanRoots: string[] = [];
+    for (const root of new Set(projectRoots)) {
+      if (isScannableProjectRoot(root)) scanRoots.push(root);
+      else result.set(root, null);
+    }
+    if (scanRoots.length === 0) return result;
+
+    const rootsKey = JSON.stringify([...scanRoots].sort());
+    const now = Date.now();
+    if (leanCtxCache !== null && now - leanCtxCache.at < ttlMs && leanCtxCache.rootsKey === rootsKey) {
+      for (const root of scanRoots) result.set(root, leanCtxCache.value.get(root) ?? null);
+      return result;
+    }
+
+    let inFlight = leanCtxInFlight.get(rootsKey);
+    if (inFlight === undefined) {
+      const run = runLeanCtxProjectScan(scanRoots).then((value) => {
+        leanCtxCache = { at: Date.now(), rootsKey, value };
+        return value;
+      });
+      inFlight = run.finally(() => {
+        leanCtxInFlight.delete(rootsKey);
+      });
+      leanCtxInFlight.set(rootsKey, inFlight);
+    }
+    const value = await inFlight;
+    for (const root of scanRoots) result.set(root, value.get(root) ?? null);
+    return result;
   }
 
   async function probeLeanCtxSite(): Promise<LeanCtxSiteStats | null> {
@@ -552,6 +614,7 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
       }
     },
     probeSite: probeLeanCtxSite,
+    probeLeanCtx,
     probeGain,
     probeValueReport,
     probeProveReport,
@@ -560,6 +623,8 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
       if (name !== undefined) cache.delete(name);
       else cache.clear();
       siteCache = null;
+      leanCtxCache = null;
+      leanCtxInFlight.clear();
       gainCache = null;
       valueReportCache = null;
       proveReportCache = null;

@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { createToolStatusProbe } from "./project-tool-status";
+import { createToolStatusProbe, type ProjectToolStatusProvider } from "./project-tool-status";
 import type { ProjectCommand } from "./projects-overview";
 
 type CmdResult = { exitCode: number; stdout: string; stderr: string };
 
 interface FakeHandlers {
   codegraph?: (source: string) => CmdResult;
+  leanctxProject?: (source: string) => CmdResult;
   site?: (source: string) => CmdResult;
   gain?: (source: string) => CmdResult;
   verify?: (source: string) => CmdResult;
@@ -29,6 +30,9 @@ function fakeCommand(handlers: FakeHandlers = {}): ProjectCommand {
     }
     if (source.includes("codegraph status")) {
       return handlers.codegraph ? handlers.codegraph(source) : { exitCode: 127, stdout: "", stderr: "" };
+    }
+    if (source.includes("LEANCTX_PROJECT_ROOTS_EOF")) {
+      return handlers.leanctxProject ? handlers.leanctxProject(source) : { exitCode: 0, stdout: "", stderr: "" };
     }
     if (source.includes("knowledge/*/knowledge.json")) {
       return handlers.site ? handlers.site(source) : { exitCode: 0, stdout: "", stderr: "" };
@@ -202,10 +206,177 @@ describe("leanCTX site probe", () => {
     await provider.probeSite();
     expect(calls).toBe(2);
   });
+
+  test("keeps concurrent site and project scan failures independent", async () => {
+    let siteCalls = 0;
+    let projectCalls = 0;
+    const command = fakeCommand({
+      site: () => {
+        siteCalls += 1;
+        return { exitCode: 1, stdout: "", stderr: "site scan failed" };
+      },
+      leanctxProject: () => {
+        projectCalls += 1;
+        return { exitCode: 1, stdout: "", stderr: "project scan failed" };
+      },
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+    const probeProject = provider.probeLeanCtx;
+    if (probeProject === undefined) throw new Error("probeLeanCtx is not implemented");
+
+    const [site, project] = await Promise.all([
+      provider.probeSite(),
+      probeProject(["/workspace/alpha"]),
+    ]);
+
+    expect(site).toBeNull();
+    expect(project.get("/workspace/alpha")).toBeNull();
+    expect(siteCalls).toBe(1);
+    expect(projectCalls).toBe(1);
+  });
 });
 
-describe("leanCTX gain probe", () => {
-  const gainJson = JSON.stringify({
+describe("leanCTX project scan probe", () => {
+  function probeFn(provider: ProjectToolStatusProvider) {
+    const fn = provider.probeLeanCtx;
+    if (fn === undefined) throw new Error("probeLeanCtx is not implemented");
+    return fn;
+  }
+
+  test("returns parsed statuses keyed by canonical root", async () => {
+    const command = fakeCommand({
+      leanctxProject: () => ({
+        exitCode: 0,
+        stdout: '{"state":"available","activeFacts":2,"archivedFacts":1,"patterns":0,"history":3,"lastUpdated":"2026-09-17T00:00:00Z"}\n{"state":"empty"}\n',
+        stderr: "",
+      }),
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    const result = await probeFn(provider)(["/workspace/alpha", "/workspace/beta"]);
+    expect(result.get("/workspace/alpha")).toEqual({
+      state: "available",
+      activeFacts: 2,
+      archivedFacts: 1,
+      patterns: 0,
+      history: 3,
+      lastUpdated: "2026-09-17T00:00:00Z",
+    });
+    expect(result.get("/workspace/beta")).toEqual({
+      state: "empty",
+      activeFacts: 0,
+      archivedFacts: 0,
+      patterns: 0,
+      history: 0,
+      lastUpdated: null,
+    });
+  });
+
+  test("maps an unknown line to null", async () => {
+    const command = fakeCommand({
+      leanctxProject: () => ({ exitCode: 0, stdout: '{"state":"unknown"}\n', stderr: "" }),
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    expect((await probeFn(provider)(["/workspace/alpha"])).get("/workspace/alpha")).toBeNull();
+  });
+
+  test("returns null for every root when the scan fails", async () => {
+    const command = fakeCommand({
+      leanctxProject: () => ({ exitCode: 1, stdout: "", stderr: "read failed" }),
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    const result = await probeFn(provider)(["/workspace/alpha", "/workspace/beta"]);
+    expect(result.get("/workspace/alpha")).toBeNull();
+    expect(result.get("/workspace/beta")).toBeNull();
+  });
+
+  test("returns null for every root when the command throws (timeout)", async () => {
+    const command = fakeCommand({
+      leanctxProject: () => { throw new Error("timed out"); },
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    expect((await probeFn(provider)(["/workspace/alpha"])).get("/workspace/alpha")).toBeNull();
+  });
+
+  test("returns null for every root when the output line count mismatches", async () => {
+    const command = fakeCommand({
+      leanctxProject: () => ({ exitCode: 0, stdout: '{"state":"empty"}\n', stderr: "" }),
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    const result = await probeFn(provider)(["/workspace/alpha", "/workspace/beta"]);
+    expect(result.get("/workspace/alpha")).toBeNull();
+    expect(result.get("/workspace/beta")).toBeNull();
+  });
+
+  test("excludes unscannable roots without interpolating them into the command", async () => {
+    let captured = "";
+    const command = fakeCommand({
+      leanctxProject: (source) => {
+        captured = source;
+        return { exitCode: 0, stdout: '{"state":"empty"}\n', stderr: "" };
+      },
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    const result = await probeFn(provider)(["/workspace/alpha", "/workspace/evil\nrm -rf /"]);
+    expect(result.get("/workspace/evil\nrm -rf /")).toBeNull();
+    expect(result.get("/workspace/alpha")).toEqual({
+      state: "empty",
+      activeFacts: 0,
+      archivedFacts: 0,
+      patterns: 0,
+      history: 0,
+      lastUpdated: null,
+    });
+    expect(captured).not.toContain("rm -rf");
+    expect(captured.split("\n").filter((line) => line === "/workspace/alpha")).toHaveLength(1);
+  });
+
+  test("runs one scan per TTL window and re-scans after invalidate", async () => {
+    let calls = 0;
+    const command = fakeCommand({
+      leanctxProject: () => {
+        calls += 1;
+        return { exitCode: 0, stdout: '{"state":"empty"}\n', stderr: "" };
+      },
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    await probeFn(provider)(["/workspace/alpha"]);
+    await probeFn(provider)(["/workspace/alpha"]);
+    expect(calls).toBe(1);
+
+    provider.invalidate();
+    await probeFn(provider)(["/workspace/alpha"]);
+    expect(calls).toBe(2);
+  });
+
+  test("deduplicates concurrent scans for the same roots", async () => {
+    let calls = 0;
+    const command: ProjectCommand = async (source) => {
+      if (source.includes("LEANCTX_PROJECT_ROOTS_EOF")) {
+        calls += 1;
+        await new Promise((r) => setTimeout(r, 10));
+        return { exitCode: 0, stdout: '{"state":"empty"}\n', stderr: "" };
+      }
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    await Promise.all([
+      probeFn(provider)(["/workspace/alpha"]),
+      probeFn(provider)(["/workspace/alpha"]),
+      probeFn(provider)(["/workspace/alpha"]),
+    ]);
+    expect(calls).toBe(1);
+  });
+});
+
+describe("leanCTX gain probe", () => {  const gainJson = JSON.stringify({
     summary: {
       tokens_saved: 19469611,
       net_tokens_saved: 19351773,
