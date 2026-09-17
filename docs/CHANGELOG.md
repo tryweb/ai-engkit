@@ -1,6 +1,31 @@
 ## [Unreleased]
 
 
+## [1.19.1] - 2026-09-17
+
+### Added
+- Bump OpenSpec 1.13.0 → 1.13.1
+- Bump lean-ctx 3.10.1 → 3.10.2
+- Bump OpenChamber 1.23.2 → 1.24.0, Bun 1.3.14 → 1.4.2
+
+### Fixed
+- Isolate lean-ctx config fixtures from the host's live configuration
+
+### Documentation
+- Align overlay validation wording
+- Clarify restart race backup limits
+- Clarify OpenChamber upgrade incident history
+- Update upgrade script rollback guidance
+- Update upgrade verification guidance
+- Align architecture with overlay upgrade flow
+- Clarify compose overlay configuration and restore
+
+### Changed
+- Upgrade OpenSpec from 1.13.0 to 1.13.1.
+- Upgrade lean-ctx from 3.10.1 to 3.10.2.
+- Upgrade OpenChamber from 1.23.2 to 1.24.0.
+- Upgrade Bun from 1.3.14 to 1.4.2.
+
 ## [1.19.0] - 2026-09-16
 
 ### Added
@@ -2260,3 +2285,4 @@
 [1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
 [1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
+[1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
