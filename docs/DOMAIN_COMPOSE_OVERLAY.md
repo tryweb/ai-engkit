@@ -119,6 +119,21 @@ After an AI-EngKit upgrade, restart, or database maintenance recreate, `ai-dev`
 returns on `ep-design_interop` and the worker resolves the stable service name
 `ai-dev` (for example `http://ai-dev:4095`).
 
+### Review-capability integration
+
+The overlay keeps `ai-dev` reachable; the domain project still decides who may
+call the OpenCode API and for which capabilities. The ep-design reference
+hides OpenCode behind a domain API and worker: a capability such as
+`review.drawing` maps server-side to an approved skill/agent/model tuple, the
+worker is the only caller of the managed API and authenticates with the
+`opencode` user, and a static-plus-runtime verifier confirms the contract
+after every deployment or upgrade.
+
+See
+[`docs/knowledge/patterns/domain-app-review-integration.md`](knowledge/patterns/domain-app-review-integration.md)
+for the full reference shape: API/worker topology, capability catalogue,
+authentication, and the verifier checklist.
+
 ## Lifecycle application
 
 The same effective base-plus-overlay configuration is used by:
