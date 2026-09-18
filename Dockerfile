@@ -154,22 +154,11 @@ ENV LEANCTX_VERSION=${LEANCTX_VERSION}
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
 RUN rm -rf ~/.bun/install/cache && \
     bun install -g opencode-ai@${OPENCODE_VERSION} && \
-    # Workaround: openchamber/openchamber#3633 — @openchamber/web@1.24.0 pins the unpublished
-    # @openchamber/sdk@1.23.1 on npm. Patch the tarball locally to depend on the published
-    # sdk@1.24.0 (per maintainer-confirmed fix), then install from the patched tarball.
-    # Revert to the direct registry install once web@1.24.1 (corrected dep) ships.
-    curl -fsSL "https://registry.npmjs.org/@openchamber/web/-/web-${OPENCHAMBER_VERSION}.tgz" -o /tmp/openchamber-web.tgz && \
-    tar -xzf /tmp/openchamber-web.tgz -C /tmp && \
-    jq '.dependencies["@openchamber/sdk"] = "1.24.0"' /tmp/package/package.json > /tmp/package/package.json.patched && \
-    mv /tmp/package/package.json.patched /tmp/package/package.json && \
-    tar -czf /tmp/openchamber-web-patched.tgz -C /tmp package && \
-    bun install -g /tmp/openchamber-web-patched.tgz --trust && \
-    # 注意：/tmp/openchamber-web-patched.tgz 必須永久保留在 image 內，不可刪除。
-    # bun 以 file: 依賴記錄於 global manifest（@openchamber/web → 此 tarball），
-    # 每次 bun install -g 都會重解析並 re-extract 此檔——包括 container 啟動時
-    # EntryPoint（01-install-packages.sh 依 BUN_PACKAGES）的重裝；刪除會造成
-    # ENOENT 並使容器進入 restart loop。原始 tarball 與解壓目錄不被引用，可清理。
-    rm -f /tmp/openchamber-web.tgz && rm -rf /tmp/package && \
+    # @openchamber/web@1.24.1 fixed the unpublishable @openchamber/sdk pin
+    # (openchamber#3633, web@1.24.0 shipped with unpublished sdk@1.23.1) and declares
+    # the zod runtime dependency (openchamber#3635). Direct registry install is safe
+    # again; the web@1.24.0 tarball-patch workaround was removed with the 1.24.1 bump.
+    bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
     bun install -g @fission-ai/openspec@${OPENSPEC_VERSION} --trust && \
     bun install -g @code-yeongyu/comment-checker --trust && \
     # Remove cross-platform opencode binaries shipped as optional dependencies.
