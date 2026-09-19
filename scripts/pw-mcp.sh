@@ -45,8 +45,14 @@ fi
 export PLAYWRIGHT_BROWSERS_PATH
 echo "pw-mcp: using $(basename "$(dirname "$(dirname "$CHROME_BIN")")") (${CHROME_BIN})" >&2
 
+# --no-webmcp: WebMCP (page-registered tools exposed as webmcp_*) is opt-out
+# since @playwright/mcp 0.0.82. Page-provided tool names/descriptions/schemas
+# are untrusted input; keep them disabled as decided in
+# docs/knowledge/architecture/webmcp-default-disabled.md.
+# See https://github.com/microsoft/playwright-mcp/releases/tag/v0.0.82
 exec playwright-mcp \
     --executable-path="${CHROME_BIN}" \
     --no-sandbox --headless \
+    --no-webmcp \
     --output-dir .playwright-mcp \
     "$@"
