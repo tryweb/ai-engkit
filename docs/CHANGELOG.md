@@ -1,6 +1,32 @@
 ## [Unreleased]
 
 
+## [1.19.2] - 2026-09-21
+
+### Added
+- Bump OpenChamber 1.24.1 → 1.24.2 + Playwright MCP 0.0.81 → 0.0.82
+- Bump OpenChamber 1.24.0 → 1.24.1
+- Show LeanCTX status in Projects UI
+- Expose LeanCTX project status API
+- Include LeanCTX status in project overview
+- Cache project LeanCTX status scans
+- Add per-project LeanCTX projection
+
+### Fixed
+- Use JS comments in github-script to fix SyntaxError
+- Disable WebMCP by default in pw-mcp wrapper
+- Remove OpenChamber tarball-patch workaround (#3633) — web 1.24.1 installable from npm
+
+### Documentation
+- Add domain review-capability integration example (#74)
+- Archive project LeanCTX status change
+- Sync project status specification
+- Document project capability badges
+
+### Changed
+- Upgrade OpenChamber from 1.24.0 to 1.24.2.
+- Upgrade @playwright/mcp from 0.0.81 to 0.0.82.
+
 ## [1.19.1] - 2026-09-17
 
 ### Added
@@ -2108,7 +2134,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2286,3 +2312,4 @@
 [1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
+[1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
