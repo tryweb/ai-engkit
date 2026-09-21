@@ -1373,9 +1373,9 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              # Title deliberately avoids the 'Dependency update check' prefix so the
-              # failure-issue dedup (includes('Dependency update check')) above never
-              # matches this gate issue and suppresses a real failure issue.
+              // Title deliberately avoids the 'Dependency update check' prefix so the
+              // failure-issue dedup (includes('Dependency update check')) above never
+              // matches this gate issue and suppresses a real failure issue.
               title: 'Auto-release blocked - significant unreleased commits',
               body: [
                 '## Auto-Release Blocked\n',
