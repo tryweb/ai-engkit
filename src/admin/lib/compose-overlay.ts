@@ -24,6 +24,7 @@ export const EXTENSIONS_DIR = "/opt/ai-engkit/extensions";
 export const COMPOSE_PROJECT_DIR = "/opt/ai-engkit";
 export const ACTIVE_COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
 export const UPGRADE_BASE_FILE = "/opt/ai-engkit/compose-upgrade-base.yml";
+export const UPGRADE_STAGING_FILE = "/opt/ai-engkit/admin-data/upgrade-base.yml.staging";
 export const ENV_FILE = "/opt/ai-engkit/.env";
 export const OVERLAY_ENV_KEY = "AI_ENGKIT_COMPOSE_OVERLAY";
 

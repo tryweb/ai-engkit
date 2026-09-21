@@ -7,13 +7,27 @@ import {
   isAiDevRunning,
   type ExecResult,
 } from "./docker";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync, statSync, readdirSync, chmodSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  constants as fsConstants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { readEnvFile, writeEnvFile, type EnvVars } from "./env";
 import { KEYS_PATH } from "./provider-keys";
 import { resolveImageRef } from "./image-ref";
 import {
   UPGRADE_BASE_FILE,
+  UPGRADE_STAGING_FILE,
   buildRecreateSubcommand,
   getOverlayStatus,
   overlayLabel,
@@ -204,6 +218,7 @@ export interface UpgradeDeps extends MergeEnvDeps, PollHealthDeps {
   backupDir?: string;
   composeFile?: string;
   stagedBaseFile?: string;
+  stagedValidationFile?: string;
   envFile?: string;
   keysFile?: string;
   versionFile?: string;
@@ -273,6 +288,7 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
   const backupDir = deps.backupDir ?? BACKUP_DIR;
   const composeFile = deps.composeFile ?? COMPOSE_FILE;
   const stagedBaseFile = deps.stagedBaseFile ?? UPGRADE_BASE_FILE;
+  const stagedValidationFile = deps.stagedValidationFile ?? UPGRADE_STAGING_FILE;
   const envFile = deps.envFile ?? ENV_FILE;
   const keysFile = deps.keysFile ?? KEYS_PATH;
   const versionFile = deps.versionFile ?? "/opt/ai-engkit/VERSION";
@@ -426,16 +442,25 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
     if (overlay.active) {
       // Validate the new upstream base against the overlay before committing it,
       // so a validation failure never replaces the effective configuration.
-      const stagingPath = `${stagedBaseFile}.staging`;
-      writeFileSync(stagingPath, latestCompose, { mode: 0o600 });
+      const stagingPath = stagedValidationFile;
       let validationError: string | null = null;
+      let stagingFd: number | null = null;
+      let stagingCreated = false;
       try {
+        stagingFd = openSync(
+          stagingPath,
+          fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
+          0o600,
+        );
+        stagingCreated = true;
+        writeFileSync(stagingFd, latestCompose);
         const validation = await validateOverlay({ overlay, baseFile: stagingPath, project, envFile });
         if (!validation.ok) {
           validationError = "error" in validation ? validation.error : "unknown validation failure";
         }
       } finally {
-        rmSync(stagingPath, { force: true });
+        if (stagingFd !== null) closeSync(stagingFd);
+        if (stagingCreated) rmSync(stagingPath, { force: true });
       }
       if (validationError !== null) {
         validationFailed = true;

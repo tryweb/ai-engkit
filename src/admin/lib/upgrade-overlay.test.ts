@@ -3,6 +3,7 @@ import {
   accessSync,
   constants as fsConstants,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -10,6 +11,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -70,6 +72,7 @@ interface OverlayWorld {
   readonly overlayFile: string;
   readonly activeFile: string;
   readonly stagedBaseFile: string;
+  readonly stagedValidationFile: string;
   readonly envFile: string;
   readonly backupDir: string;
   readonly activeBytes: string;
@@ -89,8 +92,11 @@ function makeOverlayWorld(overrides: UpgradeDeps = {}, validation: ValidationRes
   const overlayFile = join(extensionsDir, "ep-design.yml");
   const activeFile = join(dir, "compose.yml");
   const stagedBaseFile = join(dir, "compose-upgrade-base.yml");
+  const adminDataDir = join(dir, "admin-data");
+  const stagedValidationFile = join(adminDataDir, "upgrade-base.yml.staging");
   const envFile = join(dir, ".env");
   const backupDir = join(dir, "backups");
+  mkdirSync(adminDataDir);
   writeFileSync(
     overlayFile,
     "services:\n  ai-dev:\n    environment:\n      OPENCHAMBER_OPENCODE_PORT: \"4095\"\n    networks:\n      - ep-design_interop\nnetworks:\n  ep-design_interop:\n    external: true\n",
@@ -110,6 +116,7 @@ function makeOverlayWorld(overrides: UpgradeDeps = {}, validation: ValidationRes
     backupDir,
     composeFile: activeFile,
     stagedBaseFile,
+    stagedValidationFile,
     envFile,
     keysFile: join(dir, "provider-keys.json"),
     versionFile: join(dir, "VERSION"),
@@ -165,6 +172,7 @@ function makeOverlayWorld(overrides: UpgradeDeps = {}, validation: ValidationRes
     overlayFile,
     activeFile,
     stagedBaseFile,
+    stagedValidationFile,
     envFile,
     backupDir,
     activeBytes,
@@ -206,7 +214,7 @@ describe("runUpgrade with a domain overlay", () => {
       expect(command).toContain("up -d --force-recreate ai-dev");
 
       expect(world.validationCalls).toHaveLength(1);
-      expect(world.validationCalls[0].baseFile).toBe(`${world.stagedBaseFile}.staging`);
+      expect(world.validationCalls[0].baseFile).toBe(world.stagedValidationFile);
       expect(world.validationCalls[0].overlay.canonicalPath).toBe(realpathSync(world.overlayFile));
 
       const events = getEventLog();
@@ -251,7 +259,22 @@ describe("runUpgrade with a domain overlay", () => {
       expect(world.state.stagedWrites).toBe(0);
       expect(readFileSync(world.stagedBaseFile, "utf-8")).toBe(world.stagedBytes);
       expect(readFileSync(world.activeFile, "utf-8")).toBe(world.activeBytes);
-      expect(existsSync(`${world.stagedBaseFile}.staging`)).toBe(false);
+      expect(existsSync(world.stagedValidationFile)).toBe(false);
+    } finally {
+      world.cleanup();
+    }
+  });
+
+  test("does not follow a pre-existing validation staging symlink", async () => {
+    const world = makeOverlayWorld();
+    const protectedFile = join(world.dir, "protected.yml");
+    writeFileSync(protectedFile, "protected\n");
+    symlinkSync(protectedFile, world.stagedValidationFile);
+    try {
+      expect(await runUpgrade(world.deps)).toBe(false);
+      expect(readFileSync(protectedFile, "utf-8")).toBe("protected\n");
+      expect(lstatSync(world.stagedValidationFile).isSymbolicLink()).toBe(true);
+      expect(world.state.stagedWrites).toBe(0);
     } finally {
       world.cleanup();
     }
