@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 
+## [1.19.3] - 2026-09-21
+
+### Fixed
+- Harden overlay staging file creation against symlink and pre-existing path attacks
+- Move Admin overlay validation staging into the writable admin-data mount
+
 ## [1.19.2] - 2026-09-21
 
 ### Added
@@ -2134,7 +2140,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2313,3 +2319,4 @@
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
+[1.19.3]: https://github.com/tryweb/ai-engkit/releases/tag/v1.19.3
