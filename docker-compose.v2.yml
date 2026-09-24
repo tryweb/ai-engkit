@@ -1,0 +1,117 @@
+# V2 Trial Compose — Isolated from V1 (prod/dev)
+# Rationale: opencode #42260 — V2 binary migrates shared opencode.db in place
+# and breaks V1 (no such table: session_context_epoch on /move).
+# Therefore opencode-data AND opencode-config are fully suffixed (-v2),
+# not shared with V1/prod/dev volumes.
+# All other stateful volumes (omo-config, openchamber-data, caches,
+# lean-ctx-*, git/ssh/gh/glab, admin-data) are also suffixed -v2 for
+# complete isolation. Workspace uses bind-mount ./trial-workspace.
+# Production uses 8000/8080, dev 8001/8081, trial 8002/8082.
+# See docs/knowledge/tooling/opencode-v2-migration-watch.md
+name: v2
+
+services:
+  ai-dev:
+    image: ai-engkit-ai-v2
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION:-4.19.4}
+        - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
+        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.0.15}
+        - OPENCHAMBER_VERSION=2.0.0
+        - AI_ENGKIT_VERSION=v2trial
+    container_name: ai-engkit-v2
+    ports:
+      - "${CHAMBER_V2_PORT:-8002}:3000"
+    volumes:
+      - ./trial-workspace:/home/devuser/workspace
+      - opencode-data-v2:/home/devuser/.local/share/opencode
+      - lean-ctx-data-v2:/home/devuser/.local/share/lean-ctx
+      - lean-ctx-state-v2:/home/devuser/.local/state/lean-ctx
+      - lean-ctx-config-v2:/home/devuser/.config/lean-ctx
+      - opencode-config-v2:/home/devuser/.config/opencode
+      - omo-config-v2:/home/devuser/.omo
+      - opencode-cache-v2:/home/devuser/.cache/opencode
+      - ohmyopencode-cache-v2:/home/devuser/.cache/oh-my-opencode
+      - openchamber-data-v2:/home/devuser/.config/openchamber
+      - git-config-v2:/home/devuser/.config/git
+      - ssh-keys-v2:/home/devuser/.ssh
+      - gh-config-v2:/home/devuser/.config/gh
+      - glab-config-v2:/home/devuser/.config/glab-cli
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  ai-admin:
+    image: ai-engkit-ai-v2
+    container_name: ai-engkit-admin-v2
+    depends_on:
+      - ai-dev
+    working_dir: /opt/admin
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        sudo find /opt/ai-engkit -path /opt/ai-engkit/extensions -prune -o -exec chown devuser:devuser {} +
+        mkdir -p /opt/ai-engkit/backups
+        [ -f /opt/ai-engkit/VERSION ] || echo dev > /opt/ai-engkit/VERSION
+         [ -f /opt/ai-engkit/.env ] || env | grep -v -E '^(HOME|PATH|BUN_|NODE_|npm_|HOSTNAME|PWD|SHLVL|TERM|TZ|LS_COLORS|LESS[ _]|PAGER|EDITOR|LC_|LANG|SHELL|USER|SUDO_|TMPDIR|OLDPWD|_|LOGNAME|PLAYWRIGHT_|DEBIAN_|CLAUDE_)' > /opt/ai-engkit/.env
+         if [ "$${OPENCODE_PROVIDER+x}" = x ]; then
+           env_tmp="$$(mktemp /opt/ai-engkit/.env.sync.XXXXXX)"
+           persisted_provider="$$(sed -n 's/^[[:space:]]*OPENCODE_PROVIDER=//p' /opt/ai-engkit/.env | tail -n 1)"
+           merged_provider="$$(jq -cn \
+             --arg persisted "$$persisted_provider" \
+             --arg compose "$$OPENCODE_PROVIDER" \
+             'def providers: try fromjson catch {} | if type == "object" then . else {} end; ($$persisted | providers) * ($$compose | providers)')"
+           grep -vE '^[[:space:]]*OPENCODE_PROVIDER=' /opt/ai-engkit/.env > "$$env_tmp" || true
+           printf 'OPENCODE_PROVIDER=%s\n' "$$merged_provider" >> "$$env_tmp"
+           mv "$$env_tmp" /opt/ai-engkit/.env
+         fi
+         mkdir -p /opt/ai-engkit/admin-data
+         mkdir -p /opt/ai-engkit/extensions
+         [ -f /opt/ai-engkit/compose-upgrade-base.yml ] || : > /opt/ai-engkit/compose-upgrade-base.yml
+        if [ -d /opt/ai-engkit/provider-state/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/provider-state/provider-keys.json.legacy.$$(date +%s); fi
+        if [ -f /opt/ai-engkit/provider-state/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
+        if [ -f /opt/ai-engkit/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
+        if [ -d /opt/ai-engkit/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/provider-keys.json.legacy.$$(date +%s); fi
+        [ -f /opt/ai-engkit/admin-data/provider-keys.json ] || printf '%s\n' '{"providers":{}}' > /opt/ai-engkit/admin-data/provider-keys.json
+        bun run /opt/admin/server.ts
+    ports:
+      - "${ADMIN_V2_PORT:-8082}:8080"
+    volumes:
+      - admin-data-v2:/opt/ai-engkit
+      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
+      - ./extensions:/opt/ai-engkit/extensions:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - ADMIN_PORT=8080
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-testadmin123}
+      - AGENT_MODELS_DEBUG=1
+    restart: unless-stopped
+
+volumes:
+  admin-data-v2:
+  opencode-data-v2:
+  lean-ctx-data-v2:
+  lean-ctx-state-v2:
+  lean-ctx-config-v2:
+  opencode-config-v2:
+  omo-config-v2:
+  opencode-cache-v2:
+  ohmyopencode-cache-v2:
+  openchamber-data-v2:
+  git-config-v2:
+  ssh-keys-v2:
+  gh-config-v2:
+  glab-config-v2:

@@ -6,7 +6,9 @@ ARG DOCKER_VERSION=29.8.1
 ARG COMPOSE_VERSION=5.5.1
 ARG BUILDX_VERSION=0.37.1
 ARG OPENCODE_VERSION=1.18.32
-ARG OPENCHAMBER_VERSION=1.24.2
+ARG OPENCODE_CLI_PACKAGE=opencode-ai
+ARG OPENCODE_CLI_VERSION=${OPENCODE_VERSION}
+ARG OPENCHAMBER_VERSION=2.0.0
 ARG GLAB_VERSION=1.119.0
 ARG PLAYWRIGHT_VERSION=1.63.0
 ARG PLAYWRIGHT_MCP_VERSION=0.0.82
@@ -153,7 +155,13 @@ ENV LEANCTX_VERSION=${LEANCTX_VERSION}
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
 RUN rm -rf ~/.bun/install/cache && \
-    bun install -g opencode-ai@${OPENCODE_VERSION} && \
+    if [ "$OPENCODE_CLI_PACKAGE" = "opencode-ai" ]; then \
+      bun install -g opencode-ai@${OPENCODE_CLI_VERSION}; \
+    else \
+      # @opencode/cli selects its native binary via postinstall.mjs;
+      # --trust is required so bun runs it in non-interactive builds
+      bun install -g --trust @opencode/cli@${OPENCODE_CLI_VERSION}; \
+    fi && \
     # @openchamber/web@1.24.1 fixed the unpublishable @openchamber/sdk pin
     # (openchamber#3633, web@1.24.0 shipped with unpublished sdk@1.23.1) and declares
     # the zod runtime dependency (openchamber#3635). Direct registry install is safe
