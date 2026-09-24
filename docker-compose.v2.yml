@@ -46,6 +46,8 @@ services:
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      # Cell 1 no-OMO baseline: entrypoint skips plugin[] + ~/.omo lifecycle
+      OMO_ENABLED: 0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

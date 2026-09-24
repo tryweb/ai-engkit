@@ -252,9 +252,17 @@ fi
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 
-# Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency
-PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
-PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
+# Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency.
+# Trial Cell 1 (no-OMO baseline): OMO_ENABLED=0 emits a plugin-free config and
+# skips the ~/.omo lifecycle below. Default keeps V1/OMO behavior unchanged.
+if [ "${OMO_ENABLED:-1}" = "0" ]; then
+  PLUGINS=""
+  PLUGIN_JSON="[]"
+  echo "OMO disabled (OMO_ENABLED=0): writing plugin-free opencode.json"
+else
+  PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
+  PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
+fi
 # Catalog of admin-controlled LSP servers (id -> command/extensions),
 # mirroring src/admin/lib/lsp-catalog.ts. Version pinning is applied via
 # BUN_PACKAGES in 01-install-packages.sh, not in this lsp block.
@@ -353,12 +361,16 @@ archive_legacy_omo_configs() {
   done
 }
 
-archive_legacy_omo_configs
-mkdir -p "$OMO_CONFIG_DIR"
+if [ "${OMO_ENABLED:-1}" = "0" ]; then
+  echo "OMO disabled (OMO_ENABLED=0): skipping ~/.omo lifecycle"
+else
+  archive_legacy_omo_configs
+  mkdir -p "$OMO_CONFIG_DIR"
 
-initialize_omo_permissions "$OMO_CONFIG_FILE" "$DEFAULT_OMO_CONFIG"
-if ! normalize_omo_config "$OMO_CONFIG_FILE"; then
-  echo "Warning: OMO config normalization was not applied; review the reported path" >&2
+  initialize_omo_permissions "$OMO_CONFIG_FILE" "$DEFAULT_OMO_CONFIG"
+  if ! normalize_omo_config "$OMO_CONFIG_FILE"; then
+    echo "Warning: OMO config normalization was not applied; review the reported path" >&2
+  fi
 fi
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
@@ -370,7 +382,9 @@ if command -v lean-ctx &>/dev/null; then
   fi
 fi
 
-merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+if [ "${OMO_ENABLED:-1}" != "0" ]; then
+  merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+fi
 
 merge_project_lsp_config
 

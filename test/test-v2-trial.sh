@@ -14,7 +14,31 @@ ADMIN_V2_PORT="${ADMIN_V2_PORT:-8082}"
 # --------------------------------------------------
 
 cell1() {
-  echo "CELL cell1 NOT-IMPLEMENTED"
+  echo "CELL cell1: no-OMO baseline"
+  local repo_root
+  repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+  # Seed scratch workspace with the 12 native agents (trial-workspace is gitignored)
+  mkdir -p "${repo_root}/trial-workspace/.opencode"
+  rm -rf "${repo_root}/trial-workspace/.opencode/agents"
+  cp -r "${repo_root}/.opencode/agents" "${repo_root}/trial-workspace/.opencode/agents"
+
+  docker compose -f "${repo_root}/docker-compose.v2.yml" ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
+  docker compose -f "${repo_root}/docker-compose.v2.yml" ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-admin-v2$'
+  echo "PASS: trial containers running"
+
+  docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.15'
+  echo "PASS: opencode 2.0.15 in trial container"
+
+  [ "$(docker exec ai-engkit-v2 jq -c '.plugin' ~/.config/opencode/opencode.json)" = "[]" ]
+  echo "PASS: opencode.json plugin-free"
+  docker exec ai-engkit-v2 test ! -f ~/.omo/omo.jsonc
+  echo "PASS: no ~/.omo/omo.jsonc (OMO lifecycle skipped)"
+  [ "$(docker exec ai-engkit-v2 find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
+  echo "PASS: 12 native agents visible in trial workspace"
+
+  local code
+  code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "http://localhost:${CHAMBER_V2_PORT}/")"
+  case "$code" in 2*|3*) echo "PASS: OpenChamber responds on ${CHAMBER_V2_PORT} (HTTP $code)";; *) echo "FAIL: OpenChamber HTTP $code" >&2; return 1;; esac
 }
 
 cell2() {
