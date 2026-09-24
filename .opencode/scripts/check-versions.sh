@@ -26,6 +26,13 @@
 #   OH_MY_OPENAGENT_VERSION → npm:oh-my-openagent
 #   OPENCODE_VERSION       → npm:opencode-ai
 #   OPENCHAMBER_VERSION    → npm:@openchamber/web
+#
+# Locked pair: OpenCode and OpenChamber majors must match (OpenChamber N.x runs
+# only on OpenCode N.x — web@2.0.0 hard-pins @opencode/client@2.0.15 and shows a
+# forced "update to OpenCode 2" screen when it finds a 1.x CLI). A pin may move
+# to a NEW major only when the partner's candidate carries the SAME new major;
+# otherwise the row is reported "blocked" (see pairing_blocked) and never counts
+# as outdated, so the auto-update cannot ship a mispaired stack.
 #   BUN_VERSION            → github:openchamber/openchamber  (derived: packageManager
 #                            "bun@X.Y.Z" of package.json at the pinned OPENCHAMBER_VERSION
 #                            git tag; "latest" means "required", never Bun's newest release)
@@ -130,6 +137,28 @@ version_gt() {
     [[ "$max" == "$latest" ]]
 }
 
+# major_of "2.0.0" → "2"; "1.18.32" → "1"; unparseable (empty/"unknown") → "unknown"
+major_of() {
+    local v="$1"
+    [[ "$v" =~ ^[0-9]+ ]] && { printf '%s' "${BASH_REMATCH[0]}"; return 0; }
+    printf '%s' "unknown"
+}
+
+# pairing_blocked <candidate> <pinned> <partner_candidate> → 0 when blocked
+# The OpenCode/OpenChamber locked-pair guard: a pin may move to a NEW major only
+# when the partner's candidate carries the SAME new major (a 2.x web frontend
+# against a 1.x CLI is a broken stack). A candidate that stays within its own
+# pinned major (patch/minor bump) is never blocked. An unverifiable partner
+# ("unknown") is treated as absent — conservatively blocking a new-major candidate.
+pairing_blocked() {
+    local cand="$1" pinned="$2" partner="$3" cm pm sm
+    cm="$(major_of "$cand")"
+    pm="$(major_of "$partner")"
+    [[ "$cm" == "$pm" ]] && return 1
+    sm="$(major_of "$pinned")"
+    [[ "$cm" != "$sm" ]]
+}
+
 lookup() {
     case "$1" in
         DOCKER_VERSION)         get_github_latest "docker/docker" ;;
@@ -173,17 +202,37 @@ source_label() {
 }
 
 # Emit TSV rows: <NAME>\t<PINNED>\t<LATEST>\t<SOURCE>\t<STATUS>
-# STATUS ∈ { current, outdated, check_failed }
+# STATUS ∈ { current, outdated, blocked, check_failed }
+#   blocked = OpenCode/OpenChamber major-parity guard held the bump back
+#             (pairing_blocked); never counted as outdated.
 collect_rows() {
+    # The locked pair's statuses depend on each other's candidate, so resolve
+    # both latest values and both candidates (latest-if-bumped, else pinned)
+    # up front. BUN_VERSION derives from the PINNED OpenChamber tag and is
+    # unaffected.
+    local oc_latest op_latest oc_pinned op_pinned oc_cand op_cand
+    oc_latest="$(lookup OPENCHAMBER_VERSION)"
+    op_latest="$(lookup OPENCODE_VERSION)"
+    oc_pinned="$(awk '/^ARG OPENCHAMBER_VERSION=/{ sub(/^ARG OPENCHAMBER_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
+    op_pinned="$(awk '/^ARG OPENCODE_VERSION=/{ sub(/^ARG OPENCODE_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
+    oc_cand="$oc_pinned"; version_gt "$oc_pinned" "$oc_latest" && oc_cand="$oc_latest"
+    op_cand="$op_pinned"; version_gt "$op_pinned" "$op_latest" && op_cand="$op_latest"
+
     while IFS=$'\t' read -r name pinned; do
         case "$name" in
             DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|GH_VERSION|MARKSMAN_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|BUN_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GLAB_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION) ;;
             *) continue ;;
         esac
         [[ -z "${pinned:-}" ]] && continue
-        local latest source status
-        latest=$(lookup "$name")
-        source=$(source_label "$name")
+        local latest source status partner_cand
+        case "$name" in
+            OPENCODE_VERSION)    latest="$op_latest";    source="npm:opencode-ai" ;;
+            OPENCHAMBER_VERSION) latest="$oc_latest";    source="npm:@openchamber/web" ;;
+            *) latest="$(lookup "$name")"; source="$(source_label "$name")" ;;
+        esac
+        partner_cand=""
+        [[ "$name" == "OPENCODE_VERSION" ]] && partner_cand="$oc_cand"
+        [[ "$name" == "OPENCHAMBER_VERSION" ]] && partner_cand="$op_cand"
         if [[ "$latest" == "unknown" ]]; then
             status="check_failed"
         elif [[ "$pinned" == "$latest" ]]; then
@@ -192,7 +241,11 @@ collect_rows() {
             # Derived pin: exact match required — behind OR ahead is outdated.
             status="outdated"
         elif version_gt "$pinned" "$latest"; then
-            status="outdated"
+            if [[ -n "$partner_cand" ]] && pairing_blocked "$latest" "$pinned" "$partner_cand"; then
+                status="blocked"
+            else
+                status="outdated"
+            fi
         else
             status="current"
         fi
@@ -207,11 +260,12 @@ cmd_check() {
     printf '%-22s %-12s %-12s %-32s %s\n' "PACKAGE" "PINNED" "LATEST" "SOURCE" "STATUS"
     printf '%-22s %-12s %-12s %-32s %s\n' "-------" "------" "------" "------" "------"
 
-    local outdated=0 unknown=0
+    local outdated=0 unknown=0 blocked=0
     while IFS=$'\t' read -r name pinned latest source status; do
         case "$status" in
             current)      marker="OK current" ;;
             outdated)     marker="UPDATE"; outdated=$((outdated + 1)) ;;
+            blocked)      marker="BLOCKED"; blocked=$((blocked + 1)) ;;
             check_failed) marker="? check_failed"; unknown=$((unknown + 1)) ;;
             *)            marker="? unknown" ;;
         esac
@@ -219,7 +273,7 @@ cmd_check() {
     done < <(collect_rows)
 
     echo ""
-    info "outdated: ${outdated}    check_failed: ${unknown}"
+    info "outdated: ${outdated}    blocked: ${blocked}    check_failed: ${unknown}"
 }
 
 cmd_outdated() {

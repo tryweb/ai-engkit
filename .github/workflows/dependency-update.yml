@@ -28,6 +28,7 @@ jobs:
       latest-changes-detected: ${{ steps.check.outputs.latest-changes-detected }}
       pinned-updates: ${{ steps.check.outputs.pinned-updates }}
       latest-updates: ${{ steps.check.outputs.latest-updates }}
+      blocked-updates: ${{ steps.check.outputs.blocked-updates }}
       apt-updates: ${{ steps.check.outputs.apt-updates }}
       check-failed: ${{ steps.check.outputs.check-failed }}
     steps:
@@ -117,6 +118,24 @@ jobs:
             local max
             max="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n1)"
             [[ "$max" == "$latest" && "$current" != "$latest" ]]
+          }
+
+          major_of() {
+            if [[ "$1" =~ ^[0-9]+ ]]; then printf '%s\n' "${BASH_REMATCH[0]}"; else printf 'unknown\n'; fi
+          }
+
+          # OpenCode and OpenChamber are a locked pair: OpenChamber N.x runs only
+          # on OpenCode N.x (web@2.0.0 hard-pins @opencode/client@2.0.15 and shows
+          # a forced "update to OpenCode 2" screen when it finds a 1.x CLI). A
+          # pin may move to a NEW major only when the partner's candidate carries
+          # the SAME new major; otherwise the bump is blocked and excluded from
+          # the auto-update. Within-major bumps stay unrestricted.
+          pairing_blocked() { # cand pinned partner → 0 when blocked
+            local cm pm sm
+            cm="$(major_of "$1")"; pm="$(major_of "$3")"
+            [[ "$cm" == "$pm" ]] && return 1
+            sm="$(major_of "$2")"
+            [[ "$cm" != "$sm" ]]
           }
 
           strip_v() { printf '%s\n' "${1#v}"; }
@@ -237,9 +256,25 @@ jobs:
           check_failures=0
           pinned_updates_lines=()
           latest_updates_lines=()
+          blocked_updates_lines=()
           # Bun target derives from the OpenChamber candidate resolved below (pinned
           # OPENCHAMBER_VERSION as fallback); Dockerfile orders OPENCHAMBER before BUN.
           _openchamber_ref=""
+          # Locked-pair candidates: OPENCODE precedes OPENCHAMBER in Dockerfile
+          # order, so resolve both candidates up front (mirrors
+          # check-versions.sh collect_rows). Candidate = latest when it is
+          # newer than pinned, else pinned.
+          _opencode_pinned=""; _openchamber_pinned=""
+          for _idx in "${!PINNED_NAMES[@]}"; do
+            [[ "${PINNED_NAMES[$_idx]}" == "OPENCODE_VERSION" ]] && _opencode_pinned="${PINNED_VERSIONS[$_idx]}"
+            [[ "${PINNED_NAMES[$_idx]}" == "OPENCHAMBER_VERSION" ]] && _openchamber_pinned="${PINNED_VERSIONS[$_idx]}"
+          done
+          _opencode_latest_pre="$(get_npm_version 'opencode-ai')"
+          _openchamber_latest_pre="$(get_npm_version '@openchamber/web')"
+          _opencode_cand="$_opencode_pinned"
+          if [[ "$_opencode_latest_pre" != "unknown" ]] && version_gt "$_opencode_pinned" "$_opencode_latest_pre"; then _opencode_cand="$_opencode_latest_pre"; fi
+          _openchamber_cand="$_openchamber_pinned"
+          if [[ "$_openchamber_latest_pre" != "unknown" ]] && version_gt "$_openchamber_pinned" "$_openchamber_latest_pre"; then _openchamber_cand="$_openchamber_latest_pre"; fi
 
           for i in "${!PINNED_NAMES[@]}"; do
             name="${PINNED_NAMES[$i]}"
@@ -251,8 +286,8 @@ jobs:
               DOCKER_VERSION)   source='moby/moby';       latest="$(get_github_tag "$source")" ;;
               COMPOSE_VERSION)  source='docker/compose';   latest="$(get_github_tag "$source")" ;;
               BUILDX_VERSION)   source='docker/buildx';    latest="$(get_github_tag "$source")" ;;
-              OPENCODE_VERSION) source='opencode-ai';      latest="$(get_npm_version "$source")" ;;
-              OPENCHAMBER_VERSION) source='@openchamber/web'; latest="$(get_npm_version "$source")"; _openchamber_ref="$current"; if [[ "$latest" != "unknown" ]]; then _openchamber_ref="$latest"; fi ;;
+              OPENCODE_VERSION) source='opencode-ai';      latest="$_opencode_latest_pre" ;;
+              OPENCHAMBER_VERSION) source='@openchamber/web'; latest="$_openchamber_latest_pre"; _openchamber_ref="$current"; if [[ "$latest" != "unknown" ]]; then _openchamber_ref="$latest"; fi ;;
               PLAYWRIGHT_VERSION)  source='playwright';    latest="$(get_npm_version "$source")" ;;
               PLAYWRIGHT_MCP_VERSION) source='@playwright/mcp'; latest="$(get_npm_version "$source")" ;;
               BUN_VERSION)      source='openchamber/openchamber'; latest="$(get_openchamber_bun_version "$_openchamber_ref")" ;;
@@ -279,6 +314,21 @@ jobs:
               [[ "$current" != "$latest" ]] && changed=true
             elif version_gt "$current" "$latest"; then
               changed=true
+            fi
+
+            if [[ "$changed" == true ]]; then
+              # OpenCode/OpenChamber locked-pair guard (mirrors
+              # check-versions.sh): a NEW-major bump is held back unless the
+              # partner candidate carries the same new major. Blocked rows are
+              # excluded from the auto-update, never counted as outdated.
+              _partner_cand=""
+              [[ "$name" == "OPENCODE_VERSION" ]] && _partner_cand="$_openchamber_cand"
+              [[ "$name" == "OPENCHAMBER_VERSION" ]] && _partner_cand="$_opencode_cand"
+              if [[ -n "$_partner_cand" ]] && pairing_blocked "$latest" "$current" "$_partner_cand"; then
+                blocked_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$latest" "$source" "blocked")")
+                echo "::notice::$name: $current -> $latest blocked (OpenCode/OpenChamber locked pair)"
+                changed=false
+              fi
             fi
 
             if [[ "$changed" == true ]]; then
@@ -349,6 +399,7 @@ jobs:
           # --- Build JSON outputs ---
           pinned_updates_json="$(printf '%s\n' "${pinned_updates_lines[@]:-}" | build_pinned_json)"
           latest_updates_json="$(printf '%s\n' "${latest_updates_lines[@]:-}" | build_latest_json)"
+          blocked_updates_json="$(printf '%s\n' "${blocked_updates_lines[@]:-}" | build_pinned_json)"
 
           # --- Write version snapshot ---
           pinned_snapshot_json="$({
@@ -384,6 +435,7 @@ jobs:
           echo "latest-changes-detected=$latest_changes_detected" >> "$GITHUB_OUTPUT"
           echo "pinned-updates=$pinned_updates_json" >> "$GITHUB_OUTPUT"
           echo "latest-updates=$latest_updates_json" >> "$GITHUB_OUTPUT"
+          echo "blocked-updates=$blocked_updates_json" >> "$GITHUB_OUTPUT"
           echo "apt-updates=$apt_summary" >> "$GITHUB_OUTPUT"
 
           echo "::notice::updates-needed=$updates_needed dockerfile-changes=$dockerfile_changes_needed latest-changes=$latest_changes_detected"
@@ -1009,6 +1061,9 @@ jobs:
             ### Latest Package Changes
             ${{ needs.check-versions.outputs.latest-updates }}
 
+            ### Blocked Updates (OpenCode/OpenChamber locked pair)
+            ${{ needs.check-versions.outputs.blocked-updates }}
+
             ### APT Updates
             ${{ needs.check-versions.outputs.apt-updates }}
 
@@ -1168,6 +1223,9 @@ jobs:
             ### Latest Package Changes
             ${{ needs.check-versions.outputs.latest-updates }}
 
+            ### Blocked Updates (OpenCode/OpenChamber locked pair)
+            ${{ needs.check-versions.outputs.blocked-updates }}
+
             ### APT Updates
             ${{ needs.check-versions.outputs.apt-updates }}
 
@@ -1206,6 +1264,7 @@ jobs:
             ### Changes
             - CHANGELOG update
             - Latest package version changes: ${{ needs.check-versions.outputs.latest-updates }}
+            - Blocked updates (locked pair): ${{ needs.check-versions.outputs.blocked-updates }}
             - APT updates: ${{ needs.check-versions.outputs.apt-updates }}
 
             ---
