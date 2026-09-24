@@ -5,7 +5,12 @@
 # not shared with V1/prod/dev volumes.
 # All other stateful volumes (omo-config, openchamber-data, caches,
 # lean-ctx-*, git/ssh/gh/glab, admin-data) are also suffixed -v2 for
-# complete isolation. Workspace uses bind-mount ./trial-workspace.
+# complete isolation. Workspace is a NAMED volume (workspace-v2), deliberately
+# NOT a host-path bind: under DooD the daemon resolves host paths in its own
+# namespace and a ./trial-workspace bind silently diverges (writes on each
+# side invisible to the other). Seed trial files with `docker cp` (streams
+# through the daemon) instead. See
+# docs/knowledge/troubleshooting/dood-relative-workspace-path.md.
 # Production uses 8000/8080, dev 8001/8081, trial 8002/8082.
 # See docs/knowledge/tooling/opencode-v2-migration-watch.md
 name: v2
@@ -26,7 +31,7 @@ services:
     ports:
       - "${CHAMBER_V2_PORT:-8002}:3000"
     volumes:
-      - ./trial-workspace:/home/devuser/workspace
+      - workspace-v2:/home/devuser/workspace
       - opencode-data-v2:/home/devuser/.local/share/opencode
       - lean-ctx-data-v2:/home/devuser/.local/share/lean-ctx
       - lean-ctx-state-v2:/home/devuser/.local/state/lean-ctx
@@ -104,6 +109,7 @@ services:
 
 volumes:
   admin-data-v2:
+  workspace-v2:
   opencode-data-v2:
   lean-ctx-data-v2:
   lean-ctx-state-v2:

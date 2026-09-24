@@ -15,16 +15,18 @@ ADMIN_V2_PORT="${ADMIN_V2_PORT:-8082}"
 
 cell1() {
   echo "CELL cell1: no-OMO baseline"
-  local repo_root
+  local repo_root compose
   repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-  # Seed scratch workspace with the 12 native agents (trial-workspace is gitignored)
-  mkdir -p "${repo_root}/trial-workspace/.opencode"
-  rm -rf "${repo_root}/trial-workspace/.opencode/agents"
-  cp -r "${repo_root}/.opencode/agents" "${repo_root}/trial-workspace/.opencode/agents"
+  compose="docker compose -f ${repo_root}/docker-compose.v2.yml"
 
-  docker compose -f "${repo_root}/docker-compose.v2.yml" ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
-  docker compose -f "${repo_root}/docker-compose.v2.yml" ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-admin-v2$'
+  $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
+  $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-admin-v2$'
   echo "PASS: trial containers running"
+
+  # Seed workspace through the daemon: host-path writes are invisible to the
+  # trial container under DooD, so `docker cp` (not cp into a bind) is required
+  docker exec ai-engkit-v2 rm -rf /home/devuser/workspace/.opencode/agents
+  docker cp "${repo_root}/.opencode/agents" ai-engkit-v2:/home/devuser/workspace/.opencode/agents
 
   docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.15'
   echo "PASS: opencode 2.0.15 in trial container"
@@ -36,9 +38,24 @@ cell1() {
   [ "$(docker exec ai-engkit-v2 find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in trial workspace"
 
-  local code
-  code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "http://localhost:${CHAMBER_V2_PORT}/")"
-  case "$code" in 2*|3*) echo "PASS: OpenChamber responds on ${CHAMBER_V2_PORT} (HTTP $code)";; *) echo "FAIL: OpenChamber HTTP $code" >&2; return 1;; esac
+  # Reachable base: localhost works from a host shell; from inside a sibling
+  # container (DooD) use the compose bridge gateway instead
+  local base=""
+  if curl -sf -m 8 -o /dev/null "http://localhost:${CHAMBER_V2_PORT}/"; then
+    base="http://localhost:${CHAMBER_V2_PORT}"
+  else
+    local gw
+    gw="$(docker network inspect v2_default --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)" || gw=""
+    if [ -n "$gw" ] && curl -sf -m 8 -o /dev/null "http://${gw}:${CHAMBER_V2_PORT}/"; then
+      base="http://${gw}:${CHAMBER_V2_PORT}"
+    fi
+  fi
+  if [ -n "$base" ]; then
+    echo "PASS: OpenChamber responds at $base"
+  else
+    echo "FAIL: OpenChamber unreachable on ${CHAMBER_V2_PORT}" >&2
+    return 1
+  fi
 }
 
 cell2() {

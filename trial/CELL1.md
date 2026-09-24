@@ -238,9 +238,8 @@ Frontmatter validation note: all 12 files use only keys evidenced on `https://op
 **Blocks**: deterministic model selection for `plan`/`prometheus`.
 Why: V2 file-agents accept only `model: "provider/id"` with arbitrary passthrough options; there is zero documented fallback-chain syntax, and the `variant: "max"` / `"high"` values from OMO are not V2-standard (they are OMO's `model#variant` convention mapped via `lib-native-agent-overrides.bash` into `opencode.json: .agent[plan].variant`). Pinning to `opencode-go/kimi-k3` alone loses the `gpt-5.6-sol` → `gpt-5.6-luna` fallback that OMO guarantees on quota/rate-limit. A thin routing plugin must be specified in Cell 2 to reactively `switchModel` on `session.execution.failed`, respecting that `session.hook("model.request").model` is readonly and `catalog.updated` is async (model catalog empty at `setup` — per migration-watch §7). Trial execution must decide whether to accept single-model failure or require the plugin first.
 
-### U2 — No-OMO Boot Is Two Variables, Not One, and the Default `OPENCODE_PLUGINS` Env Still Points at V1
-**Blocks**: clean V2 container boot with `OMO_ENABLED=0`.
-Why: `entrypoint.d/02-init-config.sh` line 256 defaults `PLUGINS` to `oh-my-openagent` when `OPENCODE_PLUGINS` is unset: `normalize_omo_plugin_versions("${OPENCODE_PLUGINS:-oh-my-openagent}")`. Gating the filesystem (`~/.omo/omo.jsonc` lifecycle) is insufficient — the generated `~/.config/opencode/opencode.json: plugin: ["oh-my-openagent@4.19.4"]` will still reference the V1 `server(input)` API that V2 cannot load (`Plugin.define` required per migration-watch). The compose layer for trial must jointly set `OMO_ENABLED=0` **and** `OPENCODE_PLUGINS=""` (or an explicit V2-native plugin list), and separately handle `AGENTS.md` seeding vs merge so the trial profile does not inherit the V1 `AGENTS.md.default` sentinels unnecessarily. The sibling task owns that compose file — Cell 1 is blocked until it lands and a boot dry-run proves `opencode.json` is OMO-free and the server starts without the V1 plugin.
+### U2 — No-OMO Boot Gate (implemented d8e2e85, proven in boot log)
+**Status**: resolved. `entrypoint.d/02-init-config.sh` honors `OMO_ENABLED=0`: emits `plugin: []` (so `OPENCODE_PLUGINS` needs no override — the `[""]` parse trap is avoided by not parsing it at all), skips `archive_legacy_omo_configs` / `initialize_omo_permissions` / `normalize_omo_config` / `merge_native_agent_overrides`; lean-ctx setup, LSP merge, and baked skills still run. `docker-compose.v2.yml` sets `OMO_ENABLED: 0` on ai-dev. Default path (var unset) executes the original statements unchanged. Boot log proves: `OMO disabled (OMO_ENABLED=0): writing plugin-free opencode.json` + `skipping ~/.omo lifecycle`. Open: trial workspace ships no `AGENTS.md` (V2 reads project instructions from it) — Cell 1 may add a minimal one later; not blocking boot.
 
 ### U3 — Team-Scale Orchestration and `permission.task` Wiring Has No Proven Mapping
 **Blocks**: multi-run `>5` / parallel delegation semantics that OMO's Team Mode guarantees.
@@ -266,3 +265,19 @@ Why: OMO's execution model (Sisyphus as orchestrator fanning out to `explore`/`l
 - [ ] `grep -r "CLAUDE.md" .opencode/agents/` hits only the guard lines (§4.3) — no instructional `CLAUDE.md` loading
 - [ ] `grep -r "models:" .opencode/agents/` returns 0 hits — chain handled via single `model` + gap note, no invented syntax
 - [ ] Trial reviewer confirms `OMO_ENABLED=0` proposal (§3) covers exactly the OMO lifecycle without gating `merge_project_lsp_config` or `lean-ctx` setup
+
+## Appendix C — Cell 1 Run Log (2026-09-24, d8e2e85 + DooD fixes)
+
+Result: **6/6 PASS** via `./test/test-v2-trial.sh cell1` against fresh `up -d` (image `ai-engkit-ai-v2`, OpenCode 2.0.15 + OpenChamber 2.0.0):
+
+- containers `ai-engkit-v2` / `ai-engkit-admin-v2` running; prod (`ai-engkit`, `ai-engkit-admin` healthy) and dev stacks undisturbed
+- `opencode --version` → 2.0.15; `opencode.json: plugin == []`; no `~/.omo/omo.jsonc`
+- 12 native agents seeded via `docker cp` and visible in trial workspace
+- OpenChamber responds at `http://172.20.0.1:8002` (compose bridge gateway)
+
+Two environment lessons (both structural, both now encoded in scaffold + test):
+
+1. **Host-path binds diverge under DooD.** The first cell1 run seeded agents with host-side `cp` into a `./trial-workspace` bind; the container never saw them (bidirectional marker test proved it). This shell's `/home/devuser/workspace` is a bind of docker volume `ai-engkit_workspace/_data` while the daemon resolves the same string to a host path. Fix: named volume `workspace-v2` + `docker cp` seeding. Ref: `docs/knowledge/troubleshooting/dood-relative-workspace-path.md`.
+2. **localhost is unreachable from a sibling container.** The HTTP check must use the bridge gateway (`docker network inspect v2_default` → Gateway), per the project's DooD network rule. `cell1` implements localhost-first, gateway-fallback.
+
+U2 status upgraded by this run: boot log shows both `OMO disabled` lines; `openchamber serve` spawns managed opencode (`serve --port 34477`, PushWatcher connected). Leftover: empty host-side `/home/devuser/workspace/ai-engkit/trial-workspace/` (+ CONT_MARKER) auto-created by the daemon during the bind era — unreachable from here, remove from a host shell; harmless.
