@@ -59,11 +59,116 @@ cell1() {
 }
 
 cell2() {
-  echo "CELL cell2 NOT-IMPLEMENTED"
+  echo "CELL cell2: v2 diagnostics without LSP (see trial/CELL2.md)"
+  local repo_root compose
+  repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+  compose="docker compose -f ${repo_root}/docker-compose.v2.yml"
+
+  $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
+  echo "PASS: ai-engkit-v2 running"
+
+  # 1. LSP block is marksman-only: v2 configures no language servers.
+  # Upstream V2 accepts lsp but runs none, so this posture needs no entrypoint change.
+  [ "$(docker exec ai-engkit-v2 jq -c '.lsp | keys' /home/devuser/.config/opencode/opencode.json)" = '["marksman"]' ]
+  echo "PASS: v2 lsp block is marksman-only (no language servers)"
+
+  # 2. MCP config intact (presence, not runtime).
+  [ "$(docker exec ai-engkit-v2 jq -c '.mcp | keys | sort' /home/devuser/.config/opencode/opencode.json)" = '["codegraph","lean-ctx","playwright"]' ]
+  echo "PASS: v2 mcp block has codegraph/lean-ctx/playwright"
+
+  # 3. Baked skills intact — karpathy-guidelines files ARE present in v2;
+  # the v2 skill thread is scope/UI, not missing files.
+  docker exec ai-engkit-v2 test -f /home/devuser/.config/opencode/skills/karpathy-guidelines/SKILL.md
+  echo "PASS: karpathy-guidelines symlinked in v2 global skills"
+
+  # 4. Zero-install fallbacks present (yaml格 + Dockerfile格).
+  docker exec ai-engkit-v2 python3 -c 'import yaml' 2>/dev/null
+  echo "PASS: python3+pyyaml present (yaml fallback)"
+  docker exec ai-engkit-v2 docker --version >/dev/null 2>&1
+  echo "PASS: docker CLI present (docker build --check path)"
+
+  # 5. E2E: seed minimal fixtures through the daemon (DooD-safe, same as cell1
+  # agents seeding) and prove detection works without any language server.
+  docker exec ai-engkit-v2 mkdir -p /tmp/lsp-cell2
+  printf 'key: value\n\tbad_indent: 1\n' | docker exec -i ai-engkit-v2 sh -c 'cat > /tmp/lsp-cell2/sample.yaml'
+  printf 'FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y curl\n' | docker exec -i ai-engkit-v2 sh -c 'cat > /tmp/lsp-cell2/Dockerfile'
+  if docker exec ai-engkit-v2 python3 -c "import yaml; yaml.safe_load(open('/tmp/lsp-cell2/sample.yaml'))" 2>/dev/null; then
+    echo "FAIL: bad yaml parsed without error" >&2
+    return 1
+  fi
+  echo "PASS: bad yaml detected (ScannerError path, no LSP server)"
+  if ! docker exec ai-engkit-v2 docker build --check -f /tmp/lsp-cell2/Dockerfile /tmp/lsp-cell2/ >/dev/null 2>&1; then
+    echo "FAIL: docker build --check failed on clean fixture" >&2
+    return 1
+  fi
+  echo "PASS: docker build --check runs in v2"
+
+  # 6. Known gaps — recorded, not failed (CELL3.md §5 decides on demand).
+  # NOTE: `command -v` is a shell builtin; probes MUST run under `sh -c`
+  # (bare `docker exec ... command -v` always fails and would fake a SKIP).
+  if docker exec ai-engkit-v2 sh -c 'command -v biome' >/dev/null 2>&1; then
+    echo "NOTE: biome present in v2 (covered by catalog, CELL3.md §5)"
+  else
+    echo "SKIP: biome absent in v2 (on-demand via BUN_PACKAGES, CELL3.md §5)"
+  fi
+  if docker exec ai-engkit-v2 sh -c 'command -v pyright' >/dev/null 2>&1; then
+    echo "NOTE: pyright present in v2 (covered by catalog, CELL3.md §5)"
+  else
+    echo "SKIP: pyright absent in v2 (on-demand via BUN_PACKAGES, CELL3.md §5)"
+  fi
 }
 
 cell3() {
-  echo "CELL cell3 NOT-IMPLEMENTED"
+  echo "CELL cell3: v2 site diagnostics catalog (see trial/CELL3.md)"
+  local repo_root compose catalog key check
+  repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+  compose="docker compose -f ${repo_root}/docker-compose.v2.yml"
+  catalog="${repo_root}/.opencode/v2-diagnostics-catalog.json"
+
+  $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
+  echo "PASS: ai-engkit-v2 running"
+
+  # 1. Catalog shape: 8 keys, every entry carries a valid kind.
+  [ "$(jq -r '.tools | keys | length' "$catalog")" = "8" ]
+  echo "PASS: catalog has 8 keys"
+  [ "$(jq -r '[.tools[] | select(.kind != "global-executor" and .kind != "project-managed")] | length' "$catalog")" = "0" ]
+  echo "PASS: every catalog entry has a valid kind"
+
+  # 2. Enabled global-executors probe green in v2; checks driven by catalog itself.
+  for key in $(jq -r '.tools | to_entries[] | select(.value.kind == "global-executor" and .value.enabled == true) | .key' "$catalog"); do
+    check="$(jq -r ".tools[\"$key\"].check" "$catalog")"
+    if ! docker exec ai-engkit-v2 sh -c "$check" >/dev/null 2>&1; then
+      echo "FAIL: catalog tool '$key' check failed: $check" >&2
+      return 1
+    fi
+    echo "PASS: catalog tool '$key' present in v2"
+  done
+
+  # 3. Pinned version holds (typescript@5.8.3 — classic tsserver, NOT 7.x).
+  if ! docker exec ai-engkit-v2 tsc --version 2>&1 | grep -q "5.8.3"; then
+    echo "FAIL: tsc version drift (expected 5.8.3)" >&2
+    return 1
+  fi
+  echo "PASS: tsc pinned at 5.8.3 in v2"
+
+  # 4. Default-OFF absent is a recorded decision, not a failure (cell2 SKIP idiom).
+  for key in $(jq -r '.tools | to_entries[] | select(.value.kind == "global-executor" and .value.enabled == false) | .key' "$catalog"); do
+    check="$(jq -r ".tools[\"$key\"].check" "$catalog")"
+    if docker exec ai-engkit-v2 sh -c "$check" >/dev/null 2>&1; then
+      echo "NOTE: default-OFF tool '$key' present (unexpected)"
+    else
+      echo "SKIP: default-OFF tool '$key' absent in v2 (CELL3.md §5)"
+    fi
+  done
+
+  # 5. ruff is project-managed: kind asserted, never installed globally by Apply.
+  [ "$(jq -r '.tools.ruff.kind' "$catalog")" = "project-managed" ]
+  echo "PASS: ruff is project-managed in catalog"
+  if docker exec ai-engkit-v2 command -v ruff >/dev/null 2>&1; then
+    echo "NOTE: ruff present globally (unexpected)"
+  else
+    echo "SKIP: ruff not global in v2 (repo venv owns it, CELL3.md §2)"
+  fi
 }
 
 cell4() {

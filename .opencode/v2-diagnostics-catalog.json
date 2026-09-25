@@ -1,0 +1,77 @@
+{
+  "_note": "Phase 1 data file for trial/CELL3.md; consumed by test/test-v2-trial.sh cell3(). v1 json/css/html servers consolidated under biome (they shared one npm package). 8 keys.",
+  "tools": {
+    "go": {
+      "kind": "global-executor",
+      "source": "brew",
+      "package": "go",
+      "version": null,
+      "enabled": true,
+      "provides": ["Typecheck: go vet ./...", "Build: go build ./..."],
+      "check": "command -v go && go version"
+    },
+    "pyright": {
+      "kind": "global-executor",
+      "source": "bun",
+      "package": "pyright",
+      "version": null,
+      "enabled": true,
+      "provides": ["Typecheck: pyright (py/pyi)"],
+      "check": "command -v pyright && pyright --version"
+    },
+    "biome": {
+      "kind": "global-executor",
+      "source": "bun",
+      "package": "@biomejs/biome",
+      "version": null,
+      "enabled": true,
+      "provides": ["Lint: biome check . (js/ts/json/css/html)"],
+      "check": "command -v biome && biome --version"
+    },
+    "typescript": {
+      "kind": "global-executor",
+      "source": "bun",
+      "package": "typescript",
+      "version": "5.8.3",
+      "enabled": true,
+      "provides": ["Typecheck: bunx tsc --noEmit (classic tsserver required, NOT 7.x)"],
+      "check": "command -v tsc && tsc --version"
+    },
+    "yamllint": {
+      "kind": "global-executor",
+      "source": "brew",
+      "package": "yamllint",
+      "version": null,
+      "enabled": false,
+      "provides": ["Lint yaml (fallback today: python3 yaml.safe_load)"],
+      "check": "command -v yamllint"
+    },
+    "hadolint": {
+      "kind": "global-executor",
+      "source": "brew",
+      "package": "hadolint",
+      "version": null,
+      "enabled": false,
+      "provides": ["Lint Dockerfile (fallback today: docker build --check)"],
+      "check": "command -v hadolint"
+    },
+    "markdownlint-cli": {
+      "kind": "global-executor",
+      "source": "bun",
+      "package": "markdownlint-cli",
+      "version": null,
+      "enabled": false,
+      "provides": ["Lint markdown (fallback today: CI/manual)"],
+      "check": "command -v markdownlint"
+    },
+    "ruff": {
+      "kind": "project-managed",
+      "source": "venv",
+      "package": "ruff",
+      "version": null,
+      "enabled": false,
+      "provides": ["Lint: ruff check . (repo venv owns version; never global)"],
+      "check": "repo venv, never probed globally"
+    }
+  }
+}

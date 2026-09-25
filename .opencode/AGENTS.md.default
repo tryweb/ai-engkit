@@ -4,7 +4,7 @@
 ## Tool Authority
 
 - CodeGraph is the first authority for indexed source, symbols, dependencies, and source and flow tracing.
-- For correctness-sensitive source operations, use native anchored read/edit tools; use direct LSP diagnostics, direct tests/builds, and direct git commands for correctness claims about diagnostics, tests, git, and writes.
+- For correctness-sensitive source operations, use native anchored read/edit tools; use direct LSP diagnostics (V1 only — on V2 use project check-command output per v2 Diagnostics Policy below), direct tests/builds, and direct git commands for correctness claims about diagnostics, tests, git, and writes.
 - Repository routing state is fail-closed: automatic Read, Search, and Shell routing is disabled after the task-7 G0 verdict `disable-routing`; no runtime routing toggle exists.
 - Re-enable requires a new isolated passing G0-G4 evaluation and an explicit repository guidance decision; it is never an automatic toggle.
 - lean-ctx remains available for memory and knowledge tools such as `ctx_knowledge` and `ctx_session`, and for non-authoritative exploration with `ctx_read` or `ctx_shell`.
@@ -181,5 +181,12 @@ problem that was already fixed:
    problem, capture a new one with the `knowledge-capture` skill
    (Context / Problem / Solution / Evidence) so the next session starts
    ahead instead of repeating your work.
+
+## v2 Diagnostics Policy (OpenCode V2 only — ignore on V1)
+
+- V2 environments run no LSP runtime (`opencode.json:lsp` is marksman-only). `gopls`, `typescript-language-server`, `pyright-langserver` etc. do not exist there and MUST NOT be installed; never ask to install a language server.
+- Verify per-language with check commands (project `AGENTS.md` `Typecheck:`/`Lint:` lines win): Go `go vet ./...` + `go build ./...`; TypeScript `bunx tsc --noEmit` (lockfile version, never 7.x globally); Python `pyright`, `ruff check .` only if repo-owned via venv; JS/TS/JSON/CSS/HTML `biome check`; YAML `python3 -c yaml.safe_load` or repo-named `yamllint`; Dockerfile `docker build --check`; Markdown CI/manual.
+- If the user explicitly requests LSP verification by name (`gopls`, `typescript-language-server`, `pyright-langserver`, …): do NOT ask whether to install it — not even to request consent. The install-gate covers project dependencies only and never produces a language-server question. Run the equivalent check commands directly and note in one line that V2 has no LSP runtime.
+- "use direct LSP diagnostics" in Tool Authority above refers to V1 only.
 
 <!-- /@ai-engkit -->
