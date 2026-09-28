@@ -25,6 +25,13 @@
 #   LEANCTX_VERSION        → github:yvgude/lean-ctx
 #   OH_MY_OPENAGENT_VERSION → npm:oh-my-openagent
 #   OPENCODE_VERSION       → npm:opencode-ai
+#   OPENCODE_CLI_VERSION   → npm:<OPENCODE_CLI_PACKAGE> (cross-major switch;
+#                            package selector ARG OPENCODE_CLI_PACKAGE,
+#                            defaults to "opencode-ai"; e.g. "@opencode/cli").
+#                            When a Dockerfile carries OPENCODE_CLI_VERSION,
+#                            it SUPERSEDES the OPENCODE_VERSION row (skipped,
+#                            never double-reported) — V1 Dockerfiles without it
+#                            behave exactly as before.
 #   OPENCHAMBER_VERSION    → npm:@openchamber/web
 #
 # Locked pair: OpenCode and OpenChamber majors must match (OpenChamber N.x runs
@@ -159,6 +166,29 @@ pairing_blocked() {
     [[ "$cm" != "$sm" ]]
 }
 
+# Effective OpenCode pin: OPENCODE_CLI_VERSION supersedes OPENCODE_VERSION
+# when present (cross-major switch — the v2 flip is then a Dockerfile ARG
+# change, not a script change). OPENCODE_CLI_PACKAGE selects the npm package
+# (defaults to "opencode-ai"); OPENCODE_CLI_PACKAGE itself is never reported.
+opencode_effective_row() {
+    if awk '/^ARG OPENCODE_CLI_VERSION=/{found=1} END{exit !found}' "$DOCKERFILE" 2>/dev/null; then
+        printf '%s' "OPENCODE_CLI_VERSION"
+    else
+        printf '%s' "OPENCODE_VERSION"
+    fi
+}
+
+cli_package() {
+    local pkg
+    pkg=$(awk -F= '/^ARG OPENCODE_CLI_PACKAGE=/{print $2; exit}' "$DOCKERFILE") || true
+    [[ -z "$pkg" ]] && pkg="opencode-ai"
+    printf '%s' "$pkg"
+}
+
+cli_package_for_row() {
+    if [[ "${1:-}" == "OPENCODE_CLI_VERSION" ]]; then cli_package; else printf '%s' "opencode-ai"; fi
+}
+
 lookup() {
     case "$1" in
         DOCKER_VERSION)         get_github_latest "docker/docker" ;;
@@ -167,6 +197,7 @@ lookup() {
         GH_VERSION)             get_github_latest "cli/cli" ;;
         MARKSMAN_VERSION)       get_github_latest "artempyanykh/marksman" ;;
         OPENCODE_VERSION)       get_npm_latest "opencode-ai" ;;
+        OPENCODE_CLI_VERSION)   get_npm_latest "$(cli_package)" ;;
         OPENCHAMBER_VERSION)    get_npm_latest "@openchamber/web" ;;
         BUN_VERSION)            get_bun_required ;;
         PLAYWRIGHT_VERSION)     get_npm_latest "playwright" ;;
@@ -188,6 +219,7 @@ source_label() {
         GH_VERSION)             echo "github:cli/cli" ;;
         MARKSMAN_VERSION)       echo "github:artempyanykh/marksman" ;;
         OPENCODE_VERSION)       echo "npm:opencode-ai" ;;
+        OPENCODE_CLI_VERSION)   echo "npm:$(cli_package)" ;;
         OPENCHAMBER_VERSION)    echo "npm:@openchamber/web" ;;
         BUN_VERSION)            echo "github:openchamber/openchamber" ;;
         PLAYWRIGHT_VERSION)     echo "npm:playwright" ;;
@@ -201,6 +233,22 @@ source_label() {
     esac
 }
 
+# Dockerfile ARG values may reference other ARGs (${OTHER_ARG}, as Docker
+# itself resolves at build time). Resolve them against the file's own ARGs
+# (depth-guarded) so pins like OPENCODE_CLI_VERSION=${OPENCODE_VERSION}
+# compare as real versions instead of literal "${...}" strings.
+declare -A DOCKER_ARGS=()
+while IFS='=' read -r _ak _av; do
+    DOCKER_ARGS["$_ak"]="${_av:-}"
+done < <(awk '/^ARG [A-Z_]+=/ { sub(/^ARG /, ""); print }' "$DOCKERFILE")
+resolve_arg_refs() {
+    local v="$1" guard=10
+    while [[ "$v" =~ \$\{([A-Z_]+)\} ]] && (( guard-- > 0 )); do
+        v="${v//\$\{${BASH_REMATCH[1]}\}/${DOCKER_ARGS[${BASH_REMATCH[1]}]:-}}"
+    done
+    printf '%s' "$v"
+}
+
 # Emit TSV rows: <NAME>\t<PINNED>\t<LATEST>\t<SOURCE>\t<STATUS>
 # STATUS ∈ { current, outdated, blocked, check_failed }
 #   blocked = OpenCode/OpenChamber major-parity guard held the bump back
@@ -210,9 +258,10 @@ collect_rows() {
     # both latest values and both candidates (latest-if-bumped, else pinned)
     # up front. BUN_VERSION derives from the PINNED OpenChamber tag and is
     # unaffected.
-    local oc_latest op_latest oc_pinned op_pinned oc_cand op_cand
+    local oc_latest op_latest oc_pinned op_pinned oc_cand op_cand op_row
+    op_row="$(opencode_effective_row)"
     oc_latest="$(lookup OPENCHAMBER_VERSION)"
-    op_latest="$(lookup OPENCODE_VERSION)"
+    op_latest="$(lookup "$op_row")"
     oc_pinned="$(awk '/^ARG OPENCHAMBER_VERSION=/{ sub(/^ARG OPENCHAMBER_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
     op_pinned="$(awk '/^ARG OPENCODE_VERSION=/{ sub(/^ARG OPENCODE_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
     oc_cand="$oc_pinned"; version_gt "$oc_pinned" "$oc_latest" && oc_cand="$oc_latest"
@@ -220,18 +269,24 @@ collect_rows() {
 
     while IFS=$'\t' read -r name pinned; do
         case "$name" in
-            DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|GH_VERSION|MARKSMAN_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|BUN_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GLAB_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION) ;;
+            DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|GH_VERSION|MARKSMAN_VERSION|OPENCODE_VERSION|OPENCODE_CLI_VERSION|OPENCHAMBER_VERSION|BUN_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|GLAB_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION) ;;
             *) continue ;;
         esac
+        # Superseded legacy row: only the effective OpenCode pin is reported.
+        if [[ "$name" == "OPENCODE_VERSION" && "$op_row" == "OPENCODE_CLI_VERSION" ]]; then
+            continue
+        fi
+        [[ -z "${pinned:-}" ]] && continue
+        pinned="$(resolve_arg_refs "$pinned")"
         [[ -z "${pinned:-}" ]] && continue
         local latest source status partner_cand
         case "$name" in
-            OPENCODE_VERSION)    latest="$op_latest";    source="npm:opencode-ai" ;;
-            OPENCHAMBER_VERSION) latest="$oc_latest";    source="npm:@openchamber/web" ;;
+            OPENCODE_VERSION|OPENCODE_CLI_VERSION) latest="$op_latest"; source="npm:$(cli_package_for_row "$name")" ;;
+            OPENCHAMBER_VERSION) latest="$oc_latest"; source="npm:@openchamber/web" ;;
             *) latest="$(lookup "$name")"; source="$(source_label "$name")" ;;
         esac
         partner_cand=""
-        [[ "$name" == "OPENCODE_VERSION" ]] && partner_cand="$oc_cand"
+        [[ "$name" == "$op_row" ]] && partner_cand="$oc_cand"
         [[ "$name" == "OPENCHAMBER_VERSION" ]] && partner_cand="$op_cand"
         if [[ "$latest" == "unknown" ]]; then
             status="check_failed"

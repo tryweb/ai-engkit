@@ -234,19 +234,36 @@ jobs:
           }
 
           # --- Parse Dockerfile pinned ARGs ---
+          # Cross-major switch (mirrors check-versions.sh): when the Dockerfile
+          # carries OPENCODE_CLI_VERSION it supersedes OPENCODE_VERSION
+          # (effective pin + npm package from OPENCODE_CLI_PACKAGE, default
+          # "opencode-ai"); ${VAR} references resolve against sibling ARGs.
           declare -a PINNED_NAMES=()
           declare -a PINNED_VERSIONS=()
           while IFS='=' read -r name ver; do
             case "$name" in
-              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|BUN_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION)
+              DOCKER_VERSION|COMPOSE_VERSION|BUILDX_VERSION|OPENCODE_VERSION|OPENCODE_CLI_VERSION|OPENCHAMBER_VERSION|GLAB_VERSION|PLAYWRIGHT_VERSION|PLAYWRIGHT_MCP_VERSION|BUN_VERSION|GH_VERSION|MARKSMAN_VERSION|LEANCTX_VERSION|OH_MY_OPENAGENT_VERSION|OPENSPEC_VERSION|CODEGRAPH_VERSION)
                 PINNED_NAMES+=("$name")
                 PINNED_VERSIONS+=("$ver")
                 ;;
             esac
           done < <(awk '/^ARG [A-Z0-9_]+=/{sub(/^ARG /, ""); print}' Dockerfile)
 
-          if [[ "${#PINNED_NAMES[@]}" -ne 15 ]]; then
-            echo "::error::Expected 15 pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
+          _resolve_ref() {
+            local v="$1" guard=10 ref val _i
+            while [[ "$v" =~ \$\{([A-Z_]+)\} ]] && (( guard-- > 0 )); do
+              ref="${BASH_REMATCH[1]}"; val=""
+              for _i in "${!PINNED_NAMES[@]}"; do [[ "${PINNED_NAMES[$_i]}" == "$ref" ]] && val="${PINNED_VERSIONS[$_i]}"; done
+              v="${v//\$\{${ref}\}/$val}"
+            done
+            printf '%s' "$v"
+          }
+          for _i in "${!PINNED_VERSIONS[@]}"; do PINNED_VERSIONS[$_i]="$(_resolve_ref "${PINNED_VERSIONS[$_i]}")"; done
+
+          _expected_count=15
+          for _n in "${PINNED_NAMES[@]}"; do [[ "$_n" == "OPENCODE_CLI_VERSION" ]] && _expected_count=16; done
+          if [[ "${#PINNED_NAMES[@]}" -ne "$_expected_count" ]]; then
+            echo "::error::Expected ${_expected_count} pinned ARG versions in Dockerfile, found ${#PINNED_NAMES[@]}"
             exit 1
           fi
 
@@ -264,12 +281,20 @@ jobs:
           # order, so resolve both candidates up front (mirrors
           # check-versions.sh collect_rows). Candidate = latest when it is
           # newer than pinned, else pinned.
-          _opencode_pinned=""; _openchamber_pinned=""
+          _opencode_pinned=""; _openchamber_pinned=""; _opencode_cli_pinned=""
+          _opencode_source_pkg="$(awk -F= '/^ARG OPENCODE_CLI_PACKAGE=/{print $2; exit}' Dockerfile)"
+          [[ -z "$_opencode_source_pkg" ]] && _opencode_source_pkg="opencode-ai"
           for _idx in "${!PINNED_NAMES[@]}"; do
             [[ "${PINNED_NAMES[$_idx]}" == "OPENCODE_VERSION" ]] && _opencode_pinned="${PINNED_VERSIONS[$_idx]}"
+            [[ "${PINNED_NAMES[$_idx]}" == "OPENCODE_CLI_VERSION" ]] && _opencode_cli_pinned="${PINNED_VERSIONS[$_idx]}"
             [[ "${PINNED_NAMES[$_idx]}" == "OPENCHAMBER_VERSION" ]] && _openchamber_pinned="${PINNED_VERSIONS[$_idx]}"
           done
-          _opencode_latest_pre="$(get_npm_version 'opencode-ai')"
+          _opencode_row="OPENCODE_VERSION"
+          if [[ -n "$_opencode_cli_pinned" ]]; then
+            _opencode_pinned="$_opencode_cli_pinned"
+            _opencode_row="OPENCODE_CLI_VERSION"
+          fi
+          _opencode_latest_pre="$(get_npm_version "$_opencode_source_pkg")"
           _openchamber_latest_pre="$(get_npm_version '@openchamber/web')"
           _opencode_cand="$_opencode_pinned"
           if [[ "$_opencode_latest_pre" != "unknown" ]] && version_gt "$_opencode_pinned" "$_opencode_latest_pre"; then _opencode_cand="$_opencode_latest_pre"; fi
@@ -278,6 +303,10 @@ jobs:
 
           for i in "${!PINNED_NAMES[@]}"; do
             name="${PINNED_NAMES[$i]}"
+            # Superseded legacy row: only the effective OpenCode pin reports.
+            if [[ "$name" == "OPENCODE_VERSION" && "$_opencode_row" == "OPENCODE_CLI_VERSION" ]]; then
+              continue
+            fi
             current="${PINNED_VERSIONS[$i]}"
             latest="unknown"
             source=""
@@ -286,7 +315,7 @@ jobs:
               DOCKER_VERSION)   source='moby/moby';       latest="$(get_github_tag "$source")" ;;
               COMPOSE_VERSION)  source='docker/compose';   latest="$(get_github_tag "$source")" ;;
               BUILDX_VERSION)   source='docker/buildx';    latest="$(get_github_tag "$source")" ;;
-              OPENCODE_VERSION) source='opencode-ai';      latest="$_opencode_latest_pre" ;;
+              OPENCODE_VERSION|OPENCODE_CLI_VERSION) source="$_opencode_source_pkg"; latest="$_opencode_latest_pre" ;;
               OPENCHAMBER_VERSION) source='@openchamber/web'; latest="$_openchamber_latest_pre"; _openchamber_ref="$current"; if [[ "$latest" != "unknown" ]]; then _openchamber_ref="$latest"; fi ;;
               PLAYWRIGHT_VERSION)  source='playwright';    latest="$(get_npm_version "$source")" ;;
               PLAYWRIGHT_MCP_VERSION) source='@playwright/mcp'; latest="$(get_npm_version "$source")" ;;
@@ -322,7 +351,7 @@ jobs:
               # partner candidate carries the same new major. Blocked rows are
               # excluded from the auto-update, never counted as outdated.
               _partner_cand=""
-              [[ "$name" == "OPENCODE_VERSION" ]] && _partner_cand="$_openchamber_cand"
+              [[ "$name" == "$_opencode_row" ]] && _partner_cand="$_openchamber_cand"
               [[ "$name" == "OPENCHAMBER_VERSION" ]] && _partner_cand="$_opencode_cand"
               if [[ -n "$_partner_cand" ]] && pairing_blocked "$latest" "$current" "$_partner_cand"; then
                 blocked_updates_lines+=("$(printf '%s\t%s\t%s\t%s\t%s' "$name" "$current" "$latest" "$source" "blocked")")
@@ -931,6 +960,7 @@ jobs:
                   'COMPOSE_VERSION': 'Docker Compose',
                   'BUILDX_VERSION': 'Docker Buildx',
                   'OPENCODE_VERSION': 'OpenCode',
+                  'OPENCODE_CLI_VERSION': 'OpenCode',
                   'OPENCHAMBER_VERSION': 'OpenChamber',
                   'BUN_VERSION': 'Bun',
                   'PLAYWRIGHT_VERSION': 'Playwright',
