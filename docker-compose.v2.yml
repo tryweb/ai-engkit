@@ -51,6 +51,9 @@ services:
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      # Cell 2b key chase: provider key arrives via shell-exported env at
+      # trial bring-up (value never committed); empty when unset.
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       # Cell 1 no-OMO baseline: entrypoint skips plugin[] + ~/.omo lifecycle
       OMO_ENABLED: 0
     extra_hosts:

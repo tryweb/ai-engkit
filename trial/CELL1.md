@@ -281,3 +281,13 @@ Two environment lessons (both structural, both now encoded in scaffold + test):
 2. **localhost is unreachable from a sibling container.** The HTTP check must use the bridge gateway (`docker network inspect v2_default` → Gateway), per the project's DooD network rule. `cell1` implements localhost-first, gateway-fallback.
 
 U2 status upgraded by this run: boot log shows both `OMO disabled` lines; `openchamber serve` spawns managed opencode (`serve --port 34477`, PushWatcher connected). Leftover: empty host-side `/home/devuser/workspace/ai-engkit/trial-workspace/` (+ CONT_MARKER) auto-created by the daemon during the bind era — unreachable from here, remove from a host shell; harmless.
+
+## Appendix D — M2 E2E: Native Subagent Delegation on Live Inference (2026-09-29)
+
+First real agent execution on the V2 trial line, via user-provided `opencode-go` key (see `trial/CELL2B.md:§9` for provisioning; free-tier model, negligible spend):
+
+- Command: `opencode run --model opencode-go/longcat-2.5-preview-free --agent explore "List the filenames under .opencode/agents/ and report the total count. Read-only, do not edit."`
+- Result: **PASS.** The native `explore` subagent executed, listed all 12 agent files correctly, reported total 12, and wrote nothing (workspace unchanged apart from pre-existing `Test-v2-01/`, `Test-v2-02/`, `ai-engkit/` dirs from the other worker's Sep 25 sessions).
+- This closes M2's core question: V2 native file-agents (Cell 1 mapping) don't just parse — they run, scope correctly (`read`+`bash` allow, `edit` deny), and respect read-only instructions.
+- Side observation for M3/B1: the fork's context bridge failed twice more on this session (now 4 distinct sessions, all with empty error objects). Hook fidelity verdict in `CELL2B.md:§9` stands and hardens.
+- Still open (need implementation, not just a key): M3 live probes Q1/Q2/Q6/Q8 (no compaction, no countdown, no injection exists yet to observe), B1 kill-primary gate (routing plugin unbuilt), 11-agent roster beyond explore (only `explore` exercised; executor-family agents untested).

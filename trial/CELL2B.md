@@ -76,3 +76,17 @@ Standing blocker: one working provider key in trial. All three trial keys are de
 Metadata-endpoint probes (zero spend, secrets never printed): **openrouter 401** (dead), **google 401** (dead), **nvidia 200** on `/v1/models` (81 models listed) but **403 on every invoke** (`gemma-3-4b-it`, `gemma-3-12b-it`); `dbrx-instruct` / `nemotron-70b` aren't even in opencode's nvidia catalog ("Model unavailable"). `opencode/big-pickle` has no key and Console free tier rejects `docker exec` CLI sessions. Net: **no working inference in trial; everything failed pre-inference, zero quota spent.**
 
 Rotation runbook (for billing owner): keys live in trial `auth.json` (`opencode-data-v2` volume) fed by the Admin provider-keys registry (`admin-data/provider-keys.json`) + `.env` `OPENCODE_PROVIDER`. Rotate via Admin Providers page (registry → auth store → container restart) or direct volume edit. What unblocks M2 E2E + M3 live probes + hook fidelity: any ONE key with inference entitlement, or opencode Console OAuth via UI (free tier passes parent sessions per 09-25 evidence).
+
+## 9. Technical Line CLOSED: Live Inference + Hook Fidelity (2026-09-29)
+
+Key chase resolved via user-provided `opencode-go` key (`oc_sk_…`, length-verified only, never printed/committed; repo grep-clean). Findings that unblocked it: `opencode-go` is a **built-in provider in OpenCode 2.0.15** (priority index 0 in the binary's provider map, `cli.auth.resolve-integration`), gateway `https://opencode.ai/zen/go/v1`, catalog of 33 models at `https://models.opencode.ai/api.json` (public, no auth). Auth needs **both** channels: auth-store entry (`Admin applyAuthKey` jq filter replicated exactly) **and** `OPENCODE_API_KEY` env (compose `environment:` reference added — value arrives via shell export at bring-up, never in git). Managed serve caches the provider catalog at boot, so key changes require container recreate (plain `restart`/`up` without `--force-recreate` silently keeps the old catalog — verified the hard way).
+
+Live proof: `opencode run --model opencode-go/longcat-2.5-preview-free "Reply with exactly this word: ok"` → **`ok`** (free tier, near-zero spend).
+
+Hook fidelity on the successful session (`ses_f147…`):
+- `context bridge failed` **again, empty error** — DEFECT 2 upgraded from "unisolated" to **confirmed on successful inference**. The bridge fires and dies on real flows, auth failure or not.
+- `session.error`/`session.idle` fan-out works; fork's own provider discovery works (5 providers incl. `opencode-go`+`opencode`, 558 models, 3711 capabilities cached).
+- Server rejected all 14 bridged tools again this boot (`seen.ref`) — DEFECT 1 stands.
+- Incidental: fork's startup toast degrades to log spam headless; `auto-update-checker` reports "Plugin not found in config" (expected for file-loaded plugin).
+
+Final Cell 2b verdict: discovery YES, import YES (with T1+T2 procedures), setup YES (all green), hook wiring YES (fires), hook fidelity **NO** (context bridge fails open-evidence on 3/3 real sessions; tools 0/14 server-accepted). The fork is disqualified as transitional carrier on technical grounds alone — governance aside. Remaining unproven (compaction, fallback, 11-agent roster) is moot for adoption but the recorded evidence (this file + `/tmp` logs gone with container, note: `/tmp/oh-my-opencode.log` is container-ephemeral) is sufficient for the Cell 5 decision.
