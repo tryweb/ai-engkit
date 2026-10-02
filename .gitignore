@@ -15,5 +15,6 @@ backups/
 # auto-generated version tracking snapshot
 /version-snapshot.json
 
-# trial build artifact (rebuild: bun build, see trial/B1-VERIFY.md)
+# trial build artifacts (rebuild: bun build, see trial/B1-VERIFY.md)
 trial/b1-routing/dist/
+trial/m3-enforcer/dist/
