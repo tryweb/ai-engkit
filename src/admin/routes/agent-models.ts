@@ -12,6 +12,14 @@ import { parseVerificationMode, type VerificationMode } from "../lib/agent-model
 import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
 import { parseModelReference, probeModel, type ProbeResult } from "../lib/model-probe";
 import { AgentModelsPage } from "../views/agent-models";
+import { validateAgentChain } from "../lib/agent-model-config";
+
+function isV2(): boolean { return process.env.OMO_ENABLED === "0"; }
+function normalizeChainEntries(raw: Record<string, unknown>): Array<{ model: string; variant?: string }> | null {
+  const chain = (raw.chain ?? raw.entries) as unknown;
+  if (!Array.isArray(chain)) return null;
+  return chain as Array<{ model: string; variant?: string }>;
+}
 
 const AGENT_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const ALLOWED_MODES = new Set(["free", "economy", "performance"] as const);
@@ -51,15 +59,22 @@ function validateBatchBody(body: unknown): { changes: Array<{ agent: string; ent
     const change = item as Record<string, unknown>;
     const agent = change.agent;
     if (typeof agent !== "string" || !AGENT_KEY_PATTERN.test(agent.trim())) return "each change requires a valid agent name";
-    const error = validateFallbackModels({ entries: change.entries });
-    if (error !== null) return `agent ${agent}: ${error}`;
+    const entries = normalizeChainEntries(change);
+    if (entries === null) return `agent ${agent}: entries must be an array of { model, variant? }`;
+    if (isV2()) {
+      const err = validateAgentChain(entries as unknown);
+      if (err !== null) return `agent ${agent}: ${err}`;
+    } else {
+      const error = validateFallbackModels({ entries });
+      if (error !== null) return `agent ${agent}: ${error}`;
+    }
   }
   if (record.verification !== undefined) {
     const verification = parseVerificationMode(record.verification);
     if (verification === null) return "verification must be \"readiness\" or \"inference\"";
-    return { changes: changes as Array<{ agent: string; entries: Array<{ model: string; variant?: string }> }>, verification };
+    return { changes: (changes as Array<Record<string, unknown>>).map((c) => ({ agent: (c.agent as string).trim(), entries: normalizeChainEntries(c as Record<string, unknown>)! })), verification };
   }
-  return { changes: changes as Array<{ agent: string; entries: Array<{ model: string; variant?: string }> }>, verification: "readiness" };
+  return { changes: (changes as Array<Record<string, unknown>>).map((c) => ({ agent: (c.agent as string).trim(), entries: normalizeChainEntries(c as Record<string, unknown>)! })), verification: "readiness" };
 }
 
 function parseSingleVerification(body: unknown): VerificationMode | string {
@@ -245,9 +260,27 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       return c.json({ error: verificationRaw }, 400);
     }
     const verification: VerificationMode = verificationRaw === "inference" ? "inference" : "readiness";
-    const error = validateFallbackModels(body);
-    if (error !== null) {
-      return c.json({ error }, 400);
+    if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+      const br = body as Record<string, unknown>;
+      const ent = normalizeChainEntries(br);
+      if (ent === null && br.entries !== undefined && br.chain !== undefined) {
+        return c.json({ error: "entries must be an array of { model, variant? }" }, 400);
+      }
+      if (ent !== null) {
+        if (isV2()) {
+          const e = validateAgentChain(ent as unknown);
+          if (e !== null) return c.json({ error: e }, 400);
+        } else {
+          const error = validateFallbackModels({ entries: ent });
+          if (error !== null) return c.json({ error }, 400);
+        }
+      } else {
+        const error = validateFallbackModels(body);
+        if (error !== null) return c.json({ error }, 400);
+      }
+    } else {
+      const error = validateFallbackModels(body);
+      if (error !== null) return c.json({ error }, 400);
     }
 
     const password = lib.getServerPassword();
@@ -261,7 +294,8 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       );
     }
 
-    const entries = (body as { entries: Array<{ model: string; variant?: string }> }).entries;
+    const rawBody = body as Record<string, unknown>;
+    const entries = (normalizeChainEntries(rawBody) ?? (rawBody.entries as Array<{ model: string; variant?: string }>) ?? []) as Array<{ model: string; variant?: string }>;
     const state = await collectAgentModelState(lib, password);
     if (!state.agents.some((entry) => entry.name === agent)) {
       return c.json({ error: "agent is not a configurable live subagent" }, 403);

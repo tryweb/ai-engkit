@@ -337,15 +337,21 @@ if [ -n "${OPENCODE_PROVIDER:-}" ]; then
   fi
 fi
 
-# --- OMO unified configuration ---
-DEFAULT_OMO_CONFIG="/etc/opencode/omo.jsonc.default"
-OMO_CONFIG_DIR="$HOME/.omo"
-OMO_CONFIG_FILE="$OMO_CONFIG_DIR/omo.jsonc"
+# --- OMO unified configuration (V1 only; gated on v2 line) ---
+if [ "${OMO_ENABLED:-1}" != "0" ]; then
+  DEFAULT_OMO_CONFIG="/etc/opencode/omo.jsonc.default"
+  OMO_CONFIG_DIR="$HOME/.omo"
+  OMO_CONFIG_FILE="$HOME/.omo/omo.jsonc"
+fi
 
 # Kept in a non-.sh file so the entrypoint runner does not execute it separately.
-source "$(dirname "$0")/lib-omo-model-defaults.bash"
+if [ "${OMO_ENABLED:-1}" != "0" ]; then
+  source "$(dirname "$0")/lib-omo-model-defaults.bash"
+fi
 source "$(dirname "$0")/lib-openchamber-settings.bash"
-source "$(dirname "$0")/lib-native-agent-overrides.bash"
+if [ "${OMO_ENABLED:-1}" != "0" ]; then
+  source "$(dirname "$0")/lib-native-agent-overrides.bash"
+fi
 
 archive_legacy_omo_configs() {
   local legacy_name legacy_file backup_file
@@ -384,6 +390,16 @@ fi
 
 if [ "${OMO_ENABLED:-1}" != "0" ]; then
   merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+fi
+
+if [ "${OMO_ENABLED:-1}" = "0" ]; then
+  for _migrate in "/opt/ai-engkit/scripts/migrate-omo-to-native.sh" "$(dirname "$0")/../scripts/migrate-omo-to-native.sh" "./scripts/migrate-omo-to-native.sh"; do
+    if [ -x "$_migrate" ]; then
+      "$_migrate" || true
+      break
+    fi
+  done
+  unset _migrate
 fi
 
 merge_project_lsp_config

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# V1 only — on OMO_ENABLED=0 this file is not sourced (see 02-init-config.sh gating).
 
 merge_native_agent_overrides() {
   local opencode_config="$1"

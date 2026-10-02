@@ -9,21 +9,7 @@ PROVIDER_WAIT_SECONDS="${PROVIDER_WAIT_SECONDS:-120}"
 
 log() { echo "[agent-models] $*" >&2; }
 
-# Keep opencode.json native agents in sync with persisted OMO after reconcile (G1 file equality).
-# Single-source helper: reuse entrypoint's merge_native_agent_overrides if available.
-sync_native_overrides() {
-  local op="$HOME/.config/opencode/opencode.json" omo="$HOME/.omo/omo.jsonc" lib=""
-  for lib in "/entrypoint.d/lib-native-agent-overrides.bash" "$(dirname "$0")/../entrypoint.d/lib-native-agent-overrides.bash" "/opt/ai-engkit/entrypoint.d/lib-native-agent-overrides.bash"; do
-    if [ -f "$lib" ]; then
-      # shellcheck source=/dev/null
-      source "$lib" 2>/dev/null || true
-      break
-    fi
-  done
-  if declare -F merge_native_agent_overrides >/dev/null 2>&1; then
-    merge_native_agent_overrides "$op" "$omo" 2>/dev/null || true
-  fi
-}
+
 
 basic_auth() {
   printf 'opencode:%s' "${OPENCODE_SERVER_PASSWORD:-}" | base64 -w0
@@ -101,7 +87,6 @@ reconcile() {
     max_attempts=3
     while [ "$attempts" -lt "$max_attempts" ]; do
       if RECONCILE_STARTUP_NO_RESTART=1 bun run /opt/admin/lib/agent-model-reconcile-cli.ts; then
-        sync_native_overrides
         return 0
       fi
       attempts=$((attempts + 1))
@@ -118,7 +103,7 @@ reconcile() {
       wait_for_lifecycle "$PROVIDER_WAIT_SECONDS" 2>/dev/null || true
       wait_for_provider "$PROVIDER_WAIT_SECONDS" >/dev/null 2>/dev/null || true
       if RECONCILE_STARTUP_NO_RESTART=1 bun run /opt/admin/lib/agent-model-reconcile-cli.ts; then
-        sync_native_overrides
+        :
       else
         log "deferred reconciliation also failed"
       fi

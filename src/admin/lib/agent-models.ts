@@ -1,21 +1,30 @@
 import {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   displayNameToKey,
   parseAgentModelsConfig,
+  parseRoutingConfig,
+  validateAgentChain,
   validateFallbackModels,
 } from "./agent-model-config";
 import { createAgentModelLiveClient } from "./agent-model-live";
 import {
   CONFIGURABLE_NATIVE_AGENTS,
+  NATIVE12_AGENTS,
   OMO_CONFIG,
+  OPENCODE_JSON,
+  ROUTING_CONFIG,
   VARIANTS,
+  type AgentChain,
   type AgentModelConfig,
   type AgentModelChange,
   type AgentModelEntry,
   type AgentModelsDeps,
   type ApplyResult,
+  type ChainEntry,
   type FallbackModelEntry,
   type ResolvedModel,
+  type RoutingConfig,
   type VerificationMode,
 } from "./agent-model-types";
 import { execInAiDev } from "./docker";
@@ -23,11 +32,21 @@ import { readEnvFile } from "./env";
 import { restartManagedOpenCode } from "./restart-ai-dev";
 import { parseModelReference, probeModel } from "./model-probe";
 
+function isV2(): boolean {
+  return process.env.OMO_ENABLED === "0";
+}
+
 export {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   CONFIGURABLE_NATIVE_AGENTS,
+  NATIVE12_AGENTS,
   displayNameToKey,
   OMO_CONFIG,
+  OPENCODE_JSON,
+  ROUTING_CONFIG,
+  parseRoutingConfig,
+  validateAgentChain,
   validateFallbackModels,
   VARIANTS,
 };
@@ -55,10 +74,23 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     return result.exitCode === 0 ? parseAgentModelsConfig(result.stdout) : {};
   }
 
+  async function readRoutingConfig(): Promise<RoutingConfig> {
+    const result = await deps.exec(`jq -c '.' ${ROUTING_CONFIG} 2>/dev/null || echo '{"version":1,"chains":{}}'`, 10_000);
+    return result.exitCode === 0 ? parseRoutingConfig(result.stdout) : { version: 1, chains: {} };
+  }
+
   async function writeAgentFallbackModels(
     agent: string,
     entries: readonly FallbackModelEntry[],
   ): Promise<{ readonly ok: boolean; readonly error?: string }> {
+    if (isV2()) {
+      const chain: readonly ChainEntry[] = entries as readonly ChainEntry[];
+      const perAgentErr = validateAgentChain(chain as unknown);
+      if (chain.length > 0 && perAgentErr !== null) return { ok: false, error: perAgentErr };
+      const result = await deps.exec(buildRoutingWriteCommand(agent, chain), 30_000);
+      if (result.exitCode !== 0) return { ok: false, error: result.stderr || result.stdout || "jq routing write failed" };
+      return { ok: true };
+    }
     const result = await deps.exec(buildJqWriteCommand(agent, entries), 30_000);
     if (result.exitCode !== 0) {
       return { ok: false, error: result.stderr || result.stdout || "jq write failed" };
@@ -66,9 +98,22 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     return { ok: true };
   }
 
+  async function writeAgentChain(agent: string, chain: readonly ChainEntry[]): Promise<{ readonly ok: boolean; readonly error?: string }> {
+    return writeAgentFallbackModels(agent, chain as unknown as readonly FallbackModelEntry[]);
+  }
+
   async function snapshotAgentModelsConfig(): Promise<string | null> {
     const result = await deps.exec(
       `snapshot=$(mktemp /tmp/omo.jsonc.snapshot.XXXXXX) && cat ${OMO_CONFIG} > "$snapshot" 2>/dev/null && printf '%s' "$snapshot"`,
+      10_000,
+    );
+    if (result.exitCode !== 0 || !result.stdout.trim()) return null;
+    return result.stdout.trim();
+  }
+
+  async function snapshotRoutingConfig(): Promise<string | null> {
+    const result = await deps.exec(
+      `snap_r=$(mktemp /tmp/routing.json.snapshot.XXXXXX) && snap_o=$(mktemp /tmp/opencode.json.snapshot.XXXXXX) && cat ${ROUTING_CONFIG} > "$snap_r" 2>/dev/null; cat ${OPENCODE_JSON} > "$snap_o" 2>/dev/null; printf '%s:%s' "$snap_r" "$snap_o"`,
       10_000,
     );
     if (result.exitCode !== 0 || !result.stdout.trim()) return null;
@@ -83,6 +128,16 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     if (result.exitCode !== 0) {
       return { ok: false, error: result.stderr || result.stdout || "restore failed" };
     }
+    return { ok: true };
+  }
+
+  async function restoreRoutingConfig(snapshotFile: string): Promise<{ readonly ok: boolean; readonly error?: string }> {
+    const [snapR, snapO] = snapshotFile.split(":");
+    const result = await deps.exec(
+      `cat '${snapR ?? ""}' > ${ROUTING_CONFIG}.tmp && mv ${ROUTING_CONFIG}.tmp ${ROUTING_CONFIG} 2>/dev/null; cat '${snapO ?? ""}' > ${OPENCODE_JSON}.tmp && mv ${OPENCODE_JSON}.tmp ${OPENCODE_JSON} 2>/dev/null; rm -f '${snapR ?? ""}' '${snapO ?? ""}'`,
+      15_000,
+    );
+    if (result.exitCode !== 0) return { ok: false, error: result.stderr || result.stdout || "routing restore failed" };
     return { ok: true };
   }
 
@@ -199,6 +254,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   async function syncNativeAgentOverrides(): Promise<{ readonly ok: boolean; readonly error?: string }> {
+    if (isV2()) return { ok: true };
     const op = "$HOME/.config/opencode/opencode.json";
     const omo = "$HOME/.omo/omo.jsonc";
     const cmd = `tmp="${op}.native-agent-overrides.tmp"; if [ ! -f "${op}" ] || [ ! -f "${omo}" ]; then printf '%s\n' 'native override source file missing' >&2; exit 1; fi; if jq -s '.[0] as $opencode | .[1] as $omo | reduce ["general", "plan"][] as $name ($opencode; ($omo.agents[$name] // {}) as $override | if (($override.model | type) == "string" and ($override.model | test("^[^/[:space:]]+/[^[:space:]]+$"))) then .agent = (.agent // {}) | .agent[$name].model = $override.model | if (($override.variant | type) == "string" and ($override.variant | length) > 0) then .agent[$name].variant = $override.variant else del(.agent[$name].variant) end else del(.agent[$name]) end)' "${op}" "${omo}" > "$tmp" 2>/dev/null && mv "$tmp" "${op}"; then exit 0; else code=$?; rm -f "$tmp"; exit "$code"; fi`;
@@ -227,6 +283,90 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     const work = async (): Promise<ReadonlyMap<string, ApplyResult>> => {
       const results = new Map<string, ApplyResult>();
       if (changes.length === 0) return results;
+
+      if (isV2()) {
+        const snapshot = await snapshotRoutingConfig();
+        if (timedOut) {
+          for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
+          return results;
+        }
+        if (snapshot === null) {
+          for (const change of changes) {
+            results.set(change.agent, { ok: false, status: "write_failed", error: "could not snapshot routing config before applying" });
+          }
+          return results;
+        }
+        const succeeded: AgentModelChange[] = [];
+        for (const change of changes) {
+          if (timedOut) { if (!results.has(change.agent)) results.set(change.agent, timeoutError); continue; }
+          const chain = change.entries as unknown as readonly ChainEntry[];
+          if (chain.length > 0) {
+            const chainErr = validateAgentChain(chain as unknown);
+            if (chainErr !== null) { results.set(change.agent, { ok: false, status: "write_failed", error: chainErr }); continue; }
+          }
+          const write = await deps.exec(buildRoutingWriteCommand(change.agent, chain), 30_000);
+          if (timedOut) { if (!results.has(change.agent)) results.set(change.agent, timeoutError); continue; }
+          if (write.exitCode !== 0) {
+            results.set(change.agent, { ok: false, status: "write_failed", error: write.stderr || write.stdout || "jq routing write failed" });
+            continue;
+          }
+          succeeded.push(change);
+        }
+        if (succeeded.length === 0) {
+          return results;
+        }
+        const restart = await deps.restart();
+        if (timedOut) {
+          for (const change of succeeded) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
+          return results;
+        }
+        if ("error" in restart) {
+          const rollback = await restoreRoutingConfig(snapshot);
+          for (const change of succeeded) {
+            results.set(change.agent, rollback.ok
+              ? { ok: false, status: "restart_failed", error: restart.error }
+              : { ok: false, status: "rollback_failed", error: `${restart.error}; ${rollback.error ?? "rollback failed"}` });
+          }
+          return results;
+        }
+        const quotaModels = new Set<string>();
+        const quotaWarningByModel = new Map<string, ApplyResult>();
+        for (const change of succeeded) {
+          if (timedOut) { if (!results.has(change.agent)) results.set(change.agent, timeoutError); continue; }
+          const configured = (change.entries as unknown as readonly ChainEntry[])[0]?.model;
+          if (verification === "inference" && configured !== undefined && quotaModels.has(configured)) {
+            const cached = quotaWarningByModel.get(configured);
+            if (cached !== undefined) { results.set(change.agent, cached); continue; }
+          }
+          const result = await verifyAppliedAgent(change.agent, change.entries, verification, () => timedOut);
+          if (timedOut && !results.has(change.agent)) { results.set(change.agent, timeoutError); continue; }
+          results.set(change.agent, result);
+          if (result.ok && result.status === "applied_with_quota_warning" && configured !== undefined) {
+            quotaModels.add(configured);
+            quotaWarningByModel.set(configured, result);
+          }
+        }
+        if (timedOut) {
+          for (const change of succeeded) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
+          return results;
+        }
+        const probeFailure = [...results.entries()].find(([, result]) => !result.ok && result.status === "probe_failed");
+        if (probeFailure !== undefined) {
+          const probeFailureError = "error" in probeFailure[1] ? probeFailure[1].error : "model probe failed";
+          const rollback = await restoreRoutingConfig(snapshot);
+          const recovery = rollback.ok ? await deps.restart() : { ok: false, error: "recovery restart skipped" };
+          if (!rollback.ok || "error" in recovery) {
+            for (const change of succeeded) {
+              results.set(change.agent, { ok: false, status: "rollback_failed", error: `${probeFailureError}; ${rollback.error ?? ("error" in recovery ? recovery.error : "rollback failed")}` });
+            }
+          } else {
+            for (const [agent] of results) {
+              if (agent !== probeFailure[0]) results.set(agent, { ok: false, status: "rollback_failed", error: `batch rolled back after ${probeFailure[0]} probe failure` });
+            }
+          }
+        }
+        return results;
+      }
 
       const snapshot = await snapshotAgentModelsConfig();
       if (timedOut) {
@@ -370,9 +510,13 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
 
   return {
     readAgentModelsConfig,
+    readRoutingConfig,
     writeAgentFallbackModels,
+    writeAgentChain,
     snapshotAgentModelsConfig,
+    snapshotRoutingConfig,
     restoreAgentModelsConfig,
+    restoreRoutingConfig,
     applyAndVerifyBatch,
     getServerPassword,
     fetchConnectedCatalog: live.fetchConnectedCatalog,
@@ -404,12 +548,34 @@ export async function collectAgentModelState(
   lib: AgentModelsLib,
   password: string | null,
 ): Promise<AgentModelsViewState> {
-  const [config, resolvedMap, providerSnapshot, subagentNames] = await Promise.all([
-    lib.readAgentModelsConfig(),
+  const v2 = isV2();
+  const routingOrConfigPromise = v2 && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function"
+    ? (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig()
+    : lib.readAgentModelsConfig();
+  const [rawConfig, resolvedMap, providerSnapshot, subagentNames] = await Promise.all([
+    routingOrConfigPromise as Promise<Record<string, AgentModelConfig> | RoutingConfig>,
     password !== null ? lib.fetchResolvedAgentModels(password) : Promise.resolve(null),
     lib.fetchProviderSnapshot(password),
     password !== null ? lib.fetchSubagentNames(password) : Promise.resolve([]),
   ]);
+  let config: Record<string, AgentModelConfig>;
+  if (v2 && rawConfig !== null && typeof rawConfig === "object" && "chains" in (rawConfig as Record<string, unknown>)) {
+    const routing = rawConfig as RoutingConfig;
+    config = {};
+    for (const [agent, chainVal] of Object.entries(routing.chains)) {
+      const chain = chainVal.chain;
+      const primary = chain[0];
+      const invalid = chain.length < 1 || chain.length > 10 || chain.some((e) => typeof e.model !== "string" || !/^[^/\s]+\/\S+$/.test(e.model));
+      config[agent] = {
+        model: primary?.model,
+        variant: primary?.variant,
+        models: chain as unknown as readonly FallbackModelEntry[],
+        invalid,
+      };
+    }
+  } else {
+    config = rawConfig as Record<string, AgentModelConfig>;
+  }
 
   const knownKeys = new Set(Object.keys(config));
   // /agent returns display names ("Sisyphus - ultraworker"); map them back to
@@ -424,10 +590,16 @@ export async function collectAgentModelState(
   // general); internal mechanism agents (compaction, summary, title, build)
   // stay out because changing their model can break opencode internals.
   const configurableKeys = new Set<string>();
+  const gatingAgents: readonly string[] = v2 ? (NATIVE12_AGENTS as readonly string[]) : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
   for (const displayName of subagentNames) {
     const key = displayNameToKey(displayName, knownKeys) ?? displayName.toLowerCase();
-    if (knownKeys.has(key) || (CONFIGURABLE_NATIVE_AGENTS as readonly string[]).includes(key)) {
+    if (knownKeys.has(key) || (gatingAgents as readonly string[]).includes(key)) {
       configurableKeys.add(key);
+    }
+  }
+  if (v2) {
+    for (const key of Object.keys(config)) {
+      if ((gatingAgents as readonly string[]).includes(key) || knownKeys.has(key)) configurableKeys.add(key);
     }
   }
 
@@ -466,16 +638,16 @@ export async function collectAgentModelState(
 
   const agents: AgentModelEntry[] = names.map((name) => {
     const entry = config[name];
-    const configured = entry?.model
-      ? [{ model: entry.model, ...(entry.variant ? { variant: entry.variant } : {}) }]
-      : [];
+    const configured: readonly FallbackModelEntry[] = v2 && entry?.models && entry.models.length > 0
+      ? entry.models as readonly FallbackModelEntry[]
+      : entry?.model ? [{ model: entry.model, ...(entry.variant ? { variant: entry.variant } : {}) }] : [];
     const resolved = resolvedByKey.get(name) ?? null;
     const requestVerified = requestVerifiedByKey.get(name) ?? null;
     const providerConnected = resolved !== null && providerSnapshot.connectedProviders.includes(resolved.providerID);
     let source: AgentModelEntry["source"] = "plugin";
     if (configured.length > 0) {
       source = "configured";
-    } else if (name === "plan" && config["prometheus"]?.model !== undefined) {
+    } else if (!v2 && name === "plan" && config["prometheus"]?.model !== undefined) {
       source = "inherited";
     }
     let effectiveness: AgentModelEntry["effectiveness"] = "plugin";

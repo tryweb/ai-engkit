@@ -205,13 +205,14 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               <td data-label="Subagent"><code>{a.name}</code></td>
               <td data-label="Configured model">
                 <span class="configured-value">
-                  {a.configured.length === 0 ? (
+                    {a.configured.length === 0 ? (
                     <span class="text-muted">—</span>
                   ) : (
                     (() => {
                       const e = a.configured[0];
                       if (!e) return "—";
-                      return `${e.model}${e.variant ? ` (${e.variant})` : ""}`;
+                      const suffix = a.configured.length > 1 ? ` (+${a.configured.length - 1} fallback${a.configured.length > 2 ? "s" : ""})` : "";
+                      return `${e.model}${e.variant ? ` (${e.variant})` : ""}${suffix}`;
                     })()
                   )}
                 </span>

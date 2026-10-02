@@ -63,6 +63,7 @@ import {
   type ApplyResult,
   type FallbackModelEntry,
 } from "../lib/agent-models";
+import { validateAgentChain } from "../lib/agent-model-config";
 import { collectStatus } from "../lib/status";
 import { restartAiDev as restartRealAiDev } from "../lib/restart-ai-dev";
 import { getState, runUpgrade as runRealUpgrade } from "../lib/upgrade";
@@ -344,12 +345,24 @@ function parseSecretSet(payload: unknown): SecretSetPayload | null {
 
 const AGENT_MODEL_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
+function isV2Commands(): boolean { return process.env.OMO_ENABLED === "0"; }
+
 function parseAgentModelSet(payload: unknown): AgentModelSetPayload | null {
   if (!isRecord(payload)) return null;
   const agent = payload["agent"];
   if (typeof agent !== "string" || !AGENT_MODEL_KEY_PATTERN.test(agent.trim())) return null;
-  if (validateFallbackModels(payload) !== null) return null;
-  const rawEntries = payload["entries"];
+  const raw = payload as Record<string, unknown>;
+  const chainRaw = (raw.chain ?? raw.entries) as unknown;
+  if (!Array.isArray(chainRaw)) {
+    if (validateFallbackModels(payload) !== null) return null;
+  } else {
+    if (isV2Commands()) {
+      if (validateAgentChain(chainRaw as unknown) !== null) return null;
+    } else {
+      if (validateFallbackModels({ entries: chainRaw }) !== null) return null;
+    }
+  }
+  const rawEntries = (raw.chain ?? raw.entries) as unknown;
   const entries: FallbackModelEntry[] = Array.isArray(rawEntries)
     ? rawEntries.map((entry) => {
         const record = entry as Record<string, unknown>;
