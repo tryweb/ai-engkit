@@ -1,6 +1,6 @@
 # Phase A Decisions (trial/opencode-v2)
 
-> Status: **PROPOSED** (both items) — authored 2026-09-29 on branch `trial/opencode-v2`. Nothing below is ratified until sign-off; implementation (Phase B+) is gated on D1 + D2.
+> Status: **ACCEPTED** (both items, signed 2026-09-29) — Phase B implementation unblocked. Evidence index unchanged (see below).
 > Evidence index: `trial/CELL1.md` (no-OMO baseline), `trial/CELL2.md` + `trial/CELL3.md` (diagnostics track), `trial/CELL2B.md` (fork load test), `trial/TODO-SPEC.md` (todo-enforcer self-build spec), `docs/knowledge/tooling/opencode-v2-migration-watch.md` (V2 watch + gate rescope).
 
 ## D1 — OMO Route for the V2 Line
@@ -15,7 +15,7 @@
 |---|---|---|---|
 | A | Wait for official OMO V2 line | **Rejected** | #6169 stale since 08-25; beta.88 zero V2 work; ROADMAP de-centers OpenCode |
 | B | Adopt #8768 community fork (transitional carrier) | **Rejected** | CELL2B: loads + setup green (14 tools + 7 commands), BUT all 14 tools rejected server-side (`seen.ref` contract), context bridge errors on real flow, zero maintainer review, withdraw-precedent (#7104/#7570). Verdict recorded as negative result, not wasted work |
-| C | slim (`oh-my-opencode-slim`) on V2 | **Rejected for V2** | Repo-verified 2026-09-29: `master`/`v2.2.25`/`v3.0.0-beta.13` all pin V1 `@opencode-ai/*@1.18.x`; real V2 support is shim-based with an open v2 bug queue (#1247/#1255/#1335). Viable product, wrong contract for a clean V2 line |
+| C | slim (`oh-my-opencode-slim`) on V2 | **Rejected for V2** | Re-verified 2026-09-29 against `v3.0.0` (stable npm `latest`, released today): still V1-packaged (`@opencode-ai/*@1.18.32`), but V2-host-capable via actively maintained shims tracking `@opencode/plugin@2.0.18` (#1281 mirror revalidation, #1318 fake-success shim removal, #1355 multiplexer panes, #1282 v2 in-place fallback); open v2 queue #1247/#1255/#1335/#1336. Rejection stands on contract grounds (shim, not native — wrong contract for a clean V2 line). Promotion back to candidate requires a Cell-2c load test on our 2.0.15 trial under the Cell-2b protocol — NOT scheduled; opening it is a decision, not a default. **2026-09-29 user decision: slim held as BACKUP — re-evaluate if and only if self-build misses its acceptance gates (M2 E2E green, B1 kill-primary gate, M3 live probes, Admin native E2E). Trigger = a gate fails for reasons requiring server-side or upstream changes (i.e., not solvable in our code), or timeline overrun on any gate. Until then: no Cell-2c, no version tracking beyond the V2 watch.** |
 | D | Swap to a V2-native plugin | **Rejected** | Ecosystem scan: no mature OMO replacement (only ★1 POCs; high-star orchestration plugins stuck on V1). Usable fragments only (permissions, gateways) |
 | E | **Native + self-built thin mechanisms** | **Proposed** | Mechanism matrix: M1 self-config (~0 cost), M2 native agents (built, Cell 1), M3 enforcer self-build (spec ready, `trial/TODO-SPEC.md`), M4 routing/fallback plugin + Admin port (scoped, unstarted). OMO's effectively-used surface is C1–C4 + Admin API; ~40% is zombie (zero prod traffic) |
 
@@ -59,6 +59,6 @@
 
 | Item | Status | Date | By |
 |---|---|---|---|
-| D1 OMO route | PROPOSED | 2026-09-29 | Sisyphus (evidence pack attached) |
-| D2 Release lines | PROPOSED | 2026-09-29 | Sisyphus (evidence pack attached) |
+| D1 OMO route | **ACCEPTED** | 2026-09-29 | User sign-off ("Go"); includes slim-BACKUP condition as recorded |
+| D2 Release lines | **ACCEPTED** | 2026-09-29 | User sign-off ("Go") |
 | U1 chain-head canonical | **DECIDED 2026-09-29** | Sisyphus: **`opencode.json agent.*` is canonical for the effective head; `routing.json` chain is canonical for fallback order; `.md model:` is repo default (last resort).** Rationale: (1) OpenChamber `resolveDefaultSelection` reads `opencode.json` (C4 evidence) — display and session-start default must come from there; (2) Admin already writes `opencode.json` today (established path, no new read surface); (3) `.md` files are version-controlled project config — wrong layer for per-user runtime overrides, and trial workspace is scratch; (4) single-writer rule: Admin writes chain to `routing.json` AND mirrors head into `opencode.json agent.*`; the routing plugin owns the in-session fallback cursor. Precedence at session start: `opencode.json agent.*` (== chain head by construction) → `routing.json` fallback order → `.md model:`. Unblocks Admin implementation. |
