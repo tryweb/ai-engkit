@@ -90,6 +90,20 @@ describe("fetchSubagentNames V2-first with V1 fallback", () => {
     const lib = createAgentModelLiveClient({ exec });
     expect(await lib.fetchSubagentNames("pass")).toEqual([]);
   });
+
+  test("managed endpoint discovery uses $HOME form (tilde never expands after variable expansion)", async () => {
+    const calls: string[] = [];
+    const exec = async (command: string, _timeoutMs?: number) => {
+      calls.push(command);
+      return { exitCode: 2, stdout: "", stderr: "" };
+    };
+    const lib = createAgentModelLiveClient({ exec });
+    await lib.fetchSubagentNames("pass").catch(() => {});
+    const joined = calls.join("\n");
+    expect(joined).toContain("$HOME/.config/openchamber/managed-opencode");
+    expect(joined).not.toContain('"~/.config');
+    expect(joined).not.toContain(" ~/.config");
+  });
 });
 
 describe("fetchProviderSnapshot V2-first with split provider/model", () => {

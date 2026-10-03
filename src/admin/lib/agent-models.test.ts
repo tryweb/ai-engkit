@@ -121,7 +121,7 @@ describe("fetchResolvedAgentModels", () => {
     expect(script).toContain(`Authorization: Basic ${expectedAuth}`);
     expect(script).toContain("/agent");
     expect(script).toContain("for attempt in");
-    expect(script.indexOf("for attempt in")).toBeLessThan(script.indexOf("for f in ~/.config/openchamber/managed-opencode"));
+    expect(script.indexOf("for attempt in")).toBeLessThan(script.indexOf("for f in $HOME/.config/openchamber/managed-opencode"));
     expect(script).not.toContain(`[ -n "$PORT" ] || exit 3`);
   });
 
