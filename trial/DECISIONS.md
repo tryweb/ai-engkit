@@ -62,3 +62,10 @@
 | D1 OMO route | **ACCEPTED** | 2026-09-29 | User sign-off ("Go"); includes slim-BACKUP condition as recorded |
 | D2 Release lines | **ACCEPTED** | 2026-09-29 | User sign-off ("Go") |
 | U1 chain-head canonical | **DECIDED 2026-09-29** | Sisyphus: **`opencode.json agent.*` is canonical for the effective head; `routing.json` chain is canonical for fallback order; `.md model:` is repo default (last resort).** Rationale: (1) OpenChamber `resolveDefaultSelection` reads `opencode.json` (C4 evidence) — display and session-start default must come from there; (2) Admin already writes `opencode.json` today (established path, no new read surface); (3) `.md` files are version-controlled project config — wrong layer for per-user runtime overrides, and trial workspace is scratch; (4) single-writer rule: Admin writes chain to `routing.json` AND mirrors head into `opencode.json agent.*`; the routing plugin owns the in-session fallback cursor. Precedence at session start: `opencode.json agent.*` (== chain head by construction) → `routing.json` fallback order → `.md model:`. Unblocks Admin implementation. |
+
+## Backlog (accepted, NOT scheduled — no owner, no date)
+
+| ID | Item | Rationale | Unblocks |
+|---|---|---|---|
+| P1 | Product quota (v2): cost caps/quotas as an Admin feature (per-project limits, over-limit stop/notify) | OpenChamber 2.0 Stats already *displays* cost; control is a separate scope. Provider metering differs (subscription vs metered vs free); a half-accurate cap is worse than none. Independent of migration. | Nothing in migration. Needs own proposal (metering research + Admin UI + over-limit semantics) before any estimate. |
+| P2 | Trial quota policy | Moved to `trial/QUOTA-POLICY.md` — ACTIVE since 2026-10-03 (experiment spend only, NOT a product feature). | — |
