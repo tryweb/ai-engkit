@@ -25,6 +25,46 @@ function buildAgentFetchScript(auth: string): string {
   return buildManagedFetchScript(auth, "/agent");
 }
 
+function buildV2AgentFetchScript(auth: string): string {
+  return buildManagedFetchScript(auth, "/api/agent");
+}
+
+function parseV2SubagentNames(stdout: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !Array.isArray((parsed as Record<string, unknown>).data)) return null;
+  const arr = (parsed as Record<string, unknown>).data as unknown[];
+  const names: string[] = [];
+  for (const entry of arr) {
+    if (!isRecord(entry)) continue;
+    const rawId = typeof entry.id === "string" ? entry.id : typeof entry.name === "string" ? entry.name : null;
+    if (rawId === null || rawId.length === 0) continue;
+    if (entry.mode !== "subagent") continue;
+    names.push(rawId);
+  }
+  return names;
+}
+
+function parseV1SubagentNames(stdout: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const names = (parsed as unknown[])
+    .filter((agent): agent is Record<string, unknown> => isRecord(agent))
+    .filter((agent) => typeof agent.name === "string" && (agent.name as string).length > 0 && agent.mode === "subagent")
+    .map((agent) => agent.name as string)
+    .filter((name): name is string => typeof name === "string");
+  return names;
+}
+
 function buildRequestVerificationScript(auth: string, agent: string): string {
   const agentBase64 = Buffer.from(agent).toString("base64");
   return `for f in ${MANAGED_OPENCODE_DIR}/*.json; do
@@ -163,21 +203,18 @@ export function createAgentModelLiveClient(deps: Pick<AgentModelsDeps, "exec">) 
 
   async function fetchSubagentNames(password: string): Promise<readonly string[]> {
     const auth = Buffer.from(`opencode:${password}`).toString("base64");
+    const v2Result = await deps.exec(buildV2AgentFetchScript(auth), 90_000);
+    if (v2Result.exitCode === 0 && v2Result.stdout) {
+      const v2Names = parseV2SubagentNames(v2Result.stdout);
+      if (v2Names !== null) return v2Names;
+    }
+    // REMOVE WHEN: Admin E2E passes against a V2 managed server (knownAgents
+    // gate green via the V2 path alone). V1 fallback is transitional scaffolding,
+    // not a compatibility promise — see trial/DECISIONS.md Doctrine.
     const result = await deps.exec(buildAgentFetchScript(auth), 90_000);
     if (result.exitCode !== 0 || !result.stdout) return [];
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(result.stdout);
-    } catch {
-      return [];
-    }
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((agent): agent is Record<string, unknown> => isRecord(agent))
-      .filter((agent) => typeof agent.name === "string" && agent.name.length > 0 && agent.mode === "subagent")
-      .map((agent) => agent.name)
-      .filter((name): name is string => typeof name === "string");
+    const v1Names = parseV1SubagentNames(result.stdout);
+    return v1Names ?? [];
   }
 
   async function resolveRuntimeAgentName(password: string, agent: string): Promise<string> {
