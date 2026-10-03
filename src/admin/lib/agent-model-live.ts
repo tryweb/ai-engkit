@@ -29,6 +29,14 @@ function buildV2AgentFetchScript(auth: string): string {
   return buildManagedFetchScript(auth, "/api/agent");
 }
 
+function buildV2ProviderFetchScript(auth: string): string {
+  return buildManagedFetchScript(auth, "/api/provider");
+}
+
+function buildV2ModelFetchScript(auth: string): string {
+  return buildManagedFetchScript(auth, "/api/model");
+}
+
 function parseV2SubagentNames(stdout: string): readonly string[] | null {
   let parsed: unknown;
   try {
@@ -104,6 +112,45 @@ function buildRecentRequestScript(auth: string, agent: string): string {
   exit 2
 done
 exit 2`;
+}
+
+function parseV2Providers(stdout: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !Array.isArray((parsed as Record<string, unknown>).data)) return null;
+  const arr = (parsed as Record<string, unknown>).data as unknown[];
+  const ids: string[] = [];
+  for (const entry of arr) {
+    if (!isRecord(entry) || typeof entry.id !== "string" || entry.id.length === 0) continue;
+    ids.push(entry.id);
+  }
+  return ids;
+}
+
+function parseV2ModelCatalog(stdout: string): readonly string[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !Array.isArray((parsed as Record<string, unknown>).data)) return null;
+  const arr = (parsed as Record<string, unknown>).data as unknown[];
+  const catalog = new Set<string>();
+  for (const entry of arr) {
+    if (!isRecord(entry)) continue;
+    if (typeof entry.id !== "string" || entry.id.length === 0) continue;
+    if (typeof entry.providerID !== "string" || entry.providerID.length === 0) continue;
+    // Filter to active enabled models (V2 split semantics per SHIM-SPEC §5 M3)
+    if (entry.enabled === false) continue;
+    if (typeof entry.status === "string" && entry.status !== "active") continue;
+    catalog.add(`${entry.providerID}/${entry.id}`);
+  }
+  return [...catalog].sort();
 }
 
 function parseProviderSnapshot(stdout: string): { readonly connectedProviders: readonly string[]; readonly catalog: readonly string[] } | null {
@@ -237,6 +284,22 @@ export function createAgentModelLiveClient(deps: Pick<AgentModelsDeps, "exec">) 
   }> {
     if (password !== null) {
       const auth = Buffer.from(`opencode:${password}`).toString("base64");
+      const v2ProviderResult = await deps.exec(buildV2ProviderFetchScript(auth), 90_000);
+      const v2Providers = v2ProviderResult.exitCode === 0 ? parseV2Providers(v2ProviderResult.stdout) : null;
+      if (v2Providers !== null) {
+        const v2ModelResult = await deps.exec(buildV2ModelFetchScript(auth), 90_000);
+        const v2Catalog = v2ModelResult.exitCode === 0 ? parseV2ModelCatalog(v2ModelResult.stdout) : null;
+        if (v2Catalog !== null) {
+          const providerSet = new Set(v2Providers);
+          const filtered = v2Catalog.filter((entry) => providerSet.has(entry.split("/")[0] ?? ""));
+          return { connectedProviders: v2Providers, catalog: filtered, source: "live" };
+        }
+      }
+      if (v2ProviderResult.exitCode === 0) {
+        const v1FromV2 = parseProviderSnapshot(v2ProviderResult.stdout);
+        if (v1FromV2 !== null) return { ...v1FromV2, source: "live" };
+      }
+      // REMOVE WHEN: Admin catalog-409 gate green via V2 /api/provider + /api/model alone (verified live against OpenCode 2.0.15 ai-engkit-v2). V1 fallback is transitional scaffolding, not a compatibility promise — see trial/DECISIONS.md Doctrine.
       const liveResult = await deps.exec(buildManagedFetchScript(auth, "/provider"), 90_000);
       const liveSnapshot = liveResult.exitCode === 0 ? parseProviderSnapshot(liveResult.stdout) : null;
       if (liveSnapshot !== null) return { ...liveSnapshot, source: "live" };
