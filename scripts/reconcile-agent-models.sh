@@ -9,8 +9,6 @@ PROVIDER_WAIT_SECONDS="${PROVIDER_WAIT_SECONDS:-120}"
 
 log() { echo "[agent-models] $*" >&2; }
 
-
-
 basic_auth() {
   printf 'opencode:%s' "${OPENCODE_SERVER_PASSWORD:-}" | base64 -w0
 }
@@ -102,9 +100,10 @@ reconcile() {
       sleep 60
       wait_for_lifecycle "$PROVIDER_WAIT_SECONDS" 2>/dev/null || true
       wait_for_provider "$PROVIDER_WAIT_SECONDS" >/dev/null 2>/dev/null || true
-      if RECONCILE_STARTUP_NO_RESTART=1 bun run /opt/admin/lib/agent-model-reconcile-cli.ts; then
-        :
-      else
+      # NOTE (v2 line): no post-reconcile sync — native heads are written
+      # directly by Admin/routing (U1); the old sync_native_agent_overrides
+      # OMO→native copy was deleted with the OMO path.
+      if ! RECONCILE_STARTUP_NO_RESTART=1 bun run /opt/admin/lib/agent-model-reconcile-cli.ts; then
         log "deferred reconciliation also failed"
       fi
     ) &
