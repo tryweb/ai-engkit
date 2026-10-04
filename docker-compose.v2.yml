@@ -108,6 +108,10 @@ services:
       - ADMIN_PORT=8080
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-testadmin123}
       - AGENT_MODELS_DEBUG=1
+      # Same no-OMO gate as ai-dev: without this, Admin TS takes V1
+      # (omo.jsonc) paths even on the v2 line (verified live 2026-10-03:
+      # isNativeV2Enabled()=false → empty knownAgents → PUT 403).
+      - OMO_ENABLED=0
     restart: unless-stopped
 
 volumes:

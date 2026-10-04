@@ -32,6 +32,31 @@
 | M2 executor | longcat-2.5-preview-free | PASS | negligible |
 | M3 observe | longcat-2.5-preview-free | PASS w/ design gap | negligible |
 | Failed probes (dead keys/gate, pre-inference) | — | $0 (rejected pre-inference) | $0 |
-| **Total** | | | **<$0.001** |
+| **Total (round 1)** | | | **<$0.001** |
 
-Open threads for quota use (require explicit re-authorization per run): M3 idle→inject live E2E (needs todo-write path built first — code before quota), B1 proactive/full-scope probes, Admin E2E, executor-family write-capable tasks.
+## Appendix B — Tier-1 Authorized Burns, Round 2 (2026-10-03)
+
+Policy: user "Go" = standing Tier-1 authorization (free-tier, tiny prompts, 3-strike stop, running total tracked here).
+
+| Run | Command shape | Result | Spend |
+|---|---|---|---|
+| B1 regression re-run | `openrouter/auto` dead head, expect fallback | **PASS** — steer error + `fallback 0->1` + `switchModel ok` + `ok` reply (same signature as gate) | ~$0.0001 |
+| M2 librarian w/ free override | `--agent librarian --model longcat-free`, read oracle description | **PASS** — correct line returned; proves `--model` overrides dead gemma pins (convergence evidence: pins bypassable, not fatal) | negligible |
+| M2 executor (sisyphus-junior) | read-only instruction (prompt pointed outside scratch workspace — my bug) | **PASS w/ note** — dispatched, attempted read, correctly reported MISSING, zero writes | negligible |
+| M3 todo-write live | "record 2 pending todos via todo_write, then stop" | **PASS (write path)** — model invoked `todo_write` **through Code Mode** (`tools.todo_write({...})` inside `execute`, unprompted); KV `n=2 pending=2` logged; **idle→inject NOT observed** (see below) | negligible |
+
+M3 structural finding: `opencode run` CLI sessions **exit after reply — they never idle**. The enforcer's idle trigger cannot fire in one-shot mode by construction. Live idle→inject E2E needs a persistent (interactive/UI-managed) session left idle with incomplete KV todos — deferred to such a session, not to more CLI runs. Also seen: one mid-session `n=0 pending=0` write (unresolved minor: model-cleared or second call), and zero countdown lines to date.
+
+**Running total (rounds 1+2): <$0.002.** Open threads now needing quota: Admin E2E, executor write-capable tasks, B1 proactive/full probes, M3 idle E2E via persistent session.
+
+## Appendix C — Tier-1 Authorized Burns, Round 3 (2026-10-03)
+
+Policy: same standing Tier-1 (free-tier, tiny prompts). Cookie jars cleaned after use. Probe file removed after verification.
+
+| Run | Command shape | Result | Spend |
+|---|---|---|---|
+| Admin E2E (write→read-back) | `PUT /api/agent-models/{atlas,momus}` with valid chain | **BLOCKED, no spend** — both 403 `agent is not a configurable live subagent`. Root cause traced: `knownAgents` comes from `fetchSubagentNames` → V1 `GET /agent`, which returns SPA fallback HTML on V2 → parse fails → empty set. The native rewrite is proven as far as unit level goes (1183/0); the E2E path needs the Server API shim's agent-listing endpoint first (prep item 2, now precisely scoped — not just probe endpoints). Follow-on gates (catalog-409, model-400) would bite next; same shim dependency. | $0 |
+| Executor write (sisyphus-junior) | "create exactly one file E2E-PROBE.txt with exactly 'probe-ok'" | **PASS** — created exact bytes, nothing else touched (workspace otherwise unchanged), file removed after verification | negligible |
+| B1 proactive | — | **N/A by design** — proactive cost/capability routing is full-scope (unbuilt); MVP is failure-triggered only. No probe exists to run. | $0 |
+
+**Running total (rounds 1–3): <$0.002.** Quota-significant work remaining: M3 idle E2E via persistent session, Admin E2E past the shim, executor larger tasks — all gated on either code (shim) or explicit quota for longer sessions.
