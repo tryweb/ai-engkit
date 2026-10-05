@@ -4,7 +4,10 @@
 export interface EnforcerSessionState {
   lastInjectedAt?: number;
   allTodosCompletedAt?: number;
+  injectionCount?: number;
 }
+
+export const MAX_INJECTIONS_PER_SESSION = 10;
 
 interface Tracked {
   state: EnforcerSessionState;

@@ -1,7 +1,7 @@
 import { Plugin } from "@opencode/plugin";
 import { appendFileSync } from "node:fs";
-import { tool } from "@opencode-ai/plugin/tool";
 import { CONTINUATION_COOLDOWN_MS, CONTINUATION_PROMPT, DEFAULT_SKIP_AGENTS, PLUGIN_ID, TODO_PREFIX } from "./constants";
+import { MAX_INJECTIONS_PER_SESSION } from "./session-state";
 import { createTodoStore, normalizeTodosForStore } from "./todo-store";
 import type { V2TodoItem } from "./todo-store";
 import { getIncompleteCount } from "./todo";
@@ -26,55 +26,28 @@ function extractSessionID(data: Record<string, unknown>): string | undefined {
 
 function normalizeAgentKey(a: string): string { return a.toLowerCase().trim(); }
 
-// --- seen.ref shim (normalizeToolArgSchemas equivalent) ---
-// Patches each schema._zod.toJSONSchema to delegate via tool.schema.toJSONSchema(schema)
-// so host's Zod serialization (which threads `seen: {ref}`) does not throw `seen.ref`.
-function applyNormalizeShim(def: { args: Record<string, unknown> }): void {
-  for (const schema of Object.values(def.args as Record<string, Record<string, unknown>>)) {
-    const zodState = (schema as unknown as { _zod?: Record<string, unknown> })._zod;
-    if (!zodState) continue;
-    if (typeof zodState["toJSONSchema"] === "function") continue;
-    const original = zodState["toJSONSchema"] as (() => unknown) | undefined;
-    (zodState as Record<string, unknown>)["toJSONSchema"] = function (this: unknown): unknown {
-      const saved = zodState["toJSONSchema"];
-      try {
-        // Remove override so tool.schema.toJSONSchema sees the bare schema
-        delete zodState["toJSONSchema"];
-        const out = (tool.schema as unknown as { toJSONSchema: (s: unknown) => Record<string, unknown> }).toJSONSchema(schema);
-        const { $schema: _s, ...rest } = out as Record<string, unknown>;
-        return rest;
-      } finally {
-        if (original !== undefined) zodState["toJSONSchema"] = original;
-        else if (saved !== undefined) zodState["toJSONSchema"] = saved;
-        else delete zodState["toJSONSchema"];
-        // restore our override for next call
-        if (typeof zodState["toJSONSchema"] !== "function") {
-          (zodState as Record<string, unknown>)["toJSONSchema"] = (arguments.callee as unknown as () => unknown);
-        }
-      }
-    };
-  }
-}
-
-// Minimal fallback: if _zod patching mismatches runtime shape, we also provide a simpler
-// patch that directly mirrors the reference implementation (attachJsonSchemaOverride).
-function attachJsonSchemaOverrideSimple(schema: unknown): void {
-  const z = (schema as unknown as { _zod?: { toJSONSchema?: () => unknown } })._zod;
-  if (!z) return;
-  if (z.toJSONSchema) return;
-  const toolSchema = tool.schema as unknown as { toJSONSchema: (s: unknown) => Record<string, unknown> };
-  z.toJSONSchema = (): Record<string, unknown> => {
-    const orig = z.toJSONSchema;
-    delete z.toJSONSchema;
-    try {
-      const out = toolSchema.toJSONSchema(schema);
-      const { $schema: _schema, ...rest } = out as Record<string, unknown>;
-      return rest;
-    } finally {
-      if (orig) z.toJSONSchema = orig;
-    }
-  };
-}
+const TODO_WRITE_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    todos: {
+      type: "array",
+      minItems: 1,
+      maxItems: 50,
+      description: "Full replacement todo list for this session",
+      items: {
+        type: "object",
+        properties: {
+          content: { type: "string", minLength: 1, maxLength: 500, description: "Task description" },
+          status: { type: "string", enum: ["pending", "in_progress", "completed", "cancelled"], description: "Task status" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Optional priority" },
+          id: { type: "string", description: "Stable ID; if omitted, derived as content:priority for diffing" },
+        },
+        required: ["content", "status"],
+      },
+    },
+  },
+  required: ["todos"],
+};
 
 export const plugin = Plugin.define({
   id: PLUGIN_ID,
@@ -100,70 +73,36 @@ export const plugin = Plugin.define({
     const stateStore = createEnforcerStateStore();
     stateStore.startPrune();
 
-    // --- todo_write tool registration (Option B) ---
-    // Args built ONLY via tool.schema.* primitives; shim applied before add.
     if (todoStore && (ctx as unknown as { tool?: { transform: unknown } }).tool) {
       try {
-        const schemaStrings = tool.schema as unknown as {
-          string: () => { min: (n: number) => { max: (m: number) => { describe: (s: string) => unknown } } };
-          enum: (vals: string[]) => { describe: (s: string) => unknown; optional: () => unknown };
-          object: (shape: Record<string, unknown>) => unknown;
-          array: (inner: unknown) => { min: (n: number) => { max: (m: number) => { describe: (s: string) => unknown } } };
-        };
-        const todoItemSchema = (tool.schema as unknown as { object: (s: Record<string, unknown>) => unknown }).object({
-          content: (tool.schema as unknown as { string: () => { min: (n: number) => { max: (m: number) => { describe: (s: string) => unknown } } } }).string().min(1).max(500).describe("Task description"),
-          status: (tool.schema as unknown as { enum: (v: string[]) => { describe: (s: string) => unknown } }).enum(["pending", "in_progress", "completed", "cancelled"]).describe("Task status"),
-          priority: (tool.schema as unknown as { enum: (v: string[]) => { optional: () => { describe: (s: string) => unknown } } }).enum(["low", "medium", "high"]).optional().describe("Optional priority"),
-          id: (tool.schema as unknown as { string: () => { optional: () => { describe: (s: string) => unknown } } }).string().optional().describe("Stable ID; if omitted, derived as content:priority for diffing"),
-        });
-        const todosArraySchema = (tool.schema as unknown as { array: (i: unknown) => { min: (n: number) => { max: (m: number) => { describe: (s: string) => unknown } } } }).array(todoItemSchema).min(1).max(50).describe("Full replacement todo list for this session");
-
-        const toolDef: { description: string; args: Record<string, unknown>; execute: (args: unknown, context: unknown) => Promise<unknown> } = {
-          description:
-            "Manage the session todo list. Create or update tasks; the enforcer uses this list to continue work after idle. " +
-            "Statuses: pending (not started), in_progress (active), completed, cancelled. Use blocked/deleted semantics via pending/omit.",
-          args: {
-            todos: todosArraySchema,
-          },
-          execute: async (args: unknown, context: unknown) => {
-            // Accept both {todos:[...]} and bare array for robustness
-            let raw: V2TodoItem[];
-            if (Array.isArray(args)) raw = args as V2TodoItem[];
-            else {
-              const a = args as { todos?: V2TodoItem[] };
-              raw = Array.isArray(a.todos) ? a.todos : [];
-            }
-            const capped = raw.slice(0, 50);
-            const normalized = normalizeTodosForStore(capped as unknown as Parameters<typeof normalizeTodosForStore>[0]);
-            const ctxObj = context as { sessionID?: string };
-            const sid = ctxObj.sessionID;
-            if (!sid || typeof sid !== "string") throw new Error("missing sessionID");
-            await todoStore.set(sid, normalized);
-            const pending = getIncompleteCount(normalized);
-            log(`todo_write sid=${sid.slice(0, 8)} n=${normalized.length} pending=${pending}`);
-            const preview = normalized.slice(0, 5).map((t) => `[${t.status}] ${t.content.slice(0, 80)}`).join("\n");
-            const text = `stored ${normalized.length} tasks (${pending} pending/in_progress)\n${preview}`;
-            return { content: text } as unknown as string;
-          },
-        };
-
-        // Apply seen.ref shim before registration (exact fix for 14-tool failure)
-        for (const s of Object.values(toolDef.args as Record<string, unknown>)) {
-          attachJsonSchemaOverrideSimple(s);
-        }
-
-        const toolInstance = tool(toolDef as unknown as Parameters<typeof tool>[0]);
-        // Attach name explicitly if helper didn't set it (Tool.Info requires name)
-        const withName = { ...(toolInstance as Record<string, unknown>), name: "todo_write" } as unknown as Record<string, unknown>;
-        // Ensure _zod patch survived tool() wrapping — re-patch if needed via withName.input handling
-        // tool() sets input via tool.schema.object(args); we need to ensure that inner schemas are patched.
-        // Fallback: patch the constructed input's properties if present.
-        const maybeInput = withName["input"] as { _zod?: unknown; def?: unknown } | undefined;
-        // No-op if already patched; defensive.
-
         await (ctx as unknown as { tool: { transform: (fn: (e: { add: (i: unknown) => void }) => void) => Promise<void> } }).tool.transform(
           (editor) => {
-            editor.add(withName);
+            editor.add({
+              name: "todo_write",
+              description:
+                "Manage the session todo list. Create or update tasks; the enforcer uses this list to continue work after idle. " +
+                "Statuses: pending (not started), in_progress (active), completed, cancelled. Use blocked/deleted semantics via pending/omit.",
+              input: TODO_WRITE_INPUT_SCHEMA,
+              execute: async (args: unknown, context: unknown) => {
+                let raw: V2TodoItem[];
+                if (Array.isArray(args)) raw = args as V2TodoItem[];
+                else {
+                  const a = args as { todos?: V2TodoItem[] };
+                  raw = Array.isArray(a.todos) ? a.todos : [];
+                }
+                const capped = raw.slice(0, 50);
+                const normalized = normalizeTodosForStore(capped as unknown as Parameters<typeof normalizeTodosForStore>[0]);
+                const ctxObj = context as { sessionID?: string };
+                const sid = ctxObj.sessionID;
+                if (!sid || typeof sid !== "string") throw new Error("missing sessionID");
+                await todoStore.set(sid, normalized);
+                const pending = getIncompleteCount(normalized);
+                log(`todo_write sid=${sid.slice(0, 8)} n=${normalized.length} pending=${pending}`);
+                const preview = normalized.slice(0, 5).map((t) => `[${t.status}] ${t.content.slice(0, 80)}`).join("\n");
+                const text = `stored ${normalized.length} tasks (${pending} pending/in_progress)\n${preview}`;
+                return { content: text };
+              },
+            });
           }
         );
         log("todo_write tool registered");
@@ -276,6 +215,11 @@ export const plugin = Plugin.define({
       const remainingList = incompleteTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n");
       const text = `${CONTINUATION_PROMPT}\n\n${statusLine}\n\nRemaining tasks:\n${remainingList}`;
 
+      const gate = stateStore.getState(sessionID);
+      if ((gate.injectionCount ?? 0) >= MAX_INJECTIONS_PER_SESSION) {
+        log(`skip max-injections sid=${sessionID.slice(0, 8)} count=${gate.injectionCount}`);
+        return;
+      }
       // Dispatch via V2 session.prompt with delivery:"queue" (MVP: no dedupe beyond cooldown, no tools forwarding per Q8)
       try {
         const promptApi = ctx.session as unknown as { prompt: (arg: unknown) => Promise<void> };
@@ -293,7 +237,8 @@ export const plugin = Plugin.define({
         }
         const s = stateStore.getState(sessionID);
         s.lastInjectedAt = Date.now();
-        log(`injected sid=${sessionID.slice(0, 8)} incomplete=${incompleteCount} total=${total} agent=${agent ?? "-"} len=${text.length}`);
+        s.injectionCount = (s.injectionCount ?? 0) + 1;
+        log(`injected sid=${sessionID.slice(0, 8)} incomplete=${incompleteCount} total=${total} agent=${agent ?? "-"} len=${text.length} n=${s.injectionCount}`);
       } catch (e) {
         log(`inject failed sid=${sessionID.slice(0, 8)} err=${String(e).slice(0, 300)}`);
         // do not update lastInjectedAt on failure — allows retry after cooldown
@@ -306,15 +251,18 @@ export const plugin = Plugin.define({
     (async () => {
       try {
         const stream = (ctx.event as unknown as { subscribe: (opts: { signal: AbortSignal }) => AsyncIterable<{ type: string; data: Record<string, unknown> }> }).subscribe({ signal: ac.signal });
-        log("event loop started, subscribing to session.idle + session.status + session.error/session.execution.failed + session.deleted");
+        log("event loop started, subscribing to session.idle + session.status + session.error/session.execution.failed/succeeded + session.deleted");
         for await (const ev of stream) {
           const t = ev.type as string;
           const data = (ev as unknown as { data: Record<string, unknown> }).data ?? (ev as unknown as { properties: Record<string, unknown> }).properties ?? {};
           // keep log bounded
-          if (t === "session.idle" || t === "session.status" || t === "session.error" || t === "session.execution.failed" || t === "session.deleted") {
+          if (t === "session.idle" || t === "session.status" || t === "session.error" || t === "session.execution.failed" || t === "session.execution.succeeded" || t === "session.deleted") {
             log(`event type=${t} sid=${String((data as Record<string, unknown>)["sessionID"] ?? (data as Record<string, unknown>)["id"] ?? "").slice(0, 8)}`);
           }
-          if (t === "session.idle") {
+          if (t === "session.execution.succeeded") {
+            const sid = extractSessionID(data as Record<string, unknown>);
+            if (sid) await handleIdle(sid);
+          } else if (t === "session.idle") {
             const sid = extractSessionID(data as Record<string, unknown>);
             if (sid) await handleIdle(sid);
           } else if (t === "session.status") {

@@ -31,18 +31,6 @@ declare module "@opencode/plugin" {
   export const Plugin: typeof Plugin;
 }
 
-declare module "@opencode-ai/plugin/tool" {
-  export const tool: ((input: { description: string; args: Record<string, unknown>; execute: (args: unknown, ctx: unknown) => Promise<unknown> }) => unknown) & {
-    schema: {
-      string: () => unknown;
-      enum: (vals: string[]) => unknown;
-      object: (shape: Record<string, unknown>) => unknown;
-      array: (inner: unknown) => unknown;
-      toJSONSchema: (schema: unknown) => unknown;
-    };
-  };
-}
-
 // Minimal node:fs surface used for file-logging (runtime is bun-based; full
 // @types/node intentionally not added for a trial-scoped plugin).
 declare module "node:fs" {
