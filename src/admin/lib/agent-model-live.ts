@@ -79,7 +79,7 @@ export type VerificationModelRef = {
   readonly variant?: string;
 };
 
-function buildRequestVerificationScript(auth: string, agent: string, model?: VerificationModelRef): string {
+export function buildRequestVerificationScript(auth: string, agent: string, model?: VerificationModelRef): string {
   const agentBase64 = Buffer.from(agent).toString("base64");
   const providerBase64 = model ? Buffer.from(model.providerID).toString("base64") : "";
   const modelBase64 = model ? Buffer.from(model.modelID).toString("base64") : "";

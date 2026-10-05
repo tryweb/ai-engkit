@@ -9,6 +9,7 @@
 
 import { createHash } from "node:crypto";
 import type { AgentModelsDeps } from "./agent-model-types";
+import { buildRequestVerificationScript as buildV2ProbeScript } from "./agent-model-live";
 
 export type ProbeStatus = "healthy" | "retired" | "wrong_endpoint" | "unavailable" | "retryable" | "unreachable" | "mismatch" | "quota_exceeded" | "timeout" | "aborted";
 
@@ -62,6 +63,10 @@ export function hasRetiredMarker(message: string): boolean {
 
 export function hasToolUnsupportedMarker(message: string): boolean {
   return /tool.*not.?supported|unsupported.*tool|function.*not.*supported/i.test(message);
+}
+
+export function hasAuthMarker(message: string): boolean {
+  return /401|403|unauthorized|forbidden|invalid.*(?:api.?key|credential)|authentication.*failed/i.test(message);
 }
 
 export function sanitizeProbeReason(reason: string): string {
@@ -247,6 +252,9 @@ export function classifyProbeResponse(stdout: string, providerID: string, modelI
     if (hasQuotaMarker(stdout)) {
       return { status: "quota_exceeded", reason };
     }
+    if (hasAuthMarker(stdout)) {
+      return { status: "unavailable", reason };
+    }
     if (hasTimeoutMarker(stdout)) {
       return { status: "timeout", reason };
     }
@@ -268,6 +276,9 @@ export function classifyProbeResponse(stdout: string, providerID: string, modelI
   const serialized = JSON.stringify(parsed);
   if (hasQuotaMarker(serialized)) {
     return { status: "quota_exceeded", reason: sanitizeProbeReason(serialized) };
+  }
+  if (hasAuthMarker(serialized)) {
+    return { status: "unavailable", reason: sanitizeProbeReason(serialized) };
   }
   if (hasTimeoutMarker(serialized)) {
     return { status: "timeout", reason: sanitizeProbeReason(serialized) };
@@ -306,6 +317,9 @@ export function classifyProbeResponse(stdout: string, providerID: string, modelI
     if (hasQuotaMarker(rawMessage)) {
       return { status: "quota_exceeded", reason: message };
     }
+    if (hasAuthMarker(rawMessage)) {
+      return { status: "unavailable", reason: message };
+    }
     if (hasTimeoutMarker(rawMessage)) {
       return { status: "timeout", reason: message };
     }
@@ -321,7 +335,7 @@ export function classifyProbeResponse(stdout: string, providerID: string, modelI
     if (hasToolUnsupportedMarker(rawMessage)) {
       return { status: "unavailable", reason: message };
     }
-    if (/404|not.found|unavailable|does not exist/i.test(rawMessage)) {
+    if (/401|403|unauthorized|forbidden|not.found|unavailable|does not exist/i.test(rawMessage)) {
       return { status: "unavailable", reason: message };
     }
     return { status: "retryable", reason: message };
@@ -408,16 +422,20 @@ export async function probeModel(
   }
   const auth = Buffer.from(`opencode:${password}`).toString("base64");
 
-  const result = await deps.exec(buildProbeScript(auth, providerID, modelID), 90_000);
+  const isV2 = process.env.OMO_ENABLED === "0";
+  const script = isV2 ? buildV2ProbeScript(auth, "title", { providerID, modelID }) : buildProbeScript(auth, providerID, modelID);
+  const result = await deps.exec(script, 90_000);
   let probe: ProbeResult;
   if (result.exitCode !== 0 || !result.stdout.trim()) {
     const diagnostic = sanitizeProbeReason(result.stderr.trim() || result.stdout.trim());
-    if (hasTimeoutMarker(result.stderr) || hasTimeoutMarker(result.stdout)) {
+    if (hasQuotaMarker(result.stderr) || hasQuotaMarker(result.stdout)) {
+      probe = { status: "quota_exceeded", reason: diagnostic || "provider rate limited the probe" };
+    } else if (hasAuthMarker(result.stderr) || hasAuthMarker(result.stdout)) {
+      probe = { status: "unavailable", reason: diagnostic || "provider authentication failed" };
+    } else if (hasTimeoutMarker(result.stderr) || hasTimeoutMarker(result.stdout)) {
       probe = { status: "timeout", reason: diagnostic || "managed opencode probe timed out" };
     } else if (hasAbortedMarker(result.stderr) || hasAbortedMarker(result.stdout)) {
       probe = { status: "aborted", reason: diagnostic || "managed opencode probe was aborted" };
-    } else if (hasQuotaMarker(result.stderr) || hasQuotaMarker(result.stdout)) {
-      probe = { status: "quota_exceeded", reason: diagnostic || "provider rate limited the probe" };
     } else {
       probe = { status: "unreachable", reason: diagnostic || "managed opencode server unreachable" };
     }
