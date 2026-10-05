@@ -62,8 +62,10 @@ function validateBatchBody(body: unknown): { changes: Array<{ agent: string; ent
     const entries = normalizeChainEntries(change);
     if (entries === null) return `agent ${agent}: entries must be an array of { model, variant? }`;
     if (isV2()) {
-      const err = validateAgentChain(entries as unknown);
-      if (err !== null) return `agent ${agent}: ${err}`;
+      if (entries.length !== 0) {
+        const err = validateAgentChain(entries);
+        if (err !== null) return `agent ${agent}: ${err}`;
+      }
     } else {
       const error = validateFallbackModels({ entries });
       if (error !== null) return `agent ${agent}: ${error}`;
@@ -225,7 +227,7 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       }
     }
 
-    if (parsed.verification === "inference") {
+    if (parsed.verification === "inference" && !isV2()) {
       for (const change of parsed.changes) {
         for (const entry of change.entries) {
           const ref = parseModelReference(entry.model);
@@ -268,8 +270,10 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       }
       if (ent !== null) {
         if (isV2()) {
-          const e = validateAgentChain(ent as unknown);
-          if (e !== null) return c.json({ error: e }, 400);
+          if (ent.length !== 0) {
+            const e = validateAgentChain(ent);
+            if (e !== null) return c.json({ error: e }, 400);
+          }
         } else {
           const error = validateFallbackModels({ entries: ent });
           if (error !== null) return c.json({ error }, 400);
@@ -308,7 +312,7 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       return c.json({ error: "model is not available in the current environment catalog" }, 400);
     }
 
-    if (verification === "inference") {
+    if (verification === "inference" && !isV2()) {
       for (const entry of entries) {
         const ref = parseModelReference(entry.model);
         if (ref === null) continue;

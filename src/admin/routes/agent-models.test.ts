@@ -31,6 +31,36 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
     cleanup();
   });
 
+  test("clears a V2 routing chain with an empty entries array", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const routing = '{"version":1,"chains":{"librarian":{"chain":[{"model":"opencode/big-pickle"}]}}}';
+      const { deps, calls, cleanup } = stubDeps([
+        { match: /jq -c '\.' ~\/\.config\/opencode\/routing\.json/, stdout: routing },
+        { match: /\/api\/provider/, stdout: '{"data":[{"id":"opencode"}]}' },
+        { match: /\/api\/model/, stdout: '{"data":[{"id":"big-pickle","providerID":"opencode","enabled":true,"status":"active"}]}' },
+        { match: /\/api\/agent/, stdout: '{"data":[{"id":"librarian","model":{"id":"big-pickle","providerID":"opencode"}}]}' },
+        { match: /\/api\/session/, stdout: "[]" },
+        { match: /mktemp \/tmp\/routing\.json\.snapshot/, stdout: "/tmp/routing.json.snapshot-test" },
+        { match: /del\(\.chains\[\$agent\]\)/, stdout: "" },
+        { match: /rm -f/, stdout: "" },
+      ]);
+      const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models/librarian", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries: [] }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ ok: true, status: "cleared" });
+      expect(calls.some((command) => command.includes("del(.chains[$agent])"))).toBe(true);
+      cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
   test("rejects invalid entries with 400 and does not write", async () => {
     const { deps, calls, cleanup } = stubDeps([]);
     const app = createAgentModelsRoutes(deps);
@@ -338,6 +368,36 @@ describe("createAgentModelsRoutes — verification mode", () => {
     expect(await res.json()).toEqual({ results: {} });
     expect(calls).toEqual([]);
     cleanup();
+  });
+
+  test("clears a V2 routing chain in a batch with an empty entries array", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const routing = '{"version":1,"chains":{"plan":{"chain":[{"model":"opencode/big-pickle"}]}}}';
+      const { deps, calls, cleanup } = stubDeps([
+        { match: /jq -c '\.' ~\/\.config\/opencode\/routing\.json/, stdout: routing },
+        { match: /\/api\/provider/, stdout: '{"data":[{"id":"opencode"}]}' },
+        { match: /\/api\/model/, stdout: '{"data":[{"id":"big-pickle","providerID":"opencode","enabled":true,"status":"active"}]}' },
+        { match: /\/api\/agent/, stdout: '{"data":[{"id":"plan","model":{"id":"big-pickle","providerID":"opencode"}}]}' },
+        { match: /\/api\/session/, stdout: "[]" },
+        { match: /mktemp \/tmp\/routing\.json\.snapshot/, stdout: "/tmp/routing.json.snapshot-test" },
+        { match: /del\(\.chains\[\$agent\]\)/, stdout: "" },
+        { match: /rm -f/, stdout: "" },
+      ]);
+      const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes: [{ agent: "plan", entries: [] }] }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ results: { plan: { ok: true, status: "cleared" } } });
+      expect(calls.some((command) => command.includes("del(.chains[$agent])"))).toBe(true);
+      cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 });
 
