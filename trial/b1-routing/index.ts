@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { loadRoutingConfigFromPaths, parseModelString, getMaxFallbackAttempts } from "./routing-config";
 import type { RoutingConfig, ChainEntry } from "./routing-config";
 import { createRoutingStateStore } from "./routing-state";
+import { resolveHeadEnforcement } from "./head-enforcement";
 import { isTokenLimitError, isUnrecoverableRequestError, isRetryableModelError, toErrorInfo, getStatusCode } from "./error-classifier";
 
 const PLUGIN_ID = "b1-routing";
@@ -137,6 +138,41 @@ export const plugin = Plugin.define({
           const ag = (promptObj as Record<string, unknown> | undefined)?.["agent"] ?? rec["agent"];
           if (typeof ag === "string" && ag.length > 0) lastPromptAgent[sid] = ag;
           log(`captured prompt for ${sid.slice(0,8)} len=${text.length} agent=${String(ag ?? "-")}`);
+        }
+
+        try {
+          let agentForHead = lastPromptAgent[sid] || "";
+          if (!agentForHead) {
+            const maybeAg = (promptObj as Record<string, unknown> | undefined)?.["agent"] ?? rec["agent"];
+            if (typeof maybeAg === "string" && maybeAg.length > 0) agentForHead = maybeAg;
+          }
+          if (!agentForHead) {
+            try {
+              const info = await ctx.session.get({ sessionID: sid });
+              const unwrapped = (info as Record<string, unknown>)["data"] as Record<string, unknown> | undefined;
+              const src = unwrapped ?? (info as Record<string, unknown>);
+              if (src && typeof src["agent"] === "string") agentForHead = src["agent"] as string;
+            } catch (error) {
+              log(`head session lookup failed sid=${sid.slice(0,8)} err=${String(error)}`);
+            }
+          }
+          if (!agentForHead) agentForHead = "build";
+          const headState = store.get(sid);
+          const decision = resolveHeadEnforcement(routingConfig, agentForHead, headState);
+          if (decision) {
+            try {
+              await ctx.session.switchModel({ sessionID: sid, model: decision.payload });
+              log(`head enforce sid=${sid.slice(0,8)} agent=${agentForHead} -> ${decision.parsed.providerID}/${decision.parsed.modelID} variant=${decision.entry.variant ?? "-"}`);
+            } catch (e) {
+              log(`head switchModel failed sid=${sid.slice(0,8)} err=${String(e)}`);
+            }
+          } else {
+            if (headState && (headState.cursor > 0 || headState.attemptCount > 0)) {
+              log(`head skip in-flight fallback sid=${sid.slice(0,8)} cursor=${headState.cursor} attempt=${headState.attemptCount}`);
+            }
+          }
+        } catch (e) {
+          log(`head enforcement error sid=${sid.slice(0,8)} err=${String(e)}`);
         }
       });
       log("prompt hook registered");
@@ -304,7 +340,11 @@ export const plugin = Plugin.define({
             const sid = extractSessionID(d);
             if (sid) log(`session.created sid=${sid.slice(0,8)}`);
           } else if (t === "session.idle") {
-            // placeholder for proactive routing (MVP no-op)
+            const sid = extractSessionID(ev.data);
+            if (sid) {
+              store.delete(sid);
+              log(`fallback state cleared sid=${sid.slice(0,8)}`);
+            }
           }
         }
       } catch (e) {
