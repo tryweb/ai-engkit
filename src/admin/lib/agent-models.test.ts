@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createAgentModelsLib, type AgentModelsDeps } from "./agent-models";
+import { collectAgentModelState, createAgentModelsLib, type AgentModelStateSource, type AgentModelsDeps } from "./agent-models";
 import type { ExecResult as DockerExecResult } from "./docker";
+import { NATIVE12_AGENTS, type ResolvedModel } from "./agent-model-types";
 
 type ExecResponse = { match?: RegExp; stdout: string; stderr?: string; exitCode?: number };
 const SNAPSHOT_FILE = "/tmp/omo.jsonc.snapshot-test";
@@ -129,6 +130,54 @@ describe("fetchResolvedAgentModels", () => {
     const { deps } = stubDeps([{ stdout: "", exitCode: 2 }]);
     const lib = createAgentModelsLib(deps);
     expect(await lib.fetchResolvedAgentModels("testpass")).toBeNull();
+  });
+
+  test("Given empty then populated V2 agent data, When fetching resolved models Then retries and returns the map", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "kimi-k3", providerID: "opencode-go" } }],
+      });
+      const { deps, calls } = stubDeps([
+        { stdout: '{"data":[]}' },
+        { stdout: '{"data":[]}' },
+        { stdout: agentsJson },
+      ]);
+      const map = await createAgentModelsLib(deps).fetchResolvedAgentModels("testpass");
+      expect(map?.get("librarian")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
+      expect(calls).toHaveLength(3);
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 agent data, When fetching resolved models Then scopes the request to the managed workspace", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [
+          { id: "plan", name: "Plan", mode: "primary", model: { id: "kimi-k3", providerID: "opencode-go" } },
+          { id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } },
+          { id: "build", name: "Build", mode: "primary" },
+        ],
+      });
+      const { deps, calls } = stubDeps([{ stdout: agentsJson }]);
+
+      const map = await createAgentModelsLib(deps).fetchResolvedAgentModels("testpass");
+
+      expect(map?.get("plan")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
+      expect(map?.get("librarian")).toEqual({ modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" });
+      expect(map?.has("build")).toBe(false);
+      expect(calls[0]).toContain("/api/agent?location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 });
 
@@ -644,6 +693,296 @@ describe("applyAndVerify", () => {
     } finally {
       Object.defineProperty(globalThis, "setTimeout", { value: originalSetTimeout, writable: true, configurable: true });
       Object.defineProperty(globalThis, "clearTimeout", { value: originalClearTimeout, writable: true, configurable: true });
+    }
+  });
+});
+
+describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
+  test("Given V2 routing with stale internal chains, When collecting state Then returns only the NATIVE12 roster", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const fakeLib: AgentModelStateSource = {
+        readRoutingConfig: async () => ({
+          version: 1 as const,
+          chains: {
+            build: { chain: [{ model: "opencode/big-pickle" }] },
+            general: { chain: [{ model: "opencode/big-pickle" }] },
+          },
+        }),
+        readAgentModelsConfig: async () => ({}),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
+        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
+        fetchSubagentNames: async () => ["general", "explore"],
+        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
+      };
+      const state = await collectAgentModelState(fakeLib, "testpass");
+      const expected = [...NATIVE12_AGENTS].sort();
+      const actual = state.agents.map((entry) => entry.name);
+      expect(actual).toEqual(expected);
+      expect(actual).toHaveLength(12);
+      expect(actual).not.toContain("build");
+      expect(actual).not.toContain("compaction");
+      expect(actual).not.toContain("title");
+      expect(actual).not.toContain("summary");
+      expect(actual).not.toContain("general");
+      for (const entry of state.agents) {
+        expect(entry.configured).toEqual([]);
+        expect(entry.invalid).toBe(false);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given OMO_ENABLED=0 with a configured chain for plan, When collecting state Then preserves that chain while still exposing NATIVE12", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const fakeLib: AgentModelStateSource = {
+        readRoutingConfig: async () => ({
+          version: 1 as const,
+          chains: { plan: { chain: [{ model: "openai/gpt-5.6-luna-fast" }] } },
+        }),
+        readAgentModelsConfig: async () => ({}),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
+        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
+        fetchSubagentNames: async () => ["general", "explore"],
+        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
+      };
+      const state = await collectAgentModelState(fakeLib, "testpass");
+      const expected = [...NATIVE12_AGENTS].sort();
+      expect(state.agents.map((e) => e.name)).toEqual(expected);
+      const plan = state.agents.find((e) => e.name === "plan");
+      expect(plan?.configured).toEqual([{ model: "openai/gpt-5.6-luna-fast" }]);
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+});
+
+describe("V2 readiness honors canonical JSON head without Markdown comparison", () => {
+  test("Given V2 librarian configured gemma-4-31b and Markdown reports gemma-4-26b, When verifying readiness Then verified (canonical) not runtime_mismatch", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
+      });
+      const ctx = stubDeps([
+        { stdout: SNAPSHOT_FILE },
+        { stdout: "" },
+        {
+          match: /\/api\/provider/,
+          stdout: JSON.stringify({ data: [{ id: "openrouter" }] }),
+        },
+        {
+          match: /\/api\/model/,
+          stdout: JSON.stringify({ data: [
+            { id: "google/gemma-4-31b-a4b", providerID: "openrouter", enabled: true, status: "active" },
+            { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter", enabled: true, status: "active" },
+          ] }),
+        },
+        { match: /\/api\/agent/, stdout: agentsJson },
+      ]);
+      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
+        "librarian",
+        [{ model: "openrouter/google/gemma-4-31b-a4b" }],
+        "readiness",
+      );
+      expect(result.ok).toBe(true);
+      expect(result.status).toBe("verified");
+      if (!result.ok) throw new Error(`expected verified result, got ${result.status}`);
+      expect(result.resolved).not.toBeNull();
+      ctx.cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 readiness with disconnected provider Then unverified", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
+      });
+      const ctx = stubDeps([
+        { stdout: SNAPSHOT_FILE },
+        { stdout: "" },
+        {
+          match: /\/api\/provider/,
+          stdout: JSON.stringify({ data: [{ id: "openai" }] }),
+        },
+        {
+          match: /\/api\/model/,
+          stdout: JSON.stringify({ data: [{ id: "gpt-4o", providerID: "openai", enabled: true, status: "active" }] }),
+        },
+        { match: /\/api\/agent/, stdout: agentsJson },
+      ]);
+      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
+        "librarian",
+        [{ model: "openrouter/google/gemma-4-31b-a4b" }],
+        "readiness",
+      );
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("unverified");
+      if (!("error" in result)) throw new Error(`expected unverified result, got ${result.status}`);
+      expect(result.error).toContain("not connected");
+      ctx.cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 collect state with configured head differing from Markdown Then awaiting_request not runtime_mismatch and keeps static metadata", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const fakeLib: AgentModelStateSource = {
+        readRoutingConfig: async () => ({
+          version: 1 as const,
+          chains: { librarian: { chain: [{ model: "openrouter/google/gemma-4-31b-a4b" }] } },
+        }),
+        readAgentModelsConfig: async () => ({}),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>([
+          ["librarian", { modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }],
+        ]),
+        fetchProviderSnapshot: async () => ({ connectedProviders: ["openrouter"], catalog: ["openrouter/google/gemma-4-31b-a4b", "openrouter/google/gemma-4-26b-a4b-it:free"] }),
+        fetchSubagentNames: async () => [],
+        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
+      };
+      const state = await collectAgentModelState(fakeLib, "testpass");
+      const librarian = state.agents.find((e) => e.name === "librarian");
+      expect(librarian).toBeDefined();
+      expect(librarian?.configured).toEqual([{ model: "openrouter/google/gemma-4-31b-a4b" }]);
+      expect(librarian?.resolved).toEqual({ modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" });
+      expect(librarian?.providerConnected).toBe(true);
+      expect(librarian?.effectiveness).toBe("awaiting_request");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 inference with matching pinned request, When verifying Then verified with requestVerified", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
+      });
+      const requestJson = JSON.stringify({
+        data: [{ type: "assistant", agent: "librarian", model: { id: "longcat-2.5-preview-free", providerID: "opencode" }, error: null }],
+      });
+      const ctx = stubDeps([
+        { stdout: SNAPSHOT_FILE },
+        { stdout: "" },
+        {
+          match: /\/api\/provider/,
+          stdout: JSON.stringify({ data: [{ id: "opencode" }] }),
+        },
+        {
+          match: /\/api\/model/,
+          stdout: JSON.stringify({ data: [
+            { id: "longcat-2.5-preview-free", providerID: "opencode", enabled: true, status: "active" },
+          ] }),
+        },
+        { match: /\/api\/agent/, stdout: agentsJson },
+        { match: /\/api\/session/, stdout: requestJson },
+      ]);
+      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
+        "librarian",
+        [{ model: "opencode/longcat-2.5-preview-free" }],
+        "inference",
+      );
+      expect(result.ok).toBe(true);
+      expect(result.status).toBe("verified");
+      if (!result.ok) throw new Error(`expected verified result, got ${result.status}`);
+      expect(result.requestVerified).toEqual({ modelID: "longcat-2.5-preview-free", providerID: "opencode" });
+      const requestCall = ctx.calls.find((command) => command.includes("/api/session/${SESSION}/prompt"));
+      expect(requestCall).toBeDefined();
+      expect(requestCall).toContain(Buffer.from("longcat-2.5-preview-free").toString("base64"));
+      expect(requestCall).toContain(Buffer.from("opencode").toString("base64"));
+      ctx.cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 inference with mismatched request model, When verifying Then runtime_mismatch", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const agentsJson = JSON.stringify({
+        location: { directory: "/home/devuser/workspace" },
+        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
+      });
+      const requestJson = JSON.stringify({
+        data: [{ type: "assistant", agent: "librarian", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }, error: null }],
+      });
+      const ctx = stubDeps([
+        { stdout: SNAPSHOT_FILE },
+        { stdout: "" },
+        {
+          match: /\/api\/provider/,
+          stdout: JSON.stringify({ data: [{ id: "opencode" }] }),
+        },
+        {
+          match: /\/api\/model/,
+          stdout: JSON.stringify({ data: [
+            { id: "longcat-2.5-preview-free", providerID: "opencode", enabled: true, status: "active" },
+          ] }),
+        },
+        { match: /\/api\/agent/, stdout: agentsJson },
+        { match: /\/api\/session/, stdout: requestJson },
+      ]);
+      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
+        "librarian",
+        [{ model: "opencode/longcat-2.5-preview-free" }],
+        "inference",
+      );
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("runtime_mismatch");
+      if (!("error" in result)) throw new Error(`expected mismatch error, got ${result.status}`);
+      expect(result.error).toContain("did not match request-verified");
+      ctx.cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V1 with same Markdown difference Then runtime_mismatch is preserved", async () => {
+    const previous = process.env.OMO_ENABLED;
+    delete process.env.OMO_ENABLED;
+    try {
+      const fakeLib: AgentModelStateSource = {
+        readRoutingConfig: async () => ({ version: 1, chains: {} }),
+        readAgentModelsConfig: async () => ({
+          librarian: { model: "openrouter/google/gemma-4-31b-a4b", models: [{ model: "openrouter/google/gemma-4-31b-a4b" }], invalid: false },
+        }),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>([
+          ["librarian", { modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }],
+        ]),
+        fetchProviderSnapshot: async () => ({ connectedProviders: ["openrouter"], catalog: ["openrouter/google/gemma-4-31b-a4b"] }),
+        fetchSubagentNames: async () => ["librarian"],
+        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
+      };
+      const state = await collectAgentModelState(fakeLib, "testpass");
+      const librarian = state.agents.find((e) => e.name === "librarian");
+      expect(librarian?.effectiveness).toBe("runtime_mismatch");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
     }
   });
 });
