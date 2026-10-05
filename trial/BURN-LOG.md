@@ -138,4 +138,13 @@ Findings (all $0, all recorded from live logs):
 
 M3 persistent-continuation release evidence is now COMPLETE. Total session spend: $0 (free-tier model).
 
+### Round 5 — Providers V2 management + policy startup reconciliation (2026-10-05)
+
+- Admin Providers page: V2 unsupported gate replaced with integrations-backed management (231 integrations listed, key add/note/activate/delete, per-method OAuth start/status/cancel, wellknown + custom provider create/delete). Live on `ai-engkit-admin-v2:8082`: `anthropic` temp credential add → note rename → second key → activate switch (confirm dialog) → both deleted, registry back to 0; existing `google/nvidia/opencode-go/openrouter` connections untouched. `opencode-go` card shows 2 trial credentials with correct active selection.
+- Custom provider roundtrip: `parent-qa-custom` (`@ai-sdk/openai-compatible` translated to `@opencode/ai/providers/openai-compatible`) appeared in runtime `/api/provider` + `/api/model` (`qa-coder`), then deleted via API — config and runtime both clean (pre-existing `tmp-test` example.com fixture left untouched as not ours).
+- Policy API live: `GET /api/agent-models/policy` → `free` default; `PUT economy` → reflected; `PUT free` → restored; sidecar file written with correct `$HOME` expansion, then removed to restore absent-file default state.
+- Startup reconciliation live (fresh `ai-dev` boot): all 12 agents `keep_valid_configured`, `changed=0 applied=0 failed=0` — policy-selected heads preserved, no destructive overwrite. Startup readiness now probes V2 `/api/provider` first (previously legacy-only caused skip-after-timeout).
+- `bun test src/admin`: 1258 pass, 2 skip, 0 fail. `test-v2-trial.sh cell1`: all 6 checks pass. Trial config/state restored (librarian unconfigured, no temp credentials/providers/policy file).
+- Known remaining gaps (not release-blocking, documented): OAuth `complete` needs real IdP login; B1 fallback replay default text; M3 injection check-then-set race; `tmp-test` fixture predates this round.
+
 **Running total (rounds 1–4): <$0.002.** Trial config restored (librarian unconfigured); trial test sessions created today deleted.
