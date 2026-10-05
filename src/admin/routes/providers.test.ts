@@ -24,7 +24,7 @@ async function fixture(seed: string, restartFails = true): Promise<RegistryFixtu
   const restartExit = restartFails ? 1 : 0;
   await writeFile(dockerPath, `#!/bin/sh
 case "$1" in
-  exec) printf '%s\n' "$FAKE_AUTH_JSON"; [ -z "$FAKE_EXEC_CALLS" ] || printf '%s\n' "$*" >> "$FAKE_EXEC_CALLS"; exit 0 ;;
+  exec) case "$*" in *"opencode --version"*) printf '%s\n' 'opencode v1.18.32'; exit 0 ;; esac; printf '%s\n' "$FAKE_AUTH_JSON"; [ -z "$FAKE_EXEC_CALLS" ] || printf '%s\n' "$*" >> "$FAKE_EXEC_CALLS"; exit 0 ;;
   inspect|restart) echo 'restart failed' >&2; exit ${restartExit} ;;
   ps) exit 0 ;;
   *) exit 1 ;;
