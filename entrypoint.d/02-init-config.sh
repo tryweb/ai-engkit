@@ -251,6 +251,10 @@ fi
 # --- OpenCode config ---
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
+V2_MANAGED_CONFIG="{}"
+if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f "$OPCODE_CONFIG_FILE" ]; then
+  V2_MANAGED_CONFIG=$(jq '{agent: (.agent // {}), providers: (.providers // {})}' "$OPCODE_CONFIG_FILE")
+fi
 
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency.
 # Trial Cell 1 (no-OMO baseline): OMO_ENABLED=0 emits a plugin-free config and
@@ -321,6 +325,9 @@ OPCODE_CONFIG=$(jq -n \
     }
   }')
 echo "Updating opencode.json with plugins: $PLUGINS"
+if [ "${OMO_ENABLED:-1}" = "0" ]; then
+  OPCODE_CONFIG=$(printf '%s' "$OPCODE_CONFIG" | jq --argjson managed "$V2_MANAGED_CONFIG" '. * $managed')
+fi
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
 # --- Custom provider injection (from OPENCODE_PROVIDER env var) ---
