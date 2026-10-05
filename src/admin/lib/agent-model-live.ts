@@ -26,7 +26,7 @@ function buildAgentFetchScript(auth: string): string {
 }
 
 function buildV2AgentFetchScript(auth: string): string {
-  return buildManagedFetchScript(auth, "/api/agent");
+  return buildManagedFetchScript(auth, "/api/agent?location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace");
 }
 
 function buildV2ProviderFetchScript(auth: string): string {
@@ -73,8 +73,43 @@ function parseV1SubagentNames(stdout: string): readonly string[] | null {
   return names;
 }
 
-function buildRequestVerificationScript(auth: string, agent: string): string {
+export type VerificationModelRef = {
+  readonly providerID: string;
+  readonly modelID: string;
+  readonly variant?: string;
+};
+
+function buildRequestVerificationScript(auth: string, agent: string, model?: VerificationModelRef): string {
   const agentBase64 = Buffer.from(agent).toString("base64");
+  const providerBase64 = model ? Buffer.from(model.providerID).toString("base64") : "";
+  const modelBase64 = model ? Buffer.from(model.modelID).toString("base64") : "";
+  const variantBase64 = model?.variant ? Buffer.from(model.variant).toString("base64") : "";
+  if (process.env.OMO_ENABLED === "0") {
+    return `for f in ${MANAGED_OPENCODE_DIR}/*.json; do
+  [ -f "\$f" ] || continue
+  pid=\$(jq -r '.pid' "\$f" 2>/dev/null)
+  port=\$(jq -r '.port' "\$f" 2>/dev/null)
+  [ -n "\$pid" ] && [ -n "\$port" ] || continue
+  kill -0 "\$pid" 2>/dev/null || continue
+  BASE="http://127.0.0.1:\${port}"
+  AGENT=\$(printf '%s' '${agentBase64}' | base64 -d)
+  if [ -n '${providerBase64}' ] && [ -n '${modelBase64}' ]; then
+    MODEL_JSON=\$(jq -nc --arg p "\$(printf '%s' '${providerBase64}' | base64 -d)" --arg m "\$(printf '%s' '${modelBase64}' | base64 -d)" --arg v "\$(printf '%s' '${variantBase64}' | base64 -d)" '{providerID:\$p,id:\$m} + (if \$v == "" then {} else {variant:\$v} end)')
+  else
+    MODEL_JSON=null
+  fi
+  SESSION=\$(jq -nc --arg agent "\$AGENT" --arg dir "/home/devuser/workspace" --argjson model "\$MODEL_JSON" '{agent:\$agent,location:{directory:\$dir}} + (if \$model == null then {} else {model:\$model} end)' | curl -fsS -m 5 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session" -d @- 2>/dev/null | jq -r '.data.id // .id // empty')
+  [ -n "\$SESSION" ] || exit 2
+  curl -fsS -m 10 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session/\${SESSION}/prompt" -d "\$(jq -nc '{text:"Reply with exactly OK."}')" >/dev/null 2>&1 || true
+  curl -fsS -m 45 -H "Authorization: Basic ${auth}" -X POST "\$BASE/api/experimental/session/\${SESSION}/wait" >/dev/null 2>&1 || true
+  MSG=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session/\${SESSION}/message" 2>/dev/null || true)
+  OUT=\$(printf '%s' "\$MSG" | jq -c --arg agent "\$AGENT" '[.data[]? | select(.type=="assistant" and .agent==\$agent and (.error==null) and (.model.id | type=="string") and (.model.providerID | type=="string"))] | last | if .==null then empty else {info:{role:"assistant",modelID:.model.id,providerID:.model.providerID}} end' 2>/dev/null || true)
+  curl -fsS -m 5 -H "Authorization: Basic ${auth}" -X DELETE "\$BASE/api/session/\${SESSION}" >/dev/null 2>&1 || true
+  printf '%s' "\$OUT"
+  exit 0
+done
+exit 2`;
+  }
   return `for f in ${MANAGED_OPENCODE_DIR}/*.json; do
   [ -f "\$f" ] || continue
   pid=\$(jq -r '.pid' "\$f" 2>/dev/null)
@@ -95,6 +130,25 @@ exit 2`;
 
 function buildRecentRequestScript(auth: string, agent: string): string {
   const agentBase64 = Buffer.from(agent).toString("base64");
+  if (process.env.OMO_ENABLED === "0") {
+    return `for f in ${MANAGED_OPENCODE_DIR}/*.json; do
+  [ -f "\$f" ] || continue
+  pid=\$(jq -r '.pid' "\$f" 2>/dev/null)
+  port=\$(jq -r '.port' "\$f" 2>/dev/null)
+  [ -n "\$pid" ] && [ -n "\$port" ] || continue
+  kill -0 "\$pid" 2>/dev/null || continue
+  BASE="http://127.0.0.1:\${port}"
+  AGENT=\$(printf '%s' '${agentBase64}' | base64 -d)
+  SESSIONS=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session?limit=100&location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace" 2>/dev/null || true)
+  for SESSION in \$(printf '%s' "\$SESSIONS" | jq -r '(.data // .)[] | .id' 2>/dev/null); do
+    OUT=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session/\${SESSION}/message" 2>/dev/null || true)
+    MODEL=\$(printf '%s' "\$OUT" | jq -c --arg agent "\$AGENT" '[.data[]? | select(.type=="assistant" and .agent==\$agent and (.error==null) and (.model.id | type=="string") and (.model.providerID | type=="string")) | {info:{role:"assistant",modelID:.model.id,providerID:.model.providerID}}] | last // empty' 2>/dev/null || true)
+    [ -n "\$MODEL" ] && { printf '%s' "\$MODEL"; exit 0; }
+  done
+  exit 2
+done
+exit 2`;
+  }
   return `for f in ${MANAGED_OPENCODE_DIR}/*.json; do
   [ -f "\$f" ] || continue
   pid=\$(jq -r '.pid' "\$f" 2>/dev/null)
@@ -180,11 +234,28 @@ function parseSuccessfulRequestModel(stdout: string): ResolvedModel | null {
   } catch {
     return null;
   }
-  if (!isRecord(parsed) || !isRecord(parsed.info)) return null;
-  const info = parsed.info;
-  if (info.role !== "assistant" || typeof info.modelID !== "string" || typeof info.providerID !== "string") return null;
-  if (info.error !== undefined) return null;
-  return { modelID: info.modelID, providerID: info.providerID };
+
+  function extract(value: unknown): ResolvedModel | null {
+    if (!isRecord(value)) return null;
+    if (isRecord(value.info)) {
+      const info = value.info;
+      if (info.role === "assistant" && typeof info.modelID === "string" && typeof info.providerID === "string" && (info.error === undefined || info.error === null)) {
+        return { modelID: info.modelID, providerID: info.providerID };
+      }
+    }
+    if (value.type !== "assistant" || !isRecord(value.model) || (value.error !== undefined && value.error !== null)) return null;
+    if (typeof value.model.id !== "string" || typeof value.model.providerID !== "string") return null;
+    return { modelID: value.model.id, providerID: value.model.providerID };
+  }
+
+  const data = isRecord(parsed) ? parsed.data : undefined;
+  const candidates = Array.isArray(data) ? data : [data, parsed];
+  let resolved: ResolvedModel | null = null;
+  for (const candidate of candidates) {
+    const current = extract(candidate);
+    if (current !== null) resolved = current;
+  }
+  return resolved;
 }
 
 function parseProviderCatalog(stdout: string): readonly string[] {
@@ -225,7 +296,8 @@ export function createAgentModelLiveClient(deps: Pick<AgentModelsDeps, "exec">) 
   const history = createAgentModelHistoryClient(deps);
   async function fetchResolvedAgentModels(password: string): Promise<Map<string, ResolvedModel> | null> {
     const auth = Buffer.from(`opencode:${password}`).toString("base64");
-    const result = await deps.exec(buildAgentFetchScript(auth), 90_000);
+    const v2 = process.env.OMO_ENABLED === "0";
+    const result = await deps.exec(v2 ? buildV2AgentFetchScript(auth) : buildAgentFetchScript(auth), 90_000);
     if (result.exitCode !== 0 || !result.stdout) return null;
 
     let parsed: unknown;
@@ -233,6 +305,42 @@ export function createAgentModelLiveClient(deps: Pick<AgentModelsDeps, "exec">) 
       parsed = JSON.parse(result.stdout);
     } catch {
       return null;
+    }
+    if (v2) {
+      if (!isRecord(parsed) || !Array.isArray(parsed.data)) return null;
+      const models = new Map<string, ResolvedModel>();
+      for (const agent of parsed.data) {
+        if (!isRecord(agent) || typeof agent.id !== "string" || !isRecord(agent.model)) continue;
+        if (typeof agent.model.id !== "string" || typeof agent.model.providerID !== "string") continue;
+        models.set(agent.id, {
+          modelID: agent.model.id,
+          providerID: agent.model.providerID,
+        });
+      }
+      if (models.size > 0) return models;
+      for (let attempt = 1; attempt < 5; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const retryResult = await deps.exec(buildV2AgentFetchScript(auth), 90_000);
+        if (retryResult.exitCode !== 0 || !retryResult.stdout) continue;
+        let retryParsed: unknown;
+        try {
+          retryParsed = JSON.parse(retryResult.stdout);
+        } catch {
+          continue;
+        }
+        if (!isRecord(retryParsed) || !Array.isArray(retryParsed.data)) continue;
+        const retryModels = new Map<string, ResolvedModel>();
+        for (const agent of retryParsed.data) {
+          if (!isRecord(agent) || typeof agent.id !== "string" || !isRecord(agent.model)) continue;
+          if (typeof agent.model.id !== "string" || typeof agent.model.providerID !== "string") continue;
+          retryModels.set(agent.id, {
+            modelID: agent.model.id,
+            providerID: agent.model.providerID,
+          });
+        }
+        if (retryModels.size > 0) return retryModels;
+      }
+      return models;
     }
     if (!Array.isArray(parsed)) return null;
 
@@ -317,14 +425,14 @@ export function createAgentModelLiveClient(deps: Pick<AgentModelsDeps, "exec">) 
     return { connectedProviders, catalog: parseCachedCatalog(cacheResult.stdout, connectedProviders), source: "cache" };
   }
 
-  async function fetchSuccessfulRequestModel(password: string, agent: string): Promise<ResolvedModel | null> {
+  async function fetchSuccessfulRequestModel(password: string, agent: string, model?: VerificationModelRef): Promise<ResolvedModel | null> {
     const auth = Buffer.from(`opencode:${password}`).toString("base64");
-    const result = await deps.exec(buildRequestVerificationScript(auth, agent), 90_000);
+    const result = await deps.exec(buildRequestVerificationScript(auth, agent, model), 90_000);
     const parsed = result.exitCode === 0 ? parseSuccessfulRequestModel(result.stdout) : null;
     if (parsed !== null) return parsed;
     const runtimeAgent = await resolveRuntimeAgentName(password, agent);
     if (runtimeAgent === agent) return null;
-    const retry = await deps.exec(buildRequestVerificationScript(auth, runtimeAgent), 90_000);
+    const retry = await deps.exec(buildRequestVerificationScript(auth, runtimeAgent, model), 90_000);
     return retry.exitCode === 0 ? parseSuccessfulRequestModel(retry.stdout) : null;
   }
 

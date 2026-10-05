@@ -219,3 +219,163 @@ describe("fetchProviderSnapshot V2-first with split provider/model", () => {
     expect(snap.catalog).toEqual([]);
   });
 });
+
+describe("fetchSuccessfulRequestModel V2 gated on OMO_ENABLED=0", () => {
+  test("V2: under OMO_ENABLED=0 creates session via /api/session, prompts via /api/session/{id}/prompt, deletes via /api/session/{id} with location scoping and jq-safe JSON", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const calls: string[] = [];
+      const exec = async (command: string, _timeoutMs?: number) => {
+        calls.push(command);
+        expect(command).toContain("/api/session");
+        expect(command).toContain("/api/session/${SESSION}/prompt");
+        expect(command).toContain("/api/experimental/session/${SESSION}/wait");
+        expect(command).toContain("/api/session/${SESSION}/message");
+        expect(command).toContain("location");
+        expect(command).toContain("/home/devuser/workspace");
+        expect(command).toContain("jq -nc");
+        expect(command).toContain("prompt");
+        expect(command).toContain('{text:"Reply with exactly OK."}');
+        expect(command).toContain('.agent==$agent');
+        expect(command).toContain(".data.id");
+        expect(command).toContain('DELETE "$BASE/api/session/${SESSION}"');
+        expect(command).toContain('"$BASE/api/session"');
+        return { exitCode: 0, stdout: JSON.stringify({ data: { type: "assistant", model: { id: "kimi-k3", providerID: "opencode-go" } } }), stderr: "" };
+      };
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchSuccessfulRequestModel("pass", "explore");
+      expect(result).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
+      expect(calls).toHaveLength(1);
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 request script pins the head model at session create when a model ref is provided", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const calls: string[] = [];
+      const exec = async (command: string, _timeoutMs?: number) => {
+        calls.push(command);
+        return { exitCode: 0, stdout: JSON.stringify({ data: { type: "assistant", agent: "explore", model: { id: "kimi-k3", providerID: "opencode-go" }, error: null } }), stderr: "" };
+      };
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchSuccessfulRequestModel("pass", "explore", { providerID: "opencode-go", modelID: "kimi-k3" });
+      expect(result).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain(Buffer.from("kimi-k3").toString("base64"));
+      expect(calls[0]).toContain(Buffer.from("opencode-go").toString("base64"));
+      expect(calls[0]).toContain("--argjson model");
+      expect(calls[0]).toContain("/api/experimental/session/${SESSION}/wait");
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 parser: handles wrapped {data,...} with model.id/providerID fields", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const wrapped = JSON.stringify({ data: { type: "assistant", model: { id: "longcat-2.5-preview-free", providerID: "opencode-go" } } });
+      const exec = async () => ({ exitCode: 0, stdout: wrapped, stderr: "" });
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchSuccessfulRequestModel("pass", "librarian");
+      expect(result).toEqual({ modelID: "longcat-2.5-preview-free", providerID: "opencode-go" });
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 parser: handles message list envelope {data:[...]} with last assistant model", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const listWrapped = JSON.stringify({
+        data: [
+          { type: "user", text: "hi" },
+          { type: "assistant", model: { id: "gpt-4o", providerID: "openai" }, error: null },
+        ],
+        cursor: { next: null, previous: null },
+      });
+      const exec2 = async () => ({ exitCode: 0, stdout: listWrapped, stderr: "" });
+      const lib = createAgentModelLiveClient({ exec: exec2 });
+      const result = await lib.fetchSuccessfulRequestModel("pass", "explore");
+      expect(result).toEqual({ modelID: "gpt-4o", providerID: "openai" });
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V1 remains byte-behavior unchanged when OMO_ENABLED !=0", async () => {
+    const prev = process.env.OMO_ENABLED;
+    delete process.env.OMO_ENABLED;
+    try {
+      const exec = async (command: string, _timeoutMs?: number) => {
+        expect(command).toContain('jq -nc --arg agent "$AGENT"');
+        expect(command).toContain('{agent:$agent,parts:[{type:"text",text:"Reply with exactly OK."}]}');
+        expect(command).toContain('"$BASE/session"');
+        expect(command).not.toContain("/api/session");
+        return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
+      };
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchSuccessfulRequestModel("pass", "explore");
+      expect(result).toEqual({ modelID: "mimo-v2.5-free", providerID: "opencode" });
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+});
+
+describe("buildRecentRequestScript V2 wrapped envelopes", () => {
+  test("V2 recent lookup uses wrapped V2 session/message responses with location scoping", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const calls: string[] = [];
+      const exec = async (command: string, _timeoutMs?: number) => {
+        calls.push(command);
+        expect(command).toContain("/api/session");
+        expect(command).toContain("location");
+        expect(command).toContain(".data");
+        expect(command).toContain('/api/session/${SESSION}/message');
+        expect(command).toContain('.agent==$agent');
+        expect(command).toContain("model.id");
+        expect(command).toContain("providerID");
+        return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "kimi-k3", providerID: "opencode-go" } }), stderr: "" };
+      };
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchRecentSuccessfulRequestModel("pass", "explore");
+      expect(calls[0]).toContain("/api/session");
+      expect(result).not.toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V1 recent lookup unchanged when OMO_ENABLED !=0 uses bare /session", async () => {
+    const prev = process.env.OMO_ENABLED;
+    delete process.env.OMO_ENABLED;
+    try {
+      const exec = async (command: string, _timeoutMs?: number) => {
+        expect(command).toContain('"$BASE/session?limit=100"');
+        expect(command).toContain('"$BASE/session/${SESSION}/message"');
+        expect(command).not.toContain("/api/session");
+        return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
+      };
+      const lib = createAgentModelLiveClient({ exec });
+      const result = await lib.fetchRecentSuccessfulRequestModel("pass", "explore");
+      expect(result).toEqual({ modelID: "mimo-v2.5-free", providerID: "opencode" });
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+});
