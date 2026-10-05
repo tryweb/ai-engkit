@@ -18,6 +18,7 @@ export interface ProviderMeta {
   authStoreKeyPresent: boolean;
   oauthManaged: boolean;
   oauthConnected: boolean;
+  oauthMethods?: Array<{ id: string; label: string }>;
   virtual: boolean;
   registry: {
     keyCount: number;

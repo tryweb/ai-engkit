@@ -18,6 +18,7 @@ interface ProviderMetaView {
   authStoreKeyPresent: boolean;
   oauthManaged: boolean;
   oauthConnected: boolean;
+  oauthMethods?: Array<{ id: string; label: string }>;
   virtual: boolean;
   registry: {
     keyCount: number;
@@ -105,14 +106,33 @@ function getProviderKeyPlaceholder(name: string): string {
 export function ProvidersPage({
   meta,
   entries,
+  isOpenCodeV2 = false,
+  v2Mode = false,
 }: {
   meta: ProvidersMeta;
   entries: Record<string, unknown>;
+  isOpenCodeV2?: boolean;
+  v2Mode?: boolean;
 }) {
+  if (isOpenCodeV2 && !v2Mode) {
+    return (
+      <Layout title="Providers">
+        <h2 class="mb-4">Providers</h2>
+        <div class="card v2-provider-unsupported" role="status">
+          <span class="badge badge-warning">Temporarily unsupported</span>
+          <p style="margin: 12px 0 0;">
+            Provider management in this Admin page is for OpenCode 1.x. OpenCode 2 stores credentials through its Integrations API, so changes here would not connect providers. Connect providers in OpenChamber’s built-in provider settings instead. Admin support will return when the v2 release is ready.
+          </p>
+        </div>
+      </Layout>
+    );
+  }
+
   const boot = html`<script>
     window.providersBoot = {
       entries: ${raw(JSON.stringify(entries).replace(/</g, "\\u003c"))},
-      meta: ${raw(JSON.stringify(meta.providers).replace(/</g, "\\u003c"))}
+      meta: ${raw(JSON.stringify(meta.providers).replace(/</g, "\\u003c"))},
+      v2Mode: ${v2Mode ? "true" : "false"}
     };
   </script>`;
 
@@ -122,6 +142,19 @@ export function ProvidersPage({
 
   return (
     <Layout title="Providers">
+      {v2Mode && (
+        <div class="card" style="margin-bottom:16px; border-left: 4px solid var(--color-accent);">
+          <span class="badge badge-success">OpenCode v2</span>
+          <span class="text-sm text-muted" style="margin-left:8px;">Credentials are managed via the Integrations API (directory: /home/devuser). API key connect, credential activation/removal, OAuth, and wellknown custom providers are active.</span>
+        </div>
+      )}
+      {v2Mode && (
+        <div class="flex" style="margin-bottom:16px; gap:8px; align-items:center;">
+          <input type="text" id="provider-search" placeholder="Search providers (e.g. anthropic, openai)..." oninput="filterProviders(this.value)" style="flex:1; max-width:420px;" />
+          <span class="text-sm text-muted" id="provider-search-count"></span>
+          <button type="button" class="btn-outline" onclick="document.getElementById('provider-search').value=''; filterProviders('')">Clear</button>
+        </div>
+      )}
       <div class="flex items-center justify-between mb-4">
         <h2>Providers</h2>
         <div class="flex" style="gap: 8px;">
@@ -130,9 +163,9 @@ export function ProvidersPage({
         </div>
       </div>
       <p class="text-sm text-muted" style="margin-bottom: 16px;">
-        Providers are defined in <code>OPENCODE_PROVIDER</code> and injected into <code>opencode.json</code> on startup.
-        Key-managed providers (Opencode Go, OpenAI API, Google, Nvidia API, OpenRouter) keep their API keys in the provider-keys registry instead;
-        the registry-selected key is written to the opencode auth store and applied on restart.
+        {v2Mode
+          ? "Custom providers are stored in opencode.json. Credentials and active connections are managed through OpenCode's Integrations API."
+          : "Providers are defined in OPENCODE_PROVIDER and injected into opencode.json on startup. Registry-selected API keys are applied to the auth store on restart."}
       </p>
 
       {!meta.invalid && totalCount > 0 && (
@@ -166,6 +199,7 @@ export function ProvidersPage({
       )}
       {meta.providers.map((p) => {
         const isConnected = p.authStoreKeyPresent || p.oauthConnected || p.hasApiKey;
+        const oauthMethods = p.oauthMethods ?? [{ id: "chatgpt-browser", label: "ChatGPT Pro/Plus" }];
         return (
           <div key={p.name} class={`card secret-card provider-card ${isConnected ? "provider-card--active" : ""}`} data-provider={p.name} style="margin-bottom: 16px;">
             <div class="provider-card__header flex" style="justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -185,7 +219,7 @@ export function ProvidersPage({
                 {p.keyManagement ? (
                   <span class={`status-pill ${isConnected ? "status-pill--success" : "status-pill--neutral"}`}>
                     <span class="status-dot">●</span>
-                    {p.oauthConnected ? "OAuth connected" : p.authStoreKeyPresent ? "auth store: API key present" : "auth store: no API key"}
+                      {p.oauthConnected ? "OAuth connected" : p.authStoreKeyPresent ? "API key connected" : "No API key connected"}
                   </span>
                 ) : (
                   <span class={`status-pill ${p.hasApiKey ? "status-pill--success" : "status-pill--neutral"}`}>
@@ -220,7 +254,7 @@ export function ProvidersPage({
                 </div>
                 {p.registry.keys.length === 0 && (
                   <div class="text-muted" style="font-size: 13px; margin-bottom: 8px;">
-                    No keys stored. Add one below, or import the key already present in the auth store.
+                    {v2Mode ? "No API key credentials connected. Add one below." : "No keys stored. Add one below, or import the key already present in the auth store."}
                   </div>
                 )}
                 {p.registry.keys.map((k) => (
@@ -249,7 +283,7 @@ export function ProvidersPage({
                       <button type="button" class="btn-outline" onclick={`saveKeyNote('${p.name}', '${k.id}', this)`}>
                         Save
                       </button>
-                      <button type="button" class="btn-outline" onclick={`toggleKeyValue('${p.name}', '${k.id}', this)`}>Show</button>
+                      {!v2Mode && <button type="button" class="btn-outline" onclick={`toggleKeyValue('${p.name}', '${k.id}', this)`}>Show</button>}
                       <button type="button" class="btn-outline" onclick={`deleteKey('${p.name}', '${k.id}')`}>Delete</button>
                     </span>
                   </div>
@@ -263,7 +297,7 @@ export function ProvidersPage({
                   />
                   <input type="text" class="key-add-note-input" placeholder="Note (optional)" />
                   <button type="button" class="btn-outline" onclick={`addKey('${p.name}')`}>Add key</button>
-                  {p.registry.keyCount === 0 && (
+                  {!v2Mode && p.registry.keyCount === 0 && (
                     <button type="button" class="btn-outline" onclick={`importKey('${p.name}')`}>Import from auth store</button>
                   )}
                 </div>
@@ -273,38 +307,43 @@ export function ProvidersPage({
               <div class="oauth-panel" data-provider={p.name} data-connected={p.oauthConnected ? "true" : "false"}>
                 <div class="flex" style="justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
                   <div>
-                    <b style="font-size: 14px;">ChatGPT Pro/Plus</b>
+                    <b style="font-size: 14px;">OAuth</b>
                     {p.oauthConnected && <span class="badge badge-success" style="margin-left: 8px;">OAuth connected</span>}
+                    <span class="text-sm text-muted" style="margin-left: 8px;">{oauthMethods.map((m) => m.label).join(", ")}</span>
                   </div>
                   {p.oauthConnected ? (
-                    <button type="button" class="btn-danger" onclick={`disconnectOAuth('${p.name}')`}>Disconnect ChatGPT</button>
+                    <button type="button" class="btn-danger" onclick={`disconnectOAuth('${p.name}')`}>Disconnect OAuth</button>
                   ) : (
-                    <button type="button" class="btn" onclick={`startOAuth('${p.name}')`}>Connect ChatGPT Pro/Plus</button>
+                    <div class="flex" style="gap: 8px; flex-wrap: wrap;">
+                      {oauthMethods.map((m) => (
+                        <button key={m.id} type="button" class="btn" onclick={v2Mode ? `startOAuth('${p.name}', '${m.id}')` : `startOAuth('${p.name}')`}>{m.label}</button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <p class="text-sm text-muted">
                   {p.oauthConnected
-                    ? "OpenAI models run through your ChatGPT Pro/Plus subscription — no API key needed."
-                    : `Prerequisites: an active ChatGPT Pro or Plus subscription. You will be shown a code and asked to enter it at ${OPENAI_VERIFY_URL}. Connecting replaces any stored OpenAI API key credential.`}
+                    ? "Models run through your OAuth subscription — no API key needed."
+                    : `OAuth methods: ${oauthMethods.map((m) => m.label).join(", ")}. Connecting may replace existing credentials.`}
                 </p>
-                <div id="oauth-flow" class="oauth-flow" hidden>
+                <div id={"oauth-flow-" + p.name} class="oauth-flow" data-oauth-flow={p.name} hidden>
                   <div class="oauth-code-display">
                     <span class="text-muted text-sm">Code</span>
-                    <div class="oauth-code" id="oauth-user-code"></div>
+                    <div class="oauth-code" id={"oauth-user-code-" + p.name}></div>
                   </div>
                   <p class="text-sm" style="margin: 8px 0;">
-                    Open <a id="oauth-verify-link" href={OPENAI_VERIFY_URL} target="_blank" rel="noopener noreferrer">auth.openai.com/codex/device</a> and enter the code above.
+                    Open <a id={"oauth-verify-link-" + p.name} href={OPENAI_VERIFY_URL} target="_blank" rel="noopener noreferrer">auth.openai.com/codex/device</a> and enter the code above.
                   </p>
-                  <div id="oauth-poll-status" class="text-sm text-muted" style="margin-bottom: 8px;"></div>
+                  <div id={"oauth-poll-status-" + p.name} class="text-sm text-muted" style="margin-bottom: 8px;"></div>
                   <div class="flex" style="gap: 8px;">
-                    <button type="button" class="btn-outline" onclick="cancelOAuth()">Cancel</button>
-                    <button type="button" id="oauth-apply" class="btn" onclick="applyOAuth()" hidden>Finish connecting</button>
+                    <button type="button" class="btn-outline" onclick={"cancelOAuth('" + p.name + "')"}>Cancel</button>
+                    <button type="button" id={"oauth-apply-" + p.name} class="btn" onclick={"applyOAuth('" + p.name + "')"} hidden>Finish connecting</button>
                   </div>
                 </div>
               </div>
             )}
             <div class="flex" style="justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span class="badge badge-warning">Restart required to apply</span>
+              <span class={`badge ${v2Mode ? "badge-success" : "badge-warning"}`}>{v2Mode ? "Changes apply through OpenCode" : "Restart required to apply"}</span>
               <div class="flex" style="gap: 8px;">
                 {!p.virtual && <button type="button" class="btn-outline" onclick={`openProviderEdit('${p.name}')`}>Edit</button>}
                 {!p.virtual && <button type="button" class="btn-outline" onclick={`deleteProvider('${p.name}')`}>Delete</button>}
@@ -405,6 +444,23 @@ export function ProvidersPage({
         </div>
       </div>
       {boot}
+      {v2Mode && html`<script>
+        function filterProviders(q) {
+          var term = (q||'').toLowerCase().trim();
+          var cards = document.querySelectorAll('.provider-card');
+          var visible = 0;
+          cards.forEach(function(card){
+            var name = (card.getAttribute('data-provider')||'').toLowerCase();
+            var label = (card.querySelector('h3')?.textContent||'').toLowerCase();
+            var show = !term || name.includes(term) || label.includes(term);
+            card.style.display = show ? '' : 'none';
+            if(show) visible++;
+          });
+          var cnt = document.getElementById('provider-search-count');
+          if(cnt) cnt.textContent = visible + ' / ' + cards.length + ' shown';
+        }
+        document.addEventListener('DOMContentLoaded', function(){ filterProviders(''); });
+      </script>`}
       <script src="/static/providers-page.js"></script>
     </Layout>
   );

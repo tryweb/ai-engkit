@@ -1,10 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { ProvidersPage } from "./providers";
 
-function render(providers: Array<Record<string, unknown>>, entries: Record<string, unknown> = {}): string {
+function render(
+  providers: Array<Record<string, unknown>>,
+  entries: Record<string, unknown> = {},
+  isOpenCodeV2 = false,
+): string {
   return String(ProvidersPage({
     meta: { invalid: false, error: null, providers: providers as never },
     entries,
+    isOpenCodeV2,
   }));
 }
 
@@ -64,6 +69,16 @@ describe("ProvidersPage", () => {
     expect(html).toContain('class="key-add-row"');
     expect(html).toContain("Opencode Go keys in registry (1)");
     expect(html).toContain("Selected in registry");
+  });
+
+  it("renders v2 as unsupported and hides provider-management controls", () => {
+    const html = render([opencodeGo, openai], {}, true);
+    expect(html).toContain("v2-provider-unsupported");
+    expect(html).not.toContain('onclick="openAddProvider()');
+    expect(html).not.toContain('onclick="restartAiDev()');
+    expect(html).not.toContain("key-add-row");
+    expect(html).not.toContain("oauth-panel");
+    expect(html).not.toContain("providers-page.js");
   });
 
   it("injects boot data and loads the external page script", () => {
@@ -172,5 +187,33 @@ describe("ProvidersPage", () => {
     expect(html).toContain('data-provider="nvidia"');
     expect(html).toContain('fill="#76B900"');
     expect(html).toContain("M8.939 8.922");
+  });
+
+  it("renders v2Mode banner with search and keeps management controls", () => {
+    const html = String(ProvidersPage({
+      meta: { invalid: false, error: null, providers: [opencodeGo, openai] as never },
+      entries: {},
+      isOpenCodeV2: false,
+      v2Mode: true,
+    } as never));
+    expect(html).toContain("OpenCode v2");
+    expect(html).toContain('id="provider-search"');
+    expect(html).toContain('oninput="filterProviders');
+    expect(html).toContain('onclick="openAddProvider()');
+    expect(html).toContain('providers-page.js');
+    expect(html).toContain("window.providersBoot");
+    expect(html).toContain("v2Mode: true");
+    expect(html).not.toContain("v2-provider-unsupported");
+  });
+
+  it("injects v2Mode flag into boot data", () => {
+    const html = String(ProvidersPage({
+      meta: { invalid: false, error: null, providers: [opencodeGo] as never },
+      entries: { "opencode-go": { name: "Opencode Go" } },
+      isOpenCodeV2: false,
+      v2Mode: true,
+    } as never));
+    expect(html).toContain("v2Mode: true");
+    expect(html).toContain("provider-search-count");
   });
 });

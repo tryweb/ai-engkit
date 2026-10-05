@@ -2,6 +2,7 @@
  * server-side into window.providersBoot by views/providers.tsx. */
 var providersEntries = window.providersBoot.entries;
 var providersMeta = window.providersBoot.meta;
+var isV2Mode = !!window.providersBoot.v2Mode;
 var editName = null;
 var editState = null;
 var editApiKey = null;
@@ -241,6 +242,30 @@ function saveNewProvider() {
   if (!addRawValid) return;
   if (!addState) return;
 
+  if (isV2Mode) {
+    var raw = document.getElementById('add-raw').value;
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed.url) {
+        fetch('/api/providers/wellknown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: parsed.url }),
+        }).then(function(r){return r.json();}).then(function(j){ if(j.ok) return location.reload(); alert('Add provider failed: '+(j.error||'unknown')); });
+        return;
+      }
+    } catch(e) {}
+    var baseURL = (addState.options && addState.options.baseURL) || '';
+    if (baseURL && validateUrl(baseURL) && baseURL.includes('wellknown') || baseURL.includes('.json')) {
+      fetch('/api/providers/wellknown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: baseURL }),
+      }).then(function(r){return r.json();}).then(function(j){ if(j.ok) return location.reload(); alert('Add provider failed: '+(j.error||'unknown')); });
+      return;
+    }
+  }
+
   clearAllErrors('add');
   var hasError = false;
 
@@ -274,7 +299,7 @@ function saveNewProvider() {
   fetch('/api/providers/' + providerName, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: payload }),
+    body: JSON.stringify({ provider: payload, url: payload.url }),
   })
     .then(function (r) { return r.json(); })
     .then(function (j) {
@@ -305,12 +330,39 @@ function addKey(name) {
   if (!value) { input.focus(); return; }
   var note = noteInput.value.trim();
   var pm = providerMeta(name);
+  var answer = undefined;
+  if (isV2Mode) {
+    if (name === 'azure') {
+      var rn = prompt('Enter Azure Resource Name (required for Azure):');
+      if (rn === null) return;
+      rn = rn.trim();
+      if (!rn) { alert('Resource name required'); return; }
+      answer = { resourceName: rn };
+    } else if (name === 'cloudflare-ai-gateway') {
+      var acc = prompt('Enter Cloudflare Account ID:');
+      if (acc === null) return;
+      acc = acc.trim();
+      var gw = prompt('Enter Cloudflare AI Gateway ID:');
+      if (gw === null) return;
+      gw = gw.trim();
+      if (!acc || !gw) { alert('Both fields required'); return; }
+      answer = { accountId: acc, gatewayId: gw };
+    } else if (name === 'cloudflare-workers-ai') {
+      var acc2 = prompt('Enter Cloudflare Account ID:');
+      if (acc2 === null) return;
+      acc2 = acc2.trim();
+      if (!acc2) { alert('Account ID required'); return; }
+      answer = { accountId: acc2 };
+    }
+  }
   var first = pm && pm.registry.keyCount === 0;
-  if (first && !confirm('This is the first key for ' + name + ' — it will be applied to the auth store and ai-dev will restart. Continue?')) return;
+  if (first && !isV2Mode && !confirm('This is the first key for ' + name + ' — it will be applied to the auth store and ai-dev will restart. Continue?')) return;
+  var body = { value: value, note: note };
+  if (answer) body.answer = answer;
   fetch('/api/providers/' + name + '/keys', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value: value, note: note }),
+    body: JSON.stringify(body),
   })
     .then(function (r) { return r.json(); })
     .then(function (j) {
@@ -351,7 +403,11 @@ function deleteKey(name, keyId) {
 }
 
 function selectActiveKey(name, keyId) {
-  if (!confirm('Switching the active key writes it to the auth store and restarts ai-dev (brief downtime). Continue?')) return;
+  if (isV2Mode) {
+    if (!confirm('Switch active credential?')) return;
+  } else {
+    if (!confirm('Switching the active key writes it to the auth store and restarts ai-dev (brief downtime). Continue?')) return;
+  }
   var status = providerCard(name).querySelector('.key-activation-status');
   status.textContent = 'Applying selected key...';
   fetch('/api/providers/' + name + '/keys/' + keyId + '/active', { method: 'PUT' })
@@ -368,6 +424,7 @@ function selectActiveKey(name, keyId) {
 }
 
 function toggleKeyValue(name, keyId, btn) {
+  if (isV2Mode) { alert('Key value is not retrievable via Integrations API (stored securely).'); return; }
   var row = btn.closest('.key-row');
   var mv = row.querySelector('.masked-value');
   var revealed = mv.querySelector('.revealed');
@@ -406,28 +463,31 @@ function importKey(name) {
 
 /* ChatGPT Pro/Plus headless OAuth */
 
-function oauthStatus(text) {
-  var el = document.getElementById('oauth-poll-status');
+function oauthStatus(text, provider) {
+  var name = provider || oauthProvider;
+  var el = document.getElementById('oauth-poll-status-' + name) || document.getElementById('oauth-poll-status');
   if (el) el.textContent = text;
 }
 
 function startOAuth(name) {
+  if (isV2Mode) { return startOAuthV2(name, 'chatgpt-browser'); }
   oauthProvider = name;
   oauthFlowId = null;
-  var flow = document.getElementById('oauth-flow');
-  flow.hidden = false;
-  document.getElementById('oauth-apply').hidden = true;
-  oauthStatus('Requesting device code…');
+  var flow = document.getElementById('oauth-flow-' + name) || document.getElementById('oauth-flow');
+  if (flow) flow.hidden = false;
+  var applyBtn = document.getElementById('oauth-apply-' + name) || document.getElementById('oauth-apply');
+  if (applyBtn) applyBtn.hidden = true;
+  oauthStatus('Requesting device code…', name);
   fetch('/api/providers/' + name + '/oauth/start', { method: 'POST' })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       if (!j.ok) { oauthStatus('Could not start: ' + (j.error || 'unknown error')); return; }
       oauthFlowId = j.flowId;
       var uri = j.verificationUri || 'https://auth.openai.com/codex/device';
-      document.getElementById('oauth-user-code').textContent = j.userCode || '---';
-      var link = document.getElementById('oauth-verify-link');
-      link.href = uri;
-      link.textContent = uri.replace(/^https?:\/\//, '');
+      var codeEl = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
+      if (codeEl) codeEl.textContent = j.userCode || '---';
+      var link = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
+      if (link) { link.href = uri; link.textContent = uri.replace(/^https?:\/\//, ''); }
       var intervalMs = Math.max((j.intervalSec || 5) * 1000, 3000);
       var maxPolls = Math.max(1, Math.ceil((j.expiresInSec || 600) / (j.intervalSec || 5)) + 1);
       var polls = 0;
@@ -476,10 +536,11 @@ function pollOAuth() {
     .finally(function () { oauthPolling = false; });
 }
 
-function applyOAuth() {
+function applyOAuth(name) {
   if (!oauthFlowId) return;
+  var prov = name || oauthProvider;
   if (!confirm('Connect ChatGPT Pro/Plus? This writes an OAuth credential to the auth store (replacing any OpenAI API key) and restarts ai-dev (brief downtime). Continue?')) return;
-  oauthStatus('Connecting…');
+  oauthStatus('Connecting…', prov);
   fetch('/api/providers/' + (oauthProvider || 'openai') + '/oauth/apply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -495,15 +556,31 @@ function applyOAuth() {
     });
 }
 
-function cancelOAuth() {
+function cancelOAuth(name) {
   clearInterval(oauthPollTimer);
+  var prov = name || oauthProvider;
   oauthFlowId = null;
-  oauthProvider = null;
-  document.getElementById('oauth-flow').hidden = true;
-  document.getElementById('oauth-apply').hidden = true;
+  if (!name) oauthProvider = null;
+  var flow = document.getElementById('oauth-flow-' + prov) || document.getElementById('oauth-flow');
+  if (flow) flow.hidden = true;
+  var applyBtn = document.getElementById('oauth-apply-' + prov) || document.getElementById('oauth-apply');
+  if (applyBtn) applyBtn.hidden = true;
 }
 
 function disconnectOAuth(name) {
+  if (isV2Mode) {
+    if (!confirm('Disconnect ChatGPT Pro/Plus? The OAuth credential is removed.')) return;
+    fetch('/api/providers/' + name + '/oauth/v2/disconnect', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.ok) return location.reload();
+        alert('Disconnect failed: ' + (j.error || 'unknown error'));
+      })
+      .catch(function (err) {
+        alert('Disconnect failed: ' + (err && err.message ? err.message : 'network error'));
+      });
+    return;
+  }
   if (!confirm('Disconnect ChatGPT Pro/Plus? The OAuth credential is removed from the auth store and ai-dev restarts.')) return;
   fetch('/api/providers/' + name + '/oauth/disconnect', { method: 'POST' })
     .then(function (r) { return r.json(); })
@@ -513,5 +590,57 @@ function disconnectOAuth(name) {
     })
     .catch(function (err) {
       alert('Disconnect failed: ' + (err && err.message ? err.message : 'network error'));
+    });
+}
+
+function startOAuthV2(name, methodID) {
+  oauthProvider = name;
+  oauthFlowId = null;
+  var flow = document.getElementById('oauth-flow-' + name) || document.getElementById('oauth-flow');
+  if (flow) flow.hidden = false;
+  var applyBtn = document.getElementById('oauth-apply-' + name) || document.getElementById('oauth-apply');
+  if (applyBtn) applyBtn.hidden = true;
+  oauthStatus('Starting OAuth…', name);
+  fetch('/api/providers/' + name + '/oauth/v2/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ methodID: methodID || 'chatgpt-browser' })
+  })
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if (!j.ok) { oauthStatus('Could not start: '+(j.error||'unknown')); return; }
+      oauthFlowId = j.attemptID;
+      if (j.url) {
+        var codeEl2 = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
+        if (codeEl2) codeEl2.textContent = j.url;
+        var link2 = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
+        if (link2) { link2.href = j.url; link2.textContent = j.url; }
+      }
+      oauthStatus(j.instructions || 'Complete authorization in your browser. Polling…');
+      clearInterval(oauthPollTimer);
+      oauthPollTimer = setInterval(function(){ pollOAuthV2(); }, 3000);
+    })
+    .catch(function(err){ oauthStatus('Could not start: '+(err && err.message ? err.message : 'network')); });
+}
+
+function pollOAuthV2() {
+  if (!oauthFlowId) return;
+  var prov = oauthProvider || 'openai';
+  fetch('/api/providers/' + prov + '/oauth/v2/status/' + oauthFlowId)
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if (j.status === 'complete') {
+        clearInterval(oauthPollTimer);
+        oauthStatus('Authorization complete — connected.', oauthProvider);
+        setTimeout(function(){ location.reload(); }, 1000);
+      } else if (j.status === 'failed') {
+        clearInterval(oauthPollTimer);
+        oauthStatus('Authorization failed: '+(j.message||'unknown'));
+      } else if (j.status === 'expired') {
+        clearInterval(oauthPollTimer);
+        oauthStatus('Code expired. Start again.');
+      } else {
+        oauthStatus('Waiting for authorization…');
+      }
     });
 }
