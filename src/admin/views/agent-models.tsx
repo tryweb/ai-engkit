@@ -537,6 +537,16 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
 
         configureProviderSelection();
 
+        (function setupPolicyMode(){
+          var sel = document.getElementById('suggestion-mode');
+          if (!sel) return;
+          fetch('/api/agent-models/policy').then(function(r){ return r.json(); }).then(function(d){ if(d && d.mode) sel.value=d.mode; }).catch(function(){});
+          sel.addEventListener('change', function(){
+            var mode = selectedMode();
+            fetch('/api/agent-models/policy', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode:mode})}).then(function(r){ return r.json(); }).then(function(d){ if(!d.mode) console.warn('policy save failed',d); }).catch(function(e){ console.warn(e); });
+          });
+        })();
+
         function rowTemplate(model, variant) {
           var modelOpts = agentModelsState.catalog.map(function (m) {
             return '<option value="' + escapeHtml(m) + '"' + (m === model ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';

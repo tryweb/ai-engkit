@@ -13,6 +13,7 @@ import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
 import { parseModelReference, probeModel, type ProbeResult } from "../lib/model-probe";
 import { AgentModelsPage } from "../views/agent-models";
 import { validateAgentChain } from "../lib/agent-model-config";
+import { readAgentModelPolicy, writeAgentModelPolicy } from "../lib/agent-model-policy";
 
 function isV2(): boolean { return process.env.OMO_ENABLED === "0"; }
 function normalizeChainEntries(raw: Record<string, unknown>): Array<{ model: string; variant?: string }> | null {
@@ -187,6 +188,25 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     const result: Record<string, readonly { readonly model: string; readonly variant?: string }[]> = {};
     for (const [agent, entries] of suggestions) result[agent] = entries;
     return c.json({ suggestions: result, providers: state.providers });
+  });
+
+  agentModels.get("/api/agent-models/policy", async (c) => {
+    const mode = await readAgentModelPolicy(deps);
+    return c.json({ mode });
+  });
+
+  agentModels.put("/api/agent-models/policy", async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return c.json({ error: "Request body must be a JSON object" }, 400);
+    }
+    const mode = (body as Record<string, unknown>).mode;
+    if (typeof mode !== "string" || !ALLOWED_MODES.has(mode as SuggestionMode)) {
+      return c.json({ error: "mode must be one of free, economy, performance" }, 400);
+    }
+    const result = await writeAgentModelPolicy(deps, mode as SuggestionMode);
+    if (!result.ok) return c.json({ error: result.error ?? "policy write failed" }, 500);
+    return c.json({ mode });
   });
 
   // Batch endpoint: single restart for N changes
