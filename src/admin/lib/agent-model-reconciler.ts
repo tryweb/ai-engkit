@@ -177,10 +177,11 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     const configurable = new Set<string>();
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
-      if (knownKeys.has(key) || (gatingAgents as readonly string[]).includes(key)) configurable.add(key);
+      if ((gatingAgents as readonly string[]).includes(key) || (!isV2() && knownKeys.has(key))) configurable.add(key);
     }
     if (isV2()) {
-      for (const k of keys) if ((gatingAgents as readonly string[]).includes(k) || knownKeys.has(k)) configurable.add(k);
+      for (const agent of NATIVE12_AGENTS) configurable.add(agent);
+      for (const k of keys) if ((gatingAgents as readonly string[]).includes(k)) configurable.add(k);
     }
     const mapped = new Map<string, ResolvedModel>();
     for (const [name, model] of resolvedMap ?? []) {

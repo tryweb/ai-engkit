@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentModelReconciler } from "./agent-model-reconciler";
-import type { AgentModelsDeps } from "./agent-model-types";
+import { NATIVE12_AGENTS, type AgentModelsDeps } from "./agent-model-types";
 import type { ExecResult } from "./docker";
 
 type Fixture = {
@@ -620,6 +620,48 @@ describe("agent model reconciler", () => {
     expect(probedModelIds(calls)).toHaveLength(12);
     expect(new Set(probedModelIds(calls)).size).toBe(12);
     base.cleanup();
+  });
+
+  test("Given V2 routing with stale internal chains, When suggesting Then exposes only the NATIVE12 roster", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const emptyRouting = JSON.stringify({
+        version: 1,
+        chains: {
+          build: { chain: [{ model: "p/alpha" }] },
+          general: { chain: [{ model: "p/alpha" }] },
+        },
+      });
+      const liveAgents = JSON.stringify([
+        { name: "general", mode: "subagent", model: { providerID: "p", modelID: "m" } },
+        { name: "explore", mode: "subagent", model: { providerID: "p", modelID: "m" } },
+      ]);
+      const provider = JSON.stringify({ connected: ["p"], all: [{ id: "p", models: { alpha: { capabilities: {} } } }] });
+      const calls: string[] = [];
+      const deps: AgentModelsDeps = {
+        exec: async (command: string): Promise<ExecResult> => {
+          calls.push(command);
+          if (command.includes("routing.json")) return { stdout: emptyRouting, stderr: "", exitCode: 0 };
+          if (command.includes("/agent")) return { stdout: liveAgents, stderr: "", exitCode: 0 };
+          if (command.includes("/provider")) return { stdout: provider, stderr: "", exitCode: 0 };
+          if (command.includes('title:"model availability probe"')) return { stdout: healthy("p", "alpha"), stderr: "", exitCode: 0 };
+          if (command.includes("/session")) return { stdout: healthy("p", "alpha"), stderr: "", exitCode: 0 };
+          return { stdout: "{}", stderr: "", exitCode: 0 };
+        },
+        restart: async () => ({ ok: true }),
+        readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass" }),
+      };
+      const suggestions = await createAgentModelReconciler(deps).suggest();
+      const expected = [...NATIVE12_AGENTS].sort();
+      expect([...suggestions.keys()].sort()).toEqual(expected);
+      expect(suggestions.size).toBe(12);
+      expect([...suggestions.keys()]).not.toContain("build");
+      expect([...suggestions.keys()]).not.toContain("compaction");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 
 });
