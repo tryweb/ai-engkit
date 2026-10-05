@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 import { displayNameToKey } from "./agent-model-config";
 import { createAgentModelsLib, type AgentModelsLib } from "./agent-models";
 import { fetchModelMetadata } from "./model-metadata";
+import { readAgentModelPolicy } from "./agent-model-policy";
 import { capabilityScore, compareReferences, suggestForMode, type PolicyCapabilityCatalog, type SuggestionMode } from "./agent-model-suggestion-policy";
+import { profileForAgent } from "./agent-model-role-profiles";
 import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type ProbeResult } from "./model-probe";
 import {
   CONFIGURABLE_NATIVE_AGENTS,
@@ -77,6 +79,35 @@ function resultForNoop(entries: readonly FallbackModelEntry[]): ApplyResult {
 export function parseCapabilities(stdout: string): CapabilityCatalog {
   let parsed: unknown;
   try { parsed = JSON.parse(stdout); } catch { return new Map(); }
+  if (isRecord(parsed) && Array.isArray((parsed as Record<string, unknown>).data)) {
+    const arr = (parsed as Record<string, unknown>).data as unknown[];
+    const map = new Map<string, Capability>();
+    for (const entry of arr) {
+      if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.providerID !== "string") continue;
+      const caps = isRecord(entry.capabilities) ? entry.capabilities : isRecord(entry.model) ? (entry.model as Record<string, unknown>) : null;
+      const raw: Record<string, unknown> | null = caps !== null && isRecord(caps) ? (caps as Record<string, unknown>) : isRecord(entry) ? entry : null;
+      if (raw === null) continue;
+      const capsObj = isRecord(raw.capabilities) ? raw.capabilities as Record<string, unknown> : raw;
+      const reasoning = typeof capsObj.reasoning === "boolean" ? capsObj.reasoning : undefined;
+      const toolcall = typeof capsObj.tools === "boolean" ? capsObj.tools : typeof capsObj.toolcall === "boolean" ? capsObj.toolcall : typeof capsObj.toolCall === "boolean" ? capsObj.toolCall : undefined;
+      const inputRaw = capsObj.input ?? (isRecord(entry.input) ? entry.input : undefined);
+      const input = Array.isArray(inputRaw)
+        ? Object.fromEntries(inputRaw.filter((value): value is string => typeof value === "string").map((value) => [value, true]))
+        : isRecord(inputRaw) ? inputRaw : undefined;
+      const attachment = typeof capsObj.attachment === "boolean" ? capsObj.attachment : input !== undefined ? input.image === true : undefined;
+      if (reasoning === undefined && toolcall === undefined && attachment === undefined && input === undefined) {
+        if (!isRecord(entry.capabilities) && !isRecord(capsObj)) continue;
+      }
+      const key = `${entry.providerID}/${entry.id}`;
+      map.set(key, {
+        reasoning,
+        toolcall,
+        attachment,
+        ...(input === undefined ? {} : { input }),
+      });
+    }
+    if (map.size > 0) return map;
+  }
   if (!isRecord(parsed) || !Array.isArray(parsed.all)) return new Map();
   const capabilities = new Map<string, Capability>();
   for (const provider of parsed.all) {
@@ -96,6 +127,10 @@ export function parseCapabilities(stdout: string): CapabilityCatalog {
   return capabilities;
 }
 
+export function parseV2Capabilities(stdout: string): CapabilityCatalog {
+  return parseCapabilities(stdout);
+}
+
 export async function fetchCapabilityCatalog(deps: AgentModelsDeps, password: string): Promise<CapabilityCatalog> {
   const auth = Buffer.from(`opencode:${password}`).toString("base64");
   const managedDir = MANAGED_OPENCODE_DIR;
@@ -103,11 +138,35 @@ export async function fetchCapabilityCatalog(deps: AgentModelsDeps, password: st
   [ -f "\$f" ] || continue
   pid=\$(jq -r '.pid' "\$f" 2>/dev/null); port=\$(jq -r '.port' "\$f" 2>/dev/null)
   [ -n "\$pid" ] && [ -n "\$port" ] || continue; kill -0 "\$pid" 2>/dev/null || continue
+  curl -fsS -m 3 -H "Authorization: Basic ${auth}" "http://127.0.0.1:\${port}/api/model" 2>/dev/null && exit 0
+  curl -fsS -m 3 -H "Authorization: Basic ${auth}" "http://127.0.0.1:\${port}/api/provider" 2>/dev/null && exit 0
   curl -fsS -m 3 -H "Authorization: Basic ${auth}" "http://127.0.0.1:\${port}/provider" 2>/dev/null && exit 0
 done
 exit 2`;
   const result = await deps.exec(script, 90_000);
   return result.exitCode === 0 ? parseCapabilities(result.stdout) : new Map();
+}
+
+function isProvenIneligible(
+  agent: string,
+  modelRef: string,
+  metadata: ReadonlyMap<string, import("./model-metadata").NormalizedModelMetadata>,
+  capabilities: CapabilityCatalog,
+): boolean {
+  const meta = metadata.get(modelRef);
+  if (meta?.deprecated === true) return true;
+  const profile = profileForAgent(agent);
+  if (meta !== undefined) {
+    if (meta.contextLimit !== null && meta.contextLimit < profile.minContext) return true;
+    if (meta.outputLimit !== null && meta.outputLimit < profile.minOutput) return true;
+    if (profile.requiredReasoning && meta.reasoning === false) return true;
+    if (profile.requiredToolCall && meta.toolCall === false) return true;
+  }
+  if (profile.requiredAttachment) {
+    const cap = capabilities.get(modelRef);
+    if (cap?.attachment === false) return true;
+  }
+  return false;
 }
 
 export function createAgentModelReconciler(deps: AgentModelsDeps) {
@@ -202,6 +261,171 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
       lib.fetchProviderSnapshot(password),
       namesAndResolved(password, config as unknown as Record<string, { readonly models?: readonly FallbackModelEntry[] }>),
     ]);
+    if (v2) {
+      const policyMode = await readAgentModelPolicy(deps);
+      const capabilities = await fetchCapabilityCatalog(deps, password);
+      const metadata = await fetchModelMetadata();
+      const connected = new Set(snapshot.connectedProviders);
+      const catalogSet = new Set(snapshot.catalog);
+      const policyCapabilities: PolicyCapabilityCatalog = new Map(
+        [...capabilities.entries()].map(([k, v]) => [k, v as import("./agent-model-suggestion-policy").PolicyCapability]),
+      );
+      const output = suggestForMode({
+        mode: policyMode,
+        providers: [...snapshot.connectedProviders],
+        catalog: [...snapshot.catalog],
+        metadata: metadata.models,
+        sourceStatus: metadata.sourceStatus,
+        sourceAgeMs: metadata.sourceAgeMs,
+        warnings: [...metadata.warnings],
+        capabilities: policyCapabilities,
+        agents: [...state.names],
+      });
+      const changed: AgentModelChange[] = [];
+      const decisions: Array<Record<string, unknown>> = [];
+      const getChain = (agent: string): readonly ChainEntry[] | readonly FallbackModelEntry[] => {
+        return ((config as RoutingConfig).chains[agent]?.chain ?? []) as readonly ChainEntry[];
+      };
+      probes.clear();
+      probeCount = 0;
+      const shouldProbeFree = policyMode === "free" && metadata.sourceStatus === "fresh";
+      async function findHealthyFree(agent: string, initialSuggestion: string | null): Promise<{ model: string | null; probeStatus: string | null }> {
+        if (!shouldProbeFree || initialSuggestion === null) return { model: initialSuggestion, probeStatus: null };
+        let remaining = [...snapshot.catalog];
+        let current: string | null = initialSuggestion;
+        let lastStatus: string | null = null;
+        const tried = new Set<string>();
+        while (current !== null && !tried.has(current)) {
+          tried.add(current);
+          if (probeCount >= MAX_PROBES) {
+            lastStatus = "probe_budget_exhausted";
+            break;
+          }
+          const res = await probe(current);
+          lastStatus = res.status;
+          if (res.status === "healthy") return { model: current, probeStatus: res.status };
+          remaining = remaining.filter((c) => c !== current);
+          if (remaining.length === 0) break;
+          const nextOut = suggestForMode({
+            mode: policyMode,
+            providers: [...snapshot.connectedProviders],
+            catalog: remaining,
+            metadata: metadata.models,
+            sourceStatus: metadata.sourceStatus,
+            sourceAgeMs: metadata.sourceAgeMs,
+            warnings: [...metadata.warnings],
+            capabilities: policyCapabilities,
+            agents: [agent],
+          });
+          current = nextOut.suggestions.get(agent)?.model ?? null;
+        }
+        return { model: null, probeStatus: lastStatus };
+      }
+      for (const agent of state.names) {
+        const configured = getChain(agent) as readonly FallbackModelEntry[];
+        const primary = configured[0];
+        const resolved = state.resolved.get(agent);
+        const resolvedRef = resolved === undefined ? null : `${resolved.providerID}/${resolved.modelID}`;
+        const initialSuggestion = output.suggestions.get(agent)?.model ?? null;
+        let desired: readonly FallbackModelEntry[] | null = null;
+        let observedStatus = "policy";
+        let probeStatus: string | null = null;
+        if (primary !== undefined) {
+          const parsed = parseModelReference(primary.model);
+          const inCatalog = catalogSet.has(primary.model);
+          const connectedOk = parsed !== null && connected.has(parsed.providerID);
+          const provenBad = isProvenIneligible(agent, primary.model, metadata.models, capabilities);
+          const keep = inCatalog && connectedOk && !provenBad;
+          if (keep) {
+            desired = configured as readonly FallbackModelEntry[];
+            observedStatus = "keep_valid_configured";
+          } else if (initialSuggestion !== null) {
+            if (shouldProbeFree) {
+              const found = await findHealthyFree(agent, initialSuggestion);
+              if (found.model !== null) {
+                desired = [{ model: found.model }];
+                probeStatus = found.probeStatus;
+                observedStatus = !inCatalog ? "not_in_catalog" : !connectedOk ? "provider_not_connected" : "proven_ineligible";
+              } else {
+                desired = null;
+                probeStatus = found.probeStatus;
+                observedStatus = probeStatus === "probe_budget_exhausted" ? "probe_budget_exhausted" : "no_healthy_free_candidate";
+              }
+            } else {
+              desired = [{ model: initialSuggestion }];
+              observedStatus = !inCatalog ? "not_in_catalog" : !connectedOk ? "provider_not_connected" : provenBad ? "proven_ineligible" : "not_eligible";
+            }
+          } else {
+            desired = null;
+            observedStatus = "no_policy_suggestion";
+          }
+        } else {
+          if (initialSuggestion !== null) {
+            if (shouldProbeFree) {
+              const found = await findHealthyFree(agent, initialSuggestion);
+              if (found.model !== null) {
+                desired = [{ model: found.model }];
+                probeStatus = found.probeStatus;
+                observedStatus = "configure_policy";
+              } else {
+                desired = null;
+                probeStatus = found.probeStatus;
+                observedStatus = probeStatus === "probe_budget_exhausted" ? "probe_budget_exhausted" : "no_healthy_free_candidate";
+              }
+            } else {
+              desired = [{ model: initialSuggestion }];
+              observedStatus = "configure_policy";
+            }
+          } else {
+            desired = null;
+            observedStatus = "no_policy_suggestion";
+          }
+        }
+        const changedForAgent = desired !== null && !sameEntries(configured, desired);
+        const decision = desired === null
+          ? "no_usable_model"
+          : changedForAgent
+            ? primary === undefined ? "configure_candidate" : "replace_unusable_configured"
+            : primary === undefined ? "keep_healthy_assigned" : "keep_healthy_configured";
+        decisions.push({
+          agent,
+          configured: primary?.model ?? null,
+          assigned: resolvedRef,
+          probe: observedStatus,
+          probeStatus,
+          desired: desired?.[0]?.model ?? null,
+          policyMode,
+          sourceStatus: metadata.sourceStatus,
+          changed: changedForAgent,
+          decision,
+        });
+        if (changedForAgent && desired !== null) changed.push({ agent, entries: desired });
+      }
+      for (const decision of decisions) {
+        console.error(`[agent-models] decision ${JSON.stringify(decision)}`);
+      }
+      let failed = 0;
+      const results: ReconcileAgentResult[] = [];
+      const batchResults = await lib.applyAndVerifyBatch(changed, "readiness");
+      for (const { agent } of changed) {
+        const result = batchResults.get(agent)
+          ?? { ok: false, status: "write_failed" as const, error: "agent model batch returned no result" };
+        if (!result.ok) failed += 1;
+        results.push({
+          agent,
+          status: result.status,
+          error: "error" in result ? result.error ?? null : null,
+          resolved: "resolved" in result ? result.resolved ?? null : null,
+        });
+      }
+      return {
+        changed: changed.length,
+        applied: changed.length - failed,
+        failed,
+        agents: changed.map(({ agent }) => agent),
+        results,
+      };
+    }
     await Promise.all(snapshot.connectedProviders.map((providerID) => pruneStaleProbeCacheForProvider(deps, providerID)));
     const capabilities = await fetchCapabilityCatalog(deps, password);
     const connected = new Set(snapshot.connectedProviders);
