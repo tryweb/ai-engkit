@@ -98,6 +98,9 @@ for waited in 0 3 6 9 12 15 18 21 24 27 30 33 36 39 42 45 48 51 54 57 60 63 66 6
   port="$(jq -r '.port // empty' "$latest" 2>/dev/null)"
   [ -n "$port" ] || { sleep 3; continue; }
   endpoint="http://127.0.0.1:$port"
+  if curl -fsS -m 3 -H 'Authorization: Basic ${authNoKill}' "$endpoint/api/provider" >/dev/null 2>&1; then
+    exit 0
+  fi
   if curl -fsS -m 3 -H 'Authorization: Basic ${authNoKill}' "$endpoint/global/health" >/dev/null 2>&1; then
     exit 0
   fi
@@ -169,6 +172,10 @@ for waited in 0 3 6 9 12 15 18 21 24 27 30 33 36 39 42 45 48 51 54 57 60 63 66 6
     fi
   fi
   endpoint="http://127.0.0.1:$port"
+  if curl -fsS -m 3 -H 'Authorization: Basic ${auth}' "$endpoint/api/provider" >/dev/null 2>&1; then
+    printf '%s\n' "$endpoint"
+    exit 0
+  fi
   if curl -fsS -m 3 -H 'Authorization: Basic ${auth}' "$endpoint/global/health" >/dev/null 2>&1; then
     printf '%s\n' "$endpoint"
     exit 0

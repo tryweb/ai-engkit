@@ -22,16 +22,19 @@ managed_endpoint() {
   printf '%s\n' "http://127.0.0.1:${port}"
 }
 
-# wait_for_provider <timeout_seconds> - poll until /provider answers; saves
+# wait_for_provider <timeout_seconds> - poll until provider endpoint answers (V2 /api/provider, V1 /provider); saves
 # the JSON body to a temp file and echoes the endpoint on success.
 wait_for_provider() {
   local timeout="${1:-120}" waited=0 endpoint provider_json auth
   auth="$(basic_auth)"
   while [ "$waited" -le "$timeout" ]; do
     if endpoint="$(managed_endpoint)"; then
-      provider_json="$(curl -fsS -m 3 -H "Authorization: Basic ${auth}" "${endpoint}/provider" 2>/dev/null || true)"
+      provider_json="$(curl -fsS -m 3 -H "Authorization: Basic ${auth}" "${endpoint}/api/provider" 2>/dev/null || true)"
+      if [ -z "$provider_json" ]; then
+        provider_json="$(curl -fsS -m 3 -H "Authorization: Basic ${auth}" "${endpoint}/provider" 2>/dev/null || true)"
+      fi
       if [ -n "$provider_json" ] \
-        && printf '%s' "$provider_json" | jq -e '((.connected // []) | length) > 0' >/dev/null 2>&1; then
+        && printf '%s' "$provider_json" | jq -e '((.data // .connected // []) | length) > 0' >/dev/null 2>&1; then
         printf '%s\n' "$provider_json" > "${TMPDIR:-/tmp}/agent-model-provider.$$.json"
         printf '%s\n' "$endpoint"
         return 0
@@ -48,6 +51,10 @@ wait_for_lifecycle() {
   auth="$(basic_auth)"
   while [ "$waited" -le "$timeout" ]; do
     if endpoint="$(managed_endpoint)"; then
+      health_json="$(curl -fsS -m 3 -H "Authorization: Basic ${auth}" "${endpoint}/api/provider" 2>/dev/null || true)"
+      if [ -n "$health_json" ] && printf '%s' "$health_json" | jq -e 'has("data") or has("connected")' >/dev/null 2>&1; then
+        return 0
+      fi
       health_json="$(curl -fsS -m 3 -H "Authorization: Basic ${auth}" "${endpoint}/global/health" 2>/dev/null || true)"
       if [ -n "$health_json" ] && printf '%s' "$health_json" | jq -e '.healthy == true' >/dev/null 2>&1; then
         return 0

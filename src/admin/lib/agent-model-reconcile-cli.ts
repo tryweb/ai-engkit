@@ -1,11 +1,32 @@
 import { createAgentModelReconciler } from "./agent-model-reconciler";
 import { REAL_DEPS } from "./agent-models";
+import { restartManagedOpenCode } from "./restart-ai-dev";
+import type { ExecResult } from "./docker";
 
-// The CLI runs inside the ai-dev container, which has no /opt/ai-engkit/.env
-// file (only the admin container mounts it); read the password from the
-// process environment instead.
-const deps = {
-  ...REAL_DEPS,
+async function localExec(command: string, timeoutMs = 30_000): Promise<ExecResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const proc = Bun.spawn(["sh", "-c", command], { signal: controller.signal });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { stdout: "", stderr: `Command timed out after ${timeoutMs}ms`, exitCode: -1 };
+    }
+    return { stdout: "", stderr: String(err), exitCode: -1 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const deps: typeof REAL_DEPS = {
+  exec: localExec,
+  restart: () => restartManagedOpenCode({ exec: localExec, readEnv: () => ({ ...process.env }) as Record<string, string> }),
   readEnv: (): Record<string, string> => ({ ...process.env }) as Record<string, string>,
 };
 
