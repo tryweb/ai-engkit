@@ -54,6 +54,43 @@ set -uo pipefail
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
 TIMEOUT="${CHECK_VERSIONS_TIMEOUT:-15}"
 
+# V2-line mode: CHECK_V2_LINE=1 makes the v2 trial the source of truth for
+# pins the trial compose file overrides (opencode CLI package/version,
+# OpenChamber), and drops the OMO pin (D1: v2 carries no OMO runtime).
+# Default (unset/empty) = V1 behavior, byte-identical output to before.
+V2_LINE="${CHECK_V2_LINE:-}"
+COMPOSE_V2="${CHECK_COMPOSE_FILE:-docker-compose.v2.yml}"
+
+# compose_arg NAME → default value from "- NAME=${NAME:-default}" or
+# "- NAME=value" lines in the v2 compose file; empty when absent.
+compose_arg() {
+    local name="$1" line val
+    line=$(grep -E "^[[:space:]]*-[[:space:]]*${name}=" "$COMPOSE_V2" 2>/dev/null | head -1) || true
+    [[ -z "$line" ]] && return 0
+    val="${line#*=}"
+    val="$(printf '%s' "$val" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    if [[ "$val" =~ ^\$\{${name}:-(.*)\}$ ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    else
+        printf '%s' "$val"
+    fi
+}
+
+# Effective pin: v2-overridden ARGs resolve from the compose file first.
+effective_pinned() {
+    local name="$1" val=""
+    if [[ -n "$V2_LINE" ]]; then
+        case "$name" in
+            OPENCODE_CLI_PACKAGE|OPENCODE_CLI_VERSION|OPENCHAMBER_VERSION)
+                val="$(compose_arg "$name")" ;;
+        esac
+    fi
+    if [[ -z "$val" ]]; then
+        val=$(awk -F= -v k="$name" '$0 ~ "^ARG "k"=" {print $2; exit}' "$DOCKERFILE") || true
+    fi
+    printf '%s' "$val"
+}
+
 # --- Flags ---
 DO_LATEST=false
 DO_APT=false
@@ -111,7 +148,7 @@ get_gitlab_latest() {
 # any fetch/parse/validation failure yields "unknown" (reported check_failed).
 get_bun_required() {
     local oc_version
-    oc_version=$(awk '/^ARG OPENCHAMBER_VERSION=/ { sub(/^ARG OPENCHAMBER_VERSION=/, ""); print; exit }' "$DOCKERFILE") || true
+    oc_version="$(effective_pinned OPENCHAMBER_VERSION)" || true
     [[ -z "$oc_version" ]] && { echo "unknown"; return 0; }
     local base="https://raw.githubusercontent.com/openchamber/openchamber"
     local ver="" tag
@@ -180,7 +217,7 @@ opencode_effective_row() {
 
 cli_package() {
     local pkg
-    pkg=$(awk -F= '/^ARG OPENCODE_CLI_PACKAGE=/{print $2; exit}' "$DOCKERFILE") || true
+    pkg="$(effective_pinned OPENCODE_CLI_PACKAGE)" || true
     [[ -z "$pkg" ]] && pkg="opencode-ai"
     printf '%s' "$pkg"
 }
@@ -241,6 +278,13 @@ declare -A DOCKER_ARGS=()
 while IFS='=' read -r _ak _av; do
     DOCKER_ARGS["$_ak"]="${_av:-}"
 done < <(awk '/^ARG [A-Z_]+=/ { sub(/^ARG /, ""); print }' "$DOCKERFILE")
+if [[ -n "$V2_LINE" ]]; then
+    for _vk in OPENCODE_CLI_PACKAGE OPENCODE_CLI_VERSION OPENCHAMBER_VERSION; do
+        _vv="$(compose_arg "$_vk")"
+        [[ -n "$_vv" ]] && DOCKER_ARGS["$_vk"]="$_vv"
+    done
+    unset _vk _vv
+fi
 resolve_arg_refs() {
     local v="$1" guard=10
     while [[ "$v" =~ \$\{([A-Z_]+)\} ]] && (( guard-- > 0 )); do
@@ -264,6 +308,9 @@ collect_rows() {
     op_latest="$(lookup "$op_row")"
     oc_pinned="$(awk '/^ARG OPENCHAMBER_VERSION=/{ sub(/^ARG OPENCHAMBER_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
     op_pinned="$(awk '/^ARG OPENCODE_VERSION=/{ sub(/^ARG OPENCODE_VERSION=/, ""); print; exit }' "$DOCKERFILE")"
+    if [[ -n "$V2_LINE" && -n "${DOCKER_ARGS[OPENCODE_CLI_VERSION]:-}" ]]; then
+        op_pinned="$(resolve_arg_refs "${DOCKER_ARGS[OPENCODE_CLI_VERSION]}")"
+    fi
     oc_cand="$oc_pinned"; version_gt "$oc_pinned" "$oc_latest" && oc_cand="$oc_latest"
     op_cand="$op_pinned"; version_gt "$op_pinned" "$op_latest" && op_cand="$op_latest"
 
@@ -276,8 +323,18 @@ collect_rows() {
         if [[ "$name" == "OPENCODE_VERSION" && "$op_row" == "OPENCODE_CLI_VERSION" ]]; then
             continue
         fi
+        # V2 line carries no OMO runtime (D1): never report its pin.
+        if [[ -n "$V2_LINE" && "$name" == "OH_MY_OPENAGENT_VERSION" ]]; then
+            continue
+        fi
         [[ -z "${pinned:-}" ]] && continue
         pinned="$(resolve_arg_refs "$pinned")"
+        if [[ -n "$V2_LINE" ]]; then
+            case "$name" in
+                OPENCODE_CLI_VERSION|OPENCHAMBER_VERSION)
+                    [[ -n "${DOCKER_ARGS[$name]:-}" ]] && pinned="$(resolve_arg_refs "${DOCKER_ARGS[$name]}")" ;;
+            esac
+        fi
         [[ -z "${pinned:-}" ]] && continue
         local latest source status partner_cand
         case "$name" in

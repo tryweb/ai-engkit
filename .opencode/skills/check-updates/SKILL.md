@@ -21,6 +21,24 @@ rebuild the image, run integration tests, and commit.
 
 ## Workflow
 
+### 0. Detect the release line
+
+Determine which line this checkout follows before running anything:
+
+```bash
+git branch --show-current
+```
+
+- **`trial/opencode-v2` (or any v2 trial branch)** → V2 mode: prefix every
+  `check-versions.sh` invocation with `CHECK_V2_LINE=1`. In V2 mode the script
+  resolves `OPENCODE_CLI_PACKAGE`/`OPENCODE_CLI_VERSION`/`OPENCHAMBER_VERSION`
+  from `docker-compose.v2.yml` build args (the trial's effective pins) and
+  **skips `OH_MY_OPENAGENT_VERSION` entirely** (D1: the v2 line carries no OMO
+  runtime). Without the prefix you get V1 defaults, including two false
+  positives (`opencode-ai` 1.x track, OMO bump) and one hidden true positive
+  (`@opencode/cli` 2.x latest).
+- **Anything else (`main`, v1.x)** → run as-is (V1 defaults).
+
 ### 1. Check Current Status
 
 Run the version check script to see which pins are outdated:
@@ -134,11 +152,46 @@ grep -o 'oh-my-openagent/v[0-9.]*/assets/omo.schema.json' .opencode/omo.jsonc.de
 The `$schema` field is editor-only (runtime merge ignores it), but keeping it
 aligned avoids stale IDE validation after the plugin moves forward.
 
+> **V2 line: skip OMO entirely.** Do not bump `OH_MY_OPENAGENT_VERSION` and do
+> not touch `.opencode/omo.jsonc.default` — the v2 trial carries no OMO runtime
+> (the `docker-compose.v2.yml` default is a dead parameter). The script already
+> omits the OMO row in V2 mode.
+
+### 3b. Apply Updates on the V2 line
+
+`OPENCODE_CLI_VERSION`, `OPENCHAMBER_VERSION` (and their dependents) live in
+`docker-compose.v2.yml` build args on the v2 line, not in Dockerfile defaults.
+Use these patterns (values from `check-versions.sh json` in V2 mode):
+
+```bash
+# Format: - NAME=${NAME:-default}  →  replace the default after :-
+sed -i -E "s/^([[:space:]]*-[[:space:]]*OPENCODE_CLI_VERSION=.*:-)[^}]+(\})/\1${LATEST}\2/" docker-compose.v2.yml
+sed -i -E "s/^([[:space:]]*-[[:space:]]*OPENCHAMBER_VERSION=)[^[:space:]]+/\1${LATEST}/" docker-compose.v2.yml
+```
+
+After changing `OPENCHAMBER_VERSION`, re-run `check-versions.sh json` in V2
+mode: the `BUN_VERSION` target derives from the new OpenChamber tag. Also
+cross-check the OpenCode CLI floor the new OpenChamber requires (v2 docs carry
+`requires OpenCode 2.0.x+` style floors) — never ship a mispaired 2.x/1.x
+stack; the script's locked-pair guard only sees what you feed it.
+
 ### 4. Build the Dev Image
 
 ```bash
 docker compose -p dev -f docker-compose.dev.yml build ai-dev
 ```
+
+> **V2 line:** build the trial image instead, with the `trial-b` builder (the
+> default BuildKit worker fails its network prestart hook in this environment
+> with a `libnftables.so.1` error):
+>
+> ```bash
+> docker buildx build --builder trial-b --load --network=host \
+>   --build-arg OPENCODE_CLI_PACKAGE=@opencode/cli \
+>   --build-arg OPENCODE_CLI_VERSION=<NEW> \
+>   --build-arg OPENCHAMBER_VERSION=<NEW> \
+>   -t ai-engkit-ai-v2 .
+> ```
 
 If the build fails, report the error to the user and stop. Do not proceed.
 
@@ -164,6 +217,11 @@ CONTAINER=$(docker compose -p dev -f docker-compose.dev.yml ps -q ai-dev 2>/dev/
 # Run tests
 ./test/run-tests.sh "$CONTAINER"
 ```
+
+> **V2 line:** replace the gate with the trial gates — `test/test-v2-trial.sh`
+> cells, `bun test src/`, plus the Admin live checks. After any Playwright pin
+> bump, the headless Chromium launch must pass through the trial container's
+> `pw-mcp` path specifically.
 
 If any test fails, report and stop. Do not commit.
 
@@ -209,6 +267,7 @@ If confirmed:
 ```bash
 # Build a commit message listing what was updated
 # Example: "feat: bump OpenCode 1.18.3 → 1.18.4, glab 1.108.0 → 1.109.0"
+# V2 line: stage docker-compose.v2.yml instead of (or in addition to) Dockerfile.
 git add Dockerfile
 git commit -m "feat: <summary of what was updated>"
 ```
