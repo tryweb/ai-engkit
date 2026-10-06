@@ -88,7 +88,7 @@ export function groupLspRows(rows: readonly LspRow[]): readonly LspGroup[] {
   ];
 }
 
-function LspRowCells({ row }: { row: LspRow }) {
+function LspRowCells({ row, isV2 = false }: { row: LspRow; isV2?: boolean }) {
   return (
     <>
       <td data-label="Server">
@@ -102,7 +102,7 @@ function LspRowCells({ row }: { row: LspRow }) {
         <code>{row.extensions.join(" ")}</code>
       </td>
       <td data-label="Version">
-        <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey}>
+        <select class="lsp-version" data-pkg={row.npmPackage} data-row={row.serverKey} disabled={isV2}>
           <option value="__loaded" hidden></option>
         </select>
       </td>
@@ -127,7 +127,7 @@ function LspRowCells({ row }: { row: LspRow }) {
           </span>
         ) : (
           <label class="switch">
-            <input type="checkbox" class="lsp-toggle" data-row={row.serverKey} checked={row.enabled} />
+            <input type="checkbox" class="lsp-toggle" data-row={row.serverKey} checked={row.enabled} disabled={isV2} />
             <span class="slider" />
           </label>
         )}
@@ -136,14 +136,24 @@ function LspRowCells({ row }: { row: LspRow }) {
   );
 }
 
-const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => {
+const LspContent: FC<{ rows: readonly LspRow[]; isV2?: boolean }> = ({ rows, isV2 = false }) => {
   const groups = groupLspRows(rows);
   return (
   <div>
     <div class="flex items-center justify-between" style="margin-bottom:16px;">
       <h2>LSP Server Management</h2>
-      <button id="apply-btn" class="btn-primary" type="button">Apply Changes</button>
+      <button id="apply-btn" class="btn-primary" type="button" disabled={isV2}>Apply Changes</button>
     </div>
+    {isV2 && (
+      <div class="card lsp-v2-notice" role="status" style="margin-bottom:20px; border-left: 4px solid var(--color-accent);">
+        <span class="badge badge-warning">OpenCode v2</span>
+        <p class="text-sm" style="margin: 8px 0 0;">
+          OpenCode v2 accepts <code>lsp</code> configuration but does not run language servers, so changes
+          here would have no effect. Diagnostics run through each project's CLI check commands instead
+          (for example <code>tsc --noEmit</code>, <code>pyright</code>, <code>biome check</code>).
+        </p>
+      </div>
+    )}
     <p class="text-sm text-muted" style="margin-bottom:20px;">
       Manage the language servers OpenCode uses. Enable a server to install it (via BUN_PACKAGES) and
       add it to the generated <code>opencode.json</code> lsp block; pin a version to install that exact
@@ -178,7 +188,7 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => {
                 ) : (
                   group.rows.map((row) => (
                     <tr key={row.serverKey} data-key={row.serverKey}>
-                      <LspRowCells row={row} />
+                      <LspRowCells row={row} isV2={isV2} />
                     </tr>
                   ))
                 )}
@@ -327,10 +337,10 @@ const LspContent: FC<{ rows: readonly LspRow[] }> = ({ rows }) => {
   );
 };
 
-export function LspPage(rows: readonly LspRow[]) {
+export function LspPage(rows: readonly LspRow[], options: { isV2?: boolean } = {}) {
   return (
     <Layout title="LSP Servers" currentPath="/lsp">
-      <LspContent rows={rows} />
+      <LspContent rows={rows} isV2={options.isV2 ?? false} />
     </Layout>
   );
 }

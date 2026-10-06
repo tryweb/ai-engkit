@@ -10,6 +10,7 @@ import type { LspApplyResult, LspReconcileSummary } from "../lib/lsp-reconciler"
 import { discoverNpmVersions, NpmRegistryError, type NpmVersionDiscoveryResult } from "../lib/npm-versions";
 import { readEnvFile, upsertEnvVar, deleteEnvVar } from "../lib/env";
 import { execInAiDev } from "../lib/docker";
+import { isOpenCodeV2 } from "../lib/opencode-v2";
 import { LspPage } from "../views/lsp";
 
 export interface LspRoutesDeps {
@@ -62,6 +63,21 @@ function parseOverride(raw: unknown): { enabled: boolean; version: string | null
 export function createLspRoutes(options: Partial<LspRoutesDeps> = {}): Hono {
   const deps: LspRoutesDeps = { ...REAL_DEPS, ...options };
   const lsp = new Hono();
+
+  async function isV2(): Promise<boolean> {
+    try {
+      return await isOpenCodeV2();
+    } catch {
+      return false;
+    }
+  }
+
+  function v2Blocked() {
+    return {
+      error:
+        "LSP server management is unavailable on OpenCode v2: the runtime accepts lsp configuration but does not run language servers. Use each project's CLI check commands (tsc, pyright, biome) for diagnostics instead.",
+    };
+  }
 
   async function loadRows() {
     const [summary, overrides, catalog] = await Promise.all([
@@ -124,6 +140,10 @@ export function createLspRoutes(options: Partial<LspRoutesDeps> = {}): Hono {
       return c.json({ error: "overrides must be an object" }, 400);
     }
 
+    if (await isV2()) {
+      return c.json(v2Blocked(), 409);
+    }
+
     const overrides: Record<string, { enabled: boolean; version: string | null }> = {};
     for (const [key, value] of Object.entries(rawOverrides as Record<string, unknown>)) {
       if (!LSP_CATALOG_BY_KEY.has(key)) {
@@ -144,6 +164,9 @@ export function createLspRoutes(options: Partial<LspRoutesDeps> = {}): Hono {
   });
 
   lsp.post("/api/lsp/apply", async (c) => {
+    if (await isV2()) {
+      return c.json(v2Blocked(), 409);
+    }
     const result = await deps.apply();
     if ("error" in result) {
       return c.json(
@@ -155,7 +178,7 @@ export function createLspRoutes(options: Partial<LspRoutesDeps> = {}): Hono {
   });
 
   lsp.get("/lsp", async (c) => {
-    return c.html(LspPage(await loadRows()));
+    return c.html(LspPage(await loadRows(), { isV2: await isV2() }));
   });
 
   return lsp;
