@@ -83,6 +83,7 @@ Keep provider-specific additions in this table. Add one row per independently ve
 | `openrouter` | `unavailable` | `No endpoints found that support tool use` | assistant `info.error` | OpenRouter via OpenCode `1.18.25`, 2026-09-03 |
 | `openrouter` | `timeout` | `probe polling timed out after 90 seconds` with no terminal provider error | bounded message/status polling | OpenRouter via OpenCode `1.18.25`, 2026-09-03 |
 | `openrouter` | `unavailable` | `tool use is not supported`, `Function calling is not supported`, or equivalent tool-capability marker | assistant `info.error` | OpenRouter via OpenCode `1.18.25`, 2026-09-03 |
+| `opencode` | `unavailable` | `Error from provider (Console): OpenCode's free tier can only be used from within OpenCode` — free-tier anti-abuse gate (not quota): parent primary sessions pass, task-dispatched child subagent sessions fail with zero model time | assistant `info.error` in OpenChamber child session (Turn stats Model time `0.0s`); upstream `anomalyco/opencode#49680`, `#49580`, `#49588` | OpenCode `2.0.15` + OpenChamber `2.0.0`, `opencode/big-pickle` in `explore` subagent, ai-engkit-v2, 2026-09-25 |
 
 When adding a provider:
 
