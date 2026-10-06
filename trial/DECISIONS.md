@@ -63,7 +63,10 @@
 | D2 Release lines | **ACCEPTED** | 2026-09-29 | User sign-off ("Go") |
 | U1 chain-head canonical | **DECIDED 2026-09-29** | Sisyphus: **`opencode.json agent.*` is canonical for the effective head; `routing.json` chain is canonical for fallback order; `.md model:` is repo default (last resort).** Rationale: (1) OpenChamber `resolveDefaultSelection` reads `opencode.json` (C4 evidence) — display and session-start default must come from there; (2) Admin already writes `opencode.json` today (established path, no new read surface); (3) `.md` files are version-controlled project config — wrong layer for per-user runtime overrides, and trial workspace is scratch; (4) single-writer rule: Admin writes chain to `routing.json` AND mirrors head into `opencode.json agent.*`; the routing plugin owns the in-session fallback cursor. Precedence at session start: `opencode.json agent.*` (== chain head by construction) → `routing.json` fallback order → `.md model:`. Unblocks Admin implementation. |
 
-## Backlog (accepted, NOT scheduled — no owner, no date)
+## Doctrine: V1 Fallbacks Are Transitional Scaffolding (2026-10-03)
+
+V1 fallback branches added during migration (e.g. V2-first with V1 fallback in shim/Admin code) are **temporary by design, not a compatibility promise**. Rationale: this branch is the v2 line; V1 paths are deleted after V2 verification — precedent: `sync_native_overrides` deleted outright, ADMIN design deletes OMO paths rather than gating them indefinitely.
+Rule: every V1 fallback ships with an inline removal condition naming the verification that retires it (pattern: `# REMOVE WHEN: <green check>`). Designs serving V1+V2 indefinitely are out of scope. Permanent dual support is explicitly rejected.
 
 | ID | Item | Rationale | Unblocks |
 |---|---|---|---|
