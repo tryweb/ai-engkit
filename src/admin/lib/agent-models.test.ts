@@ -761,6 +761,37 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
       else process.env.OMO_ENABLED = previous;
     }
   });
+
+  test("Given a pinned agents source, When collecting state Then marks pinned agents", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const base = {
+        readRoutingConfig: async () => ({
+          version: 1 as const,
+          chains: { plan: { chain: [{ model: "openai/gpt-5.6-luna-fast" }] } },
+        }),
+        readAgentModelsConfig: async () => ({}),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
+        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
+        fetchSubagentNames: async () => ["general", "explore"],
+        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
+      };
+      const withPins: AgentModelStateSource = {
+        ...base,
+        readPinnedAgents: async () => new Set(["plan"]),
+      };
+      const pinned = await collectAgentModelState(withPins, "testpass");
+      expect(pinned.agents.find((e) => e.name === "plan")?.pinned).toBe(true);
+      expect(pinned.agents.find((e) => e.name === "explore")?.pinned).toBe(false);
+      const withoutPins: AgentModelStateSource = { ...base };
+      const unpinned = await collectAgentModelState(withoutPins, "testpass");
+      for (const entry of unpinned.agents) expect(entry.pinned).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
 });
 
 describe("V2 readiness honors canonical JSON head without Markdown comparison", () => {

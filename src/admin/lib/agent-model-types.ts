@@ -24,6 +24,7 @@ export interface AgentModelEntry {
   readonly requestVerified: ResolvedModel | null;
   readonly providerConnected: boolean;
   readonly source: "configured" | "inherited" | "plugin";
+  readonly pinned: boolean;
   readonly invalid: boolean;
   readonly effectiveness: "effective" | "runtime_mismatch" | "awaiting_request" | "invalid" | "plugin" | "unverified";
 }

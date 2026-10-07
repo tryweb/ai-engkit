@@ -31,6 +31,7 @@ import { execInAiDev } from "./docker";
 import { readEnvFile } from "./env";
 import { restartManagedOpenCode } from "./restart-ai-dev";
 import { parseModelReference, probeModel } from "./model-probe";
+import { readPinnedAgents } from "./agent-model-pinned";
 
 function isV2(): boolean {
   return process.env.OMO_ENABLED === "0";
@@ -606,6 +607,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     fetchResolvedAgentModels: live.fetchResolvedAgentModels,
     fetchSubagentNames: live.fetchSubagentNames,
     applyAndVerify,
+    readPinnedAgents: () => readPinnedAgents(deps),
   };
 }
 
@@ -618,6 +620,7 @@ export type AgentModelStateSource = {
   readonly fetchProviderSnapshot: (password: string | null) => Promise<{ readonly connectedProviders: readonly string[]; readonly catalog: readonly string[] }>;
   readonly fetchSubagentNames: (password: string) => Promise<readonly string[]>;
   readonly fetchRecentRequestModels: (password: string) => Promise<{ readonly models: readonly { readonly agent: string; readonly modelID: string; readonly providerID: string; readonly completedAt: number }[]; readonly truncated: boolean; readonly warning?: string }>;
+  readonly readPinnedAgents?: () => Promise<ReadonlySet<string>>;
 };
 
 /** Per-agent view state shared by the admin UI and the center agent protocol. */
@@ -640,11 +643,12 @@ export async function collectAgentModelState(
   const routingOrConfigPromise = v2 && typeof lib.readRoutingConfig === "function"
     ? lib.readRoutingConfig()
     : lib.readAgentModelsConfig();
-  const [rawConfig, resolvedMap, providerSnapshot, subagentNames] = await Promise.all([
+  const [rawConfig, resolvedMap, providerSnapshot, subagentNames, pinnedAgents] = await Promise.all([
     routingOrConfigPromise as Promise<Record<string, AgentModelConfig> | RoutingConfig>,
     password !== null ? lib.fetchResolvedAgentModels(password) : Promise.resolve(null),
     lib.fetchProviderSnapshot(password),
     password !== null ? lib.fetchSubagentNames(password) : Promise.resolve([]),
+    password !== null && typeof lib.readPinnedAgents === "function" ? lib.readPinnedAgents() : Promise.resolve(new Set<string>()),
   ]);
   let config: Record<string, AgentModelConfig>;
   if (v2 && rawConfig !== null && typeof rawConfig === "object" && "chains" in (rawConfig as Record<string, unknown>)) {
@@ -785,6 +789,7 @@ export async function collectAgentModelState(
       requestVerified,
       providerConnected,
       source,
+      pinned: pinnedAgents.has(name),
       invalid: entry?.invalid ?? false,
       effectiveness,
     };
