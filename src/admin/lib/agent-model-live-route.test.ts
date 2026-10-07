@@ -236,7 +236,7 @@ describe("fetchSuccessfulRequestModel V2 gated on OMO_ENABLED=0", () => {
         expect(command).toContain("/home/devuser/workspace");
         expect(command).toContain("jq -nc");
         expect(command).toContain("prompt");
-        expect(command).toContain('{text:"Reply with exactly OK."}');
+        expect(command).toContain("'{agent:$agent,text:");
         expect(command).toContain('.agent==$agent');
         expect(command).toContain(".data.id");
         expect(command).toContain('DELETE "$BASE/api/session/${SESSION}"');

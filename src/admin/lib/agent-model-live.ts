@@ -100,7 +100,7 @@ export function buildRequestVerificationScript(auth: string, agent: string, mode
   fi
   SESSION=\$(jq -nc --arg agent "\$AGENT" --arg dir "/home/devuser/workspace" --argjson model "\$MODEL_JSON" '{agent:\$agent,location:{directory:\$dir}} + (if \$model == null then {} else {model:\$model} end)' | curl -fsS -m 5 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session" -d @- 2>/dev/null | jq -r '.data.id // .id // empty')
   [ -n "\$SESSION" ] || exit 2
-  curl -fsS -m 10 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session/\${SESSION}/prompt" -d "\$(jq -nc '{text:"Reply with exactly OK."}')" >/dev/null 2>&1 || true
+  curl -fsS -m 10 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session/\${SESSION}/prompt" -d "\$(jq -nc --arg agent "\$AGENT" '{agent:\$agent,text:"Reply with exactly OK."}')" >/dev/null 2>&1 || true
   curl -fsS -m 45 -H "Authorization: Basic ${auth}" -X POST "\$BASE/api/experimental/session/\${SESSION}/wait" >/dev/null 2>&1 || true
   MSG=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session/\${SESSION}/message" 2>/dev/null || true)
   OUT=\$(printf '%s' "\$MSG" | jq -c --arg agent "\$AGENT" '[.data[]? | select(.type=="assistant" and .agent==\$agent and (.error==null) and (.model.id | type=="string") and (.model.providerID | type=="string"))] | last | if .==null then empty else {info:{role:"assistant",modelID:.model.id,providerID:.model.providerID}} end' 2>/dev/null || true)
@@ -256,10 +256,6 @@ function parseSuccessfulRequestModel(stdout: string): ResolvedModel | null {
     if (current !== null) resolved = current;
   }
   return resolved;
-}
-
-function parseProviderCatalog(stdout: string): readonly string[] {
-  return parseProviderSnapshot(stdout)?.catalog ?? [];
 }
 
 function parseConnectedProviders(stdout: string): readonly string[] {
