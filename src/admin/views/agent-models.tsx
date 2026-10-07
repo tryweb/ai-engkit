@@ -267,6 +267,14 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
                 >
                   {a.source}
                 </span>
+                {a.pinned && (
+                  <span
+                    title="Manually configured — preserved on restart instead of policy reassignment. Clear the model to unpin."
+                    style={{ color: "var(--accent, #38bdf8)", fontSize: "0.75rem", marginLeft: "0.5rem" }}
+                  >
+                    ● pinned
+                  </span>
+                )}
                 <span class="text-muted" style="font-size:0.75rem;margin-left:0.5rem;">
                   {a.effectiveness}
                 </span>

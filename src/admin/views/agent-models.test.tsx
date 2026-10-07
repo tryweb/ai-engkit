@@ -58,6 +58,32 @@ describe("AgentModelsPage unhealthy model warnings", () => {
   });
 });
 
+describe("AgentModelsPage pinned badge", () => {
+  it("shows pinned badge for manually configured agents", () => {
+    const html = render({
+      agents: [
+        {
+          name: "plan",
+          configured: [{ model: "openai/gpt-4" }],
+          resolved: null,
+          requestVerified: null,
+          source: "configured",
+          effectiveness: "awaiting_request",
+          invalid: false,
+          pinned: true,
+        } as never,
+      ],
+    });
+    expect(html).toContain("pinned");
+    expect(html).toContain("preserved on restart");
+  });
+
+  it("omits pinned badge when not pinned", () => {
+    const html = render();
+    expect(html).not.toContain("● pinned");
+  });
+});
+
 describe("AgentModelsPage mode-aware suggestions", () => {
   it("renders Provider-adjacent mode selector with free/economy/performance and defaults to free", () => {
     const html = render();

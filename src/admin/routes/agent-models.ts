@@ -14,6 +14,7 @@ import { listUnhealthyModels, parseModelReference, probeModel, type ProbeResult 
 import { AgentModelsPage } from "../views/agent-models";
 import { validateAgentChain } from "../lib/agent-model-config";
 import { readAgentModelPolicy, writeAgentModelPolicy } from "../lib/agent-model-policy";
+import { setPinnedAgent } from "../lib/agent-model-pinned";
 
 function isV2(): boolean { return process.env.OMO_ENABLED === "0"; }
 function normalizeChainEntries(raw: Record<string, unknown>): Array<{ model: string; variant?: string }> | null {
@@ -266,6 +267,10 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     const resultsRecord: Record<string, ApplyResult> = {};
     for (const [agent, result] of results) {
       resultsRecord[agent] = result;
+      if (result.ok) {
+        const change = batchChanges.find((ch) => ch.agent === agent);
+        await setPinnedAgent(deps, agent, (change?.entries.length ?? 0) > 0);
+      }
     }
     return c.json({ results: resultsRecord });
   });
@@ -344,6 +349,9 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     }
 
     const result = await reconciler.applyAgent(agent, entries, verification);
+    if (result.ok) {
+      await setPinnedAgent(deps, agent, entries.length > 0);
+    }
     return c.json(result);
   });
 

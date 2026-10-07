@@ -5,6 +5,7 @@ import { displayNameToKey } from "./agent-model-config";
 import { createAgentModelsLib, type AgentModelsLib } from "./agent-models";
 import { fetchModelMetadata } from "./model-metadata";
 import { readAgentModelPolicy } from "./agent-model-policy";
+import { readPinnedAgents } from "./agent-model-pinned";
 import { capabilityScore, compareReferences, suggestForMode, type PolicyCapabilityCatalog, type SuggestionMode } from "./agent-model-suggestion-policy";
 import { profileForAgent } from "./agent-model-role-profiles";
 import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type ProbeResult } from "./model-probe";
@@ -283,6 +284,7 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
       });
       const changed: AgentModelChange[] = [];
       const decisions: Array<Record<string, unknown>> = [];
+      const pinnedAgents = await readPinnedAgents(deps);
       const getChain = (agent: string): readonly ChainEntry[] | readonly FallbackModelEntry[] => {
         return ((config as RoutingConfig).chains[agent]?.chain ?? []) as readonly ChainEntry[];
       };
@@ -330,7 +332,10 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
         let desired: readonly FallbackModelEntry[] | null = null;
         let observedStatus = "policy";
         let probeStatus: string | null = null;
-        if (primary !== undefined) {
+        if (primary !== undefined && pinnedAgents.has(agent)) {
+          desired = configured as readonly FallbackModelEntry[];
+          observedStatus = "pinned_manual";
+        } else if (primary !== undefined) {
           const parsed = parseModelReference(primary.model);
           const inCatalog = catalogSet.has(primary.model);
           const connectedOk = parsed !== null && connected.has(parsed.providerID);
