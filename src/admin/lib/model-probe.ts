@@ -94,6 +94,40 @@ async function readHealthCache(deps: Pick<AgentModelsDeps, "exec">): Promise<Rec
   return {};
 }
 
+const UNHEALTHY_STATUSES: ReadonlySet<ProbeStatus> = new Set([
+  "retired",
+  "unavailable",
+  "mismatch",
+  "wrong_endpoint",
+]);
+
+export interface UnhealthyModel {
+  readonly model: string;
+  readonly status: ProbeStatus;
+  readonly reason: string;
+}
+
+export async function listUnhealthyModels(
+  deps: Pick<AgentModelsDeps, "exec">,
+): Promise<readonly UnhealthyModel[]> {
+  const cache = await readHealthCache(deps);
+  const now = Math.floor(Date.now() / 1000);
+  const out: UnhealthyModel[] = [];
+  for (const [key, record] of Object.entries(cache)) {
+    if (!isRecord(record)) continue;
+    const status = (record as Record<string, unknown>)["status"];
+    if (typeof status !== "string" || !UNHEALTHY_STATUSES.has(status as ProbeStatus)) continue;
+    if (typeof (record as Record<string, unknown>)["retryAfter"] !== "number" || ((record as Record<string, unknown>)["retryAfter"] as number) <= now) continue;
+    const segments = key.split("|");
+    const ref = segments[segments.length - 1] ?? "";
+    if (!ref.includes("/") || ref.startsWith("/") || ref.endsWith("/")) continue;
+    const reason = (record as Record<string, unknown>)["reason"];
+    out.push({ model: ref, status: status as ProbeStatus, reason: typeof reason === "string" ? reason : "" });
+  }
+  out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+  return out;
+}
+
 export async function getCachedProbe(
   deps: Pick<AgentModelsDeps, "exec">,
   providerID: string,

@@ -421,3 +421,42 @@ describe("provider credential scoped model probe cache", () => {
     expect(probeCalls).toBe(0);
   });
 });
+
+describe("listUnhealthyModels", () => {
+  const future = Math.floor(Date.now() / 1000) + 3600;
+  const past = Math.floor(Date.now() / 1000) - 3600;
+  function cacheDeps(cache: Record<string, unknown>) {
+    const deps: Pick<AgentModelsDeps, "exec"> = {
+      exec: async () => ({ stdout: JSON.stringify(cache), stderr: "", exitCode: 0 }),
+    };
+    return deps;
+  }
+  function record(status: string, retryAfter: number, reason = "probe failed") {
+    return { providerID: "p", fingerprint: "f", status, reason, observedAt: new Date().toISOString(), retryAfter };
+  }
+
+  test("lists only unexpired terminal failures with model refs", async () => {
+    const { listUnhealthyModels } = await import("./model-probe");
+    const deps = cacheDeps({
+      "p|f|p/dead-model": record("retired", future),
+      "p|f|p/gone-model": record("unavailable", future),
+      "p|f|p/wrong-model": record("mismatch", future),
+      "p|f|p/bad-endpoint": record("wrong_endpoint", future),
+      "p|f|p/stale-model": record("retired", past),
+      "p|f|p/quota-model": record("quota_exceeded", future),
+      "p|f|p/ok-model": record("healthy", future),
+      "p|f|p/retry-model": record("retryable", future),
+      "not-a-key": record("retired", future),
+    });
+    const result = await listUnhealthyModels(deps);
+    const models = result.map((r) => r.model).sort();
+    expect(models).toEqual(["p/bad-endpoint", "p/dead-model", "p/gone-model", "p/wrong-model"]);
+    expect(result.find((r) => r.model === "p/dead-model")?.status).toBe("retired");
+  });
+
+  test("returns empty list when cache is missing or malformed", async () => {
+    const { listUnhealthyModels } = await import("./model-probe");
+    expect(await listUnhealthyModels({ exec: async () => ({ stdout: "", stderr: "", exitCode: 1 }) })).toEqual([]);
+    expect(await listUnhealthyModels({ exec: async () => ({ stdout: "not json", stderr: "", exitCode: 0 }) })).toEqual([]);
+  });
+});
