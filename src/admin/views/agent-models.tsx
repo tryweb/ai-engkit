@@ -9,6 +9,8 @@ interface AgentModelsState {
   providers: string[];
   hasPassword: boolean;
   catalogAvailable: boolean;
+  unhealthyModels?: readonly string[];
+  unhealthyReasons?: Readonly<Record<string, string>>;
 }
 
 const VARIANTS = ["low", "medium", "high", "xhigh", "max"];
@@ -21,6 +23,8 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
       providers: state.providers,
       hasPassword: state.hasPassword,
       catalogAvailable: state.catalogAvailable,
+      unhealthyModels: state.unhealthyModels ?? [],
+      unhealthyReasons: state.unhealthyReasons ?? {},
     }).replace(/</g, "\\u003c"),
   );
   return (
@@ -547,9 +551,52 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           });
         })();
 
+        function unhealthySet() {
+          var list = agentModelsState.unhealthyModels;
+          return Array.isArray(list) ? list : [];
+        }
+
+        function unhealthyReason(model) {
+          var reasons = agentModelsState.unhealthyReasons;
+          if (reasons && typeof reasons[model] === 'string') return reasons[model];
+          return 'A recent probe reported this model as retired, unavailable, or mismatched.';
+        }
+
+        function markUnhealthyRows() {
+          var bad = unhealthySet();
+          if (bad.length === 0) return;
+          document.querySelectorAll('#agent-models-table tr[data-agent]').forEach(function (tr) {
+            var agent = tr.getAttribute('data-agent');
+            var configuredEl = tr.querySelector('.configured-value');
+            if (!agent || !configuredEl) return;
+            var info = agentModelsState.agents.filter(function (a) { return a.name === agent; })[0];
+            var current = info && info.configured.length ? info.configured[0].model : null;
+            var warn = tr.querySelector('.unhealthy-warn');
+            if (warn) warn.remove();
+            configuredEl.style.color = '';
+            configuredEl.removeAttribute('title');
+            if (current && bad.indexOf(current) !== -1) {
+              configuredEl.style.color = 'var(--danger)';
+              configuredEl.setAttribute('title', unhealthyReason(current));
+              var badge = document.createElement('span');
+              badge.className = 'unhealthy-warn';
+              badge.style.color = 'var(--danger)';
+              badge.style.fontSize = '0.75rem';
+              badge.style.marginLeft = '0.5rem';
+              badge.setAttribute('title', unhealthyReason(current));
+              badge.textContent = '⚠ unhealthy';
+              configuredEl.appendChild(badge);
+            }
+          });
+        }
+
         function rowTemplate(model, variant) {
+          var bad = unhealthySet();
           var modelOpts = agentModelsState.catalog.map(function (m) {
-            return '<option value="' + escapeHtml(m) + '"' + (m === model ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';
+            var flagged = bad.indexOf(m) !== -1;
+            return '<option value="' + escapeHtml(m) + '"' + (m === model ? ' selected' : '') +
+              (flagged ? ' style="color:var(--danger);" title="' + escapeHtml('⚠ ' + unhealthyReason(m)) + '"' : '') + '>' +
+              (flagged ? '⚠ ' : '') + escapeHtml(m) + '</option>';
           }).join('');
           var variantOpts = ['', ${raw(VARIANTS.map((v) => `"${v}"`).join(","))}].map(function (v) {
             return '<option value="' + v + '"' + (v === (variant || '') ? ' selected' : '') + '>' + (v || 'default') + '</option>';
@@ -708,23 +755,41 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               batchResultEl.textContent = message.text;
             }
           });
+          markUnhealthyRows();
+        }
+
+        function batchStageLabel(r, error) {
+          if (r.status === 'write_failed' || r.status === 'restart_failed' || r.status === 'rollback_failed') return 'write';
+          if (r.status === 'probe_failed') return 'probe';
+          if (r.status === 'runtime_mismatch') {
+            return /did not match request-verified/i.test(error) ? 'request' : 'probe';
+          }
+          if (r.status === 'unverified') {
+            if (/not connected/i.test(error)) return 'provider';
+            if (/timed out|timeout/i.test(error)) return 'verify';
+            return 'request';
+          }
+          return 'verify';
         }
 
         function batchResultMessage(r) {
           var error = r.error || r.warning || 'Unknown error';
-          if (r.status === 'applied_with_quota_warning') return { color: 'var(--warning)', text: 'applied with quota warning: ' + error };
+          if (r.status === 'applied_with_quota_warning') return { color: 'var(--warning)', text: '[quota] applied with quota warning: ' + error };
           if (r.status === 'unverified') {
             if (error.toLowerCase().indexOf('timed out') !== -1 || error.toLowerCase().indexOf('timeout') !== -1) {
-              return { color: 'var(--warning)', text: 'Apply timed out: ' + error + ' The configuration was written but verification did not complete. Check health and retry.' };
+              return { color: 'var(--warning)', text: '[verify] Apply timed out: ' + error + ' The configuration was written but verification did not complete. Check health and retry.' };
             }
-            return { color: 'var(--warning)', text: 'Applied but could not confirm restart: ' + error };
+            if (/not connected/i.test(error)) {
+              return { color: 'var(--danger)', text: '[provider] Provider not connected: ' + error };
+            }
+            return { color: 'var(--warning)', text: '[request] Applied but request did not confirm the model: ' + error };
           }
           if (r.status === 'write_failed' || r.status === 'restart_failed' || r.status === 'rollback_failed') {
-            return { color: 'var(--danger)', text: 'not applied — rolled back: ' + error };
+            return { color: 'var(--danger)', text: '[write] not applied — rolled back: ' + error };
           }
-          if (r.status === 'probe_failed') return { color: 'var(--danger)', text: 'rolled back — probe failed: ' + error };
-          if (r.status === 'runtime_mismatch') return { color: 'var(--danger)', text: 'applied but mismatched: ' + error };
-          return { color: 'var(--danger)', text: r.status + ': ' + error };
+          if (r.status === 'probe_failed') return { color: 'var(--danger)', text: '[probe] rolled back — probe failed: ' + error };
+          if (r.status === 'runtime_mismatch') return { color: 'var(--danger)', text: '[' + batchStageLabel(r, error) + '] applied but mismatched: ' + error };
+          return { color: 'var(--danger)', text: '[verify] ' + r.status + ': ' + error };
         }
 
         async function applyPending() {
@@ -962,6 +1027,8 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             warning.style.display = el.checked ? 'block' : 'none';
           });
         })();
+
+        markUnhealthyRows();
       `}</script>
     </div>
   );

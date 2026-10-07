@@ -33,6 +33,31 @@ function render(state: Partial<Parameters<typeof AgentModelsPage>[0]> = {}): str
   );
 }
 
+describe("AgentModelsPage unhealthy model warnings", () => {
+  it("embeds unhealthy models and reasons in page state", () => {
+    const html = render({
+      unhealthyModels: ["p/dead"],
+      unhealthyReasons: { "p/dead": "retired" },
+    } as never);
+    expect(html).toContain('"unhealthyModels":["p/dead"]');
+    expect(html).toContain('"unhealthyReasons":{"p/dead":"retired"}');
+  });
+
+  it("marks unhealthy options red in the edit modal template", () => {
+    const html = render({ unhealthyModels: ["p/dead"] } as never);
+    expect(html).toContain("unhealthy-warn");
+    expect(html).toContain("markUnhealthyRows");
+  });
+
+  it("labels batch failure stages in result messages", () => {
+    const html = render();
+    expect(html).toContain("[provider] Provider not connected");
+    expect(html).toContain("[probe] rolled back");
+    expect(html).toContain("[request] Applied but request did not confirm");
+    expect(html).toContain("[write] not applied");
+  });
+});
+
 describe("AgentModelsPage mode-aware suggestions", () => {
   it("renders Provider-adjacent mode selector with free/economy/performance and defaults to free", () => {
     const html = render();
