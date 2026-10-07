@@ -10,7 +10,7 @@ import {
 } from "../lib/agent-models";
 import { parseVerificationMode, type VerificationMode } from "../lib/agent-model-types";
 import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
-import { parseModelReference, probeModel, type ProbeResult } from "../lib/model-probe";
+import { listUnhealthyModels, parseModelReference, probeModel, type ProbeResult } from "../lib/model-probe";
 import { AgentModelsPage } from "../views/agent-models";
 import { validateAgentChain } from "../lib/agent-model-config";
 import { readAgentModelPolicy, writeAgentModelPolicy } from "../lib/agent-model-policy";
@@ -452,6 +452,11 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     return c.json({ verification, results, summary });
   });
 
+  agentModels.get("/api/agent-models/unhealthy", async (c) => {
+    const unhealthy = await listUnhealthyModels(deps);
+    return c.json({ unhealthy: [...unhealthy] });
+  });
+
   agentModels.get("/api/agent-models/verify-model", async (c) => {
     const modelRef = c.req.query("model");
     if (!modelRef) return c.json({ error: "model parameter required" }, 400);
@@ -466,7 +471,12 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
   agentModels.get("/agent-models", async (c) => {
     const password = lib.getServerPassword();
     const state = await collectAgentModelState(lib, password);
-    return c.html(AgentModelsPage(state));
+    const unhealthy = await listUnhealthyModels(deps);
+    const unhealthyReasons: Record<string, string> = {};
+    for (const u of unhealthy) {
+      if (u.reason) unhealthyReasons[u.model] = u.reason;
+    }
+    return c.html(AgentModelsPage({ ...state, unhealthyModels: unhealthy.map((u) => u.model), unhealthyReasons }));
   });
 
   return agentModels;
