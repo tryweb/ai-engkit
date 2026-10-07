@@ -11,10 +11,6 @@ beforeEach(() => {
   clearModelMetadataCache();
 });
 
-function payload(providers: Record<string, unknown>): Record<string, unknown> {
-  return providers;
-}
-
 function jsonRes(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
@@ -167,7 +163,7 @@ describe("explicit mode schema and provider scope", () => {
     expect(Array.isArray(j.warnings)).toBe(true);
     // suggestions should be object, not Map
     expect(j.suggestions).not.toBeInstanceOf(Map);
-    for (const [agent, sug] of Object.entries(j.suggestions)) {
+    for (const [, sug] of Object.entries(j.suggestions)) {
       expect(typeof sug.model).toBe("string");
       expect(sug.metadata).toBeDefined();
       expect(typeof sug.reason).toBe("string");
@@ -353,5 +349,73 @@ describe("no probe/write/restart in explicit mode", () => {
     globalThis.fetch = origFetch;
     cleanup();
     clearModelMetadataCache();
+  });
+});
+
+describe("agent verification semantics", () => {
+  test("readiness does not report an unprobed agent as healthy", async () => {
+    const { deps, cleanup } = stubDeps(listHandlers());
+    const app = createAgentModelsRoutes(deps);
+    const response = await app.request("http://localhost/api/agent-models/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agents: ["plan"], verification: "readiness" }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.results.plan.status).toBe("configured");
+    expect(body.results.plan.reason).toContain("no SubAgent request was sent");
+    expect(body.summary.configured).toBe(1);
+    expect(body.summary.healthy).toBe(0);
+    cleanup();
+  });
+
+  test("V2 inference verifies the configured SubAgent route, not a model pinned to title", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const routing = JSON.stringify({
+        version: 1,
+        chains: { plan: { chain: [{ model: "nvidia/z-ai/glm-5.3" }] } },
+      });
+      const agents = JSON.stringify({
+        data: [{ id: "plan", name: "plan", mode: "subagent", model: { id: "kimi-k3", providerID: "opencode-go" } }],
+      });
+      const request = JSON.stringify({
+        data: [{ type: "assistant", agent: "plan", model: { id: "z-ai/glm-5.3", providerID: "nvidia" }, error: null }],
+      });
+      const { deps, calls, cleanup } = stubDeps([
+        { match: /jq -c '\.' ~\/\.config\/opencode\/routing\.json/, stdout: routing },
+        { match: /\/api\/agent\?location/, stdout: agents },
+        { match: /\/api\/provider/, stdout: JSON.stringify({ data: [{ id: "nvidia" }] }) },
+        { match: /\/api\/model/, stdout: JSON.stringify({ data: [{ id: "z-ai/glm-5.3", providerID: "nvidia", enabled: true, status: "active" }] }) },
+        { match: /\/api\/session\?limit=100/, stdout: JSON.stringify({ models: [], truncated: false }) },
+        { match: /\/api\/session/, stdout: request },
+      ]);
+      const app = createAgentModelsRoutes(deps);
+      const response = await app.request("http://localhost/api/agent-models/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agents: ["plan"], verification: "inference" }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as {
+        results: Record<string, { status: string; requestModel?: string }>;
+        summary: { total: number; healthy: number; configured: number; unconfigured: number; failed: number; verification: string };
+      };
+      expect(body.results.plan.status).toBe("healthy");
+      expect(body.results.plan.requestModel).toBe("nvidia/z-ai/glm-5.3");
+      expect(body.summary).toEqual({ total: 1, healthy: 1, configured: 0, unconfigured: 0, failed: 0, verification: "inference" });
+      const requestCall = calls.find((command) => command.includes("/api/session/${SESSION}/prompt"));
+      expect(requestCall).toBeDefined();
+      expect(requestCall).not.toContain(Buffer.from("z-ai/glm-5.3").toString("base64"));
+      expect(requestCall).toContain("{agent:$agent,text:");
+      cleanup();
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 });

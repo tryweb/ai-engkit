@@ -5,7 +5,6 @@ import {
   validateFallbackModels,
   REAL_DEPS,
   type AgentModelsDeps,
-  type AgentModelsLib,
   type ApplyResult,
 } from "../lib/agent-models";
 import { parseVerificationMode, type VerificationMode } from "../lib/agent-model-types";
@@ -367,15 +366,11 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     const state = await collectAgentModelState(lib, password);
 
     const configurableNames = new Set(state.agents.map((entry) => entry.name));
-    const configuredByAgent = new Map<string, string | null>();
-    for (const entry of state.agents) {
-      const primary = entry.configured[0]?.model ?? null;
-      configuredByAgent.set(entry.name, primary);
-    }
+    const configuredByAgent = new Map(state.agents.map((entry) => [entry.name, entry.configured] as const));
 
     let targetAgents: readonly string[];
     if (requestedAgents === null || requestedAgents.length === 0) {
-      targetAgents = state.agents.filter((entry) => (configuredByAgent.get(entry.name) ?? null) !== null).map((entry) => entry.name);
+      targetAgents = state.agents.filter((entry) => (configuredByAgent.get(entry.name)?.length ?? 0) > 0).map((entry) => entry.name);
     } else {
       const unknown = requestedAgents.find((agent) => !configurableNames.has(agent));
       if (unknown !== undefined) {
@@ -385,75 +380,92 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     }
 
     if (targetAgents.length === 0) {
-      return c.json({ verification, results: {}, summary: { total: 0, healthy: 0, unconfigured: 0, failed: 0, verification } });
+      return c.json({ verification, results: {}, summary: { total: 0, healthy: 0, configured: 0, unconfigured: 0, failed: 0, verification } });
     }
 
     if (targetAgents.length > MAX_VERIFY_TARGETS) {
       return c.json({ error: `too many agents to verify: ${targetAgents.length} exceeds limit ${MAX_VERIFY_TARGETS}` }, 400);
     }
 
-    const distinctModels = new Set<string>();
-    for (const agent of targetAgents) {
-      const model = configuredByAgent.get(agent) ?? null;
-      if (model !== null) distinctModels.add(model);
-    }
-    if (distinctModels.size > MAX_VERIFY_TARGETS) {
-      return c.json({ error: `too many distinct models to verify: ${distinctModels.size} exceeds limit ${MAX_VERIFY_TARGETS}` }, 400);
-    }
-
     const probeCache = new Map<string, ProbeResult>();
     const deadlineAt = Date.now() + VERIFY_TOTAL_DEADLINE_MS;
-
     async function probeForModel(model: string): Promise<ProbeResult> {
       const cached = probeCache.get(model);
       if (cached !== undefined) return cached;
       const ref = parseModelReference(model);
-      if (ref === null) {
-        const result: ProbeResult = { status: "unavailable", reason: "invalid model reference" };
-        probeCache.set(model, result);
-        return result;
-      }
-      if (verification === "readiness") {
-        const result: ProbeResult = { status: "healthy", reason: "readiness verification does not probe" };
-        probeCache.set(model, result);
-        return result;
-      }
+      if (ref === null) return { status: "unavailable", reason: "invalid model reference" };
       const remainingMs = deadlineAt - Date.now();
-      if (remainingMs <= 0) {
-        const result: ProbeResult = { status: "timeout", reason: "verification deadline exceeded" };
+      if (remainingMs <= 0) return { status: "timeout", reason: "verification deadline exceeded" };
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([
+          probeModel(deps, ref.providerID, ref.modelID),
+          new Promise<ProbeResult>((resolve) => {
+            timer = setTimeout(() => resolve({ status: "timeout", reason: "verification deadline exceeded" }), remainingMs);
+          }),
+        ]);
         probeCache.set(model, result);
         return result;
-      }
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const deadline = new Promise<ProbeResult>((resolve) => {
-        timer = setTimeout(() => resolve({ status: "timeout", reason: "verification deadline exceeded" }), remainingMs);
-      });
-      let result: ProbeResult;
-      try {
-        result = await Promise.race([probeModel(deps, ref.providerID, ref.modelID), deadline]);
       } finally {
         if (timer !== undefined) clearTimeout(timer);
       }
-      probeCache.set(model, result);
-      return result;
     }
 
-    const results: Record<string, { readonly model: string | null; readonly status: string; readonly reason?: string; readonly verification: VerificationMode }> = {};
+    const results: Record<string, { readonly model: string | null; readonly requestModel?: string; readonly status: string; readonly reason?: string; readonly verification: VerificationMode }> = {};
     for (const agent of targetAgents) {
-      const model = configuredByAgent.get(agent) ?? null;
+      const entries = configuredByAgent.get(agent) ?? [];
+      const model = entries[0]?.model ?? null;
       if (model === null) {
         results[agent] = { model: null, status: "unconfigured", reason: "agent has no configured primary model", verification };
         continue;
       }
-      const probe = await probeForModel(model);
-      results[agent] = { model, status: probe.status, ...(probe.reason !== undefined ? { reason: probe.reason } : {}), verification };
+      if (verification === "inference" && !isV2()) {
+        const probe = await probeForModel(model);
+        results[agent] = { model, status: probe.status, ...(probe.reason !== undefined ? { reason: probe.reason } : {}), verification };
+        continue;
+      }
+      let check: ApplyResult;
+      if (verification === "inference") {
+        const remainingMs = deadlineAt - Date.now();
+        if (remainingMs <= 0) {
+          results[agent] = { model, status: "unverified", reason: "verification deadline exceeded", verification };
+          continue;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          check = await Promise.race([
+            lib.verifyAgent(agent, entries, verification),
+            new Promise<ApplyResult>((resolve) => {
+              timer = setTimeout(() => resolve({ ok: false, status: "unverified", error: "verification deadline exceeded" }), remainingMs);
+            }),
+          ]);
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      } else {
+        check = await lib.verifyAgent(agent, entries, verification);
+      }
+      const requestVerified = "requestVerified" in check ? check.requestVerified : null;
+      const requestModel = requestVerified === null
+        ? undefined
+        : `${requestVerified.providerID}/${requestVerified.modelID}`;
+      const status = check.ok
+        ? verification === "readiness" || check.status === "configured" ? "configured" : "healthy"
+        : check.status;
+      const reason = "error" in check
+        ? check.error
+        : verification === "readiness" || check.status === "configured"
+          ? "provider connected; no SubAgent request was sent"
+          : undefined;
+      results[agent] = { model, ...(requestModel !== undefined ? { requestModel } : {}), status, ...(reason !== undefined ? { reason } : {}), verification };
     }
 
     const summary = {
       total: targetAgents.length,
       healthy: Object.values(results).filter((entry) => entry.status === "healthy").length,
+      configured: Object.values(results).filter((entry) => entry.status === "configured").length,
       unconfigured: Object.values(results).filter((entry) => entry.status === "unconfigured").length,
-      failed: Object.values(results).filter((entry) => entry.status !== "healthy" && entry.status !== "unconfigured").length,
+      failed: Object.values(results).filter((entry) => !["healthy", "configured", "unconfigured"].includes(entry.status)).length,
       verification,
     };
 

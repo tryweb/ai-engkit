@@ -65,13 +65,13 @@ function sameEntries(left: readonly FallbackModelEntry[], right: readonly Fallba
   });
 }
 
-function resultForNoop(entries: readonly FallbackModelEntry[]): ApplyResult {
+function resultForNoop(entries: readonly FallbackModelEntry[], v2: boolean): ApplyResult {
   const resolved = entries[0]?.model;
   if (resolved === undefined) return { ok: true, status: "cleared", resolved: null, requestVerified: null };
   const parsed = parseModelReference(resolved);
   return {
     ok: true,
-    status: "verified",
+    status: v2 ? "configured" : "verified",
     resolved: parsed === null ? null : { providerID: parsed.providerID, modelID: parsed.modelID },
     requestVerified: null,
   };
@@ -629,17 +629,26 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
   }
 
   async function applyAgent(agent: string, entries: readonly FallbackModelEntry[], verification: VerificationMode = "readiness"): Promise<ApplyResult> {
+    const v2 = isV2();
+    const fallback: ApplyResult = verification === "inference"
+      ? { ok: false, status: "unverified", error: "verification was skipped because model reconciliation is already active" }
+      : resultForNoop(entries, v2);
     return withLock(async () => {
-      const v2 = isV2();
       if (v2 && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function") {
         const routing = await (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig();
         const current = (routing.chains[agent]?.chain ?? []) as readonly FallbackModelEntry[];
-        return sameEntries(current, entries) ? resultForNoop(entries) : lib.applyAndVerify(agent, entries, verification);
+        if (sameEntries(current, entries)) {
+          return verification === "inference" ? lib.verifyAgent(agent, entries, verification) : resultForNoop(entries, v2);
+        }
+        return lib.applyAndVerify(agent, entries, verification);
       }
       const config = await lib.readAgentModelsConfig();
       const current = config[agent]?.models ?? [];
-      return sameEntries(current, entries) ? resultForNoop(entries) : lib.applyAndVerify(agent, entries, verification);
-    }, resultForNoop(entries));
+      if (sameEntries(current, entries)) {
+        return verification === "inference" ? lib.verifyAgent(agent, entries, verification) : resultForNoop(entries, v2);
+      }
+      return lib.applyAndVerify(agent, entries, verification);
+    }, fallback);
   }
 
   return { reconcileAll, applyAgent, suggest, suggestExplicit };

@@ -466,7 +466,7 @@ describe("createAgentModelsRoutes — POST /api/agent-models/verify", () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(200);
-    const data = await res.json() as { verification: string; results: Record<string, { model: string | null; status: string; reason?: string; verification: string }>; summary: { total: number; healthy: number; unconfigured: number; failed: number; verification: string } };
+    const data = await res.json() as { verification: string; results: Record<string, { model: string | null; status: string; reason?: string; verification: string }>; summary: { total: number; healthy: number; configured: number; unconfigured: number; failed: number; verification: string } };
     expect(data.verification).toBe("inference");
     expect(Object.keys(data.results).sort()).toEqual(["explore", "plan"]);
     for (const entry of Object.values(data.results)) {
@@ -474,7 +474,7 @@ describe("createAgentModelsRoutes — POST /api/agent-models/verify", () => {
       expect(entry.status).toBe("healthy");
       expect(entry.verification).toBe("inference");
     }
-    expect(data.summary).toEqual({ total: 2, healthy: 2, unconfigured: 0, failed: 0, verification: "inference" });
+    expect(data.summary).toEqual({ total: 2, healthy: 2, configured: 0, unconfigured: 0, failed: 0, verification: "inference" });
     expect(calls.some((c) => c.includes(".agents[$agent].model = $model"))).toBe(false);
     expect(calls.some((c) => c.includes("native-agent-overrides"))).toBe(false);
     cleanup();
