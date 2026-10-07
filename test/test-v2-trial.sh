@@ -28,8 +28,8 @@ cell1() {
   docker exec ai-engkit-v2 rm -rf /home/devuser/workspace/.opencode/agents
   docker cp "${repo_root}/.opencode/agents" ai-engkit-v2:/home/devuser/workspace/.opencode/agents
 
-  docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.15'
-  echo "PASS: opencode 2.0.15 in trial container"
+  docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.24'
+  echo "PASS: opencode 2.0.24 in trial container"
 
   [ "$(docker exec ai-engkit-v2 jq -c '.plugin' ~/.config/opencode/opencode.json)" = "[]" ]
   echo "PASS: opencode.json plugin-free"
