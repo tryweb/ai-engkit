@@ -15,7 +15,6 @@ import {
   OPENCODE_JSON,
   ROUTING_CONFIG,
   VARIANTS,
-  type AgentChain,
   type AgentModelConfig,
   type AgentModelChange,
   type AgentModelEntry,
@@ -182,7 +181,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
       const resolvedV2 = resolvedMapV2?.get(agent)
         ?? [...(resolvedMapV2?.entries() ?? [])].find(([name]) => displayNameToKey(name, new Set([agent])) === agent)?.[1]
         ?? null;
-      return { ok: true, status: "verified", resolved: resolvedV2, requestVerified: null };
+      return { ok: true, status: "configured", resolved: resolvedV2, requestVerified: null };
     }
     if (isV2() && verification === "inference") {
       const configuredV2 = entries[0]?.model;
@@ -201,8 +200,12 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         return { ok: false, status: "unverified", error: "Apply timed out after 300 seconds; the configuration was written but verification did not complete. Check provider quota and try again." };
       }
       const providerSnapshotV2 = await live.fetchProviderSnapshot(password);
-      if (!providerSnapshotV2.connectedProviders.includes(parsedV2.providerID)) {
-        return { ok: false, status: "unverified", error: `provider ${parsedV2.providerID} is not connected` };
+      const connectedProviders = new Set(providerSnapshotV2.connectedProviders);
+      if (!entries.some((entry) => {
+        const parsed = parseModelReference(entry.model);
+        return parsed !== null && connectedProviders.has(parsed.providerID);
+      })) {
+        return { ok: false, status: "unverified", error: "no configured chain provider is connected" };
       }
       if (isAborted()) {
         return { ok: false, status: "unverified", error: "Apply timed out after 300 seconds; the configuration was written but verification did not complete. Check provider quota and try again." };
@@ -214,24 +217,21 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
       if (isAborted()) {
         return { ok: false, status: "unverified", error: "Apply timed out after 300 seconds; the configuration was written but verification did not complete. Check provider quota and try again." };
       }
-      const requestVerified = await live.fetchSuccessfulRequestModel(password, agent, { providerID: parsedV2.providerID, modelID: parsedV2.modelID });
+      const requestVerified = await live.fetchSuccessfulRequestModel(password, agent);
       if (requestVerified === null) {
-        return { ok: false, status: "unverified", error: `a successful request for ${agent} did not return model metadata` };
+        return { ok: false, status: "unverified", error: `no successful ${agent} request returned assistant model metadata; the request may have timed out or failed` };
       }
       const requestActual = `${requestVerified.providerID}/${requestVerified.modelID}`;
-      if (requestActual !== configuredV2) {
+      if (!entries.some((entry) => entry.model === requestActual)) {
         return {
           ok: false,
           status: "runtime_mismatch",
           configured: configuredV2,
           resolved: resolvedV2,
           requestVerified,
-          error: `Configured model ${configuredV2} did not match request-verified ${requestActual}`,
+          error: `Configured chain for ${agent} did not include request-verified ${requestActual}`,
         };
       }
-      // A successful pinned request on the exact head model is itself the
-      // liveness probe; metadata probing stays V1-only (its scripts target
-      // legacy /session routes absent from the V2 server).
       return { ok: true, status: "verified", resolved: resolvedV2, requestVerified };
     }
     const resolvedMap = await live.fetchResolvedAgentModels(password);
@@ -558,7 +558,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
             });
           }
         } else {
-          for (const [agent, result] of results) {
+          for (const agent of results.keys()) {
             if (agent !== probeFailure[0]) {
               results.set(agent, { ok: false, status: "rollback_failed", error: `batch rolled back after ${probeFailure[0]} probe failure` });
             }
@@ -588,6 +588,10 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
       ?? { ok: false, status: "write_failed", error: "agent model apply returned no result" };
   }
 
+  async function verifyAgent(agent: string, entries: readonly FallbackModelEntry[], verification: VerificationMode): Promise<ApplyResult> {
+    return verifyAppliedAgent(agent, entries, verification);
+  }
+
   return {
     readAgentModelsConfig,
     readRoutingConfig,
@@ -607,6 +611,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     fetchResolvedAgentModels: live.fetchResolvedAgentModels,
     fetchSubagentNames: live.fetchSubagentNames,
     applyAndVerify,
+    verifyAgent,
     readPinnedAgents: () => readPinnedAgents(deps),
   };
 }
@@ -715,7 +720,7 @@ export async function collectAgentModelState(
     const previous = recentRequestByKey.get(key);
     if (previous === undefined || request.completedAt >= previous.completedAt) recentRequestByKey.set(key, request);
   }
-  const requestVerifiedByKey = new Map<string, ResolvedModel | null>();
+  const requestVerifiedByKey = new Map<string, (typeof recentRequestModels)[number] | null>();
   for (const name of names) {
     const entry = config[name];
     if (entry?.invalid === true) {
@@ -723,10 +728,7 @@ export async function collectAgentModelState(
       continue;
     }
     const match = recentRequestByKey.get(name);
-    requestVerifiedByKey.set(name, match === undefined ? null : {
-      modelID: match.modelID,
-      providerID: match.providerID,
-    });
+    requestVerifiedByKey.set(name, match ?? null);
   }
 
   const agents: AgentModelEntry[] = names.map((name) => {
@@ -735,7 +737,8 @@ export async function collectAgentModelState(
       ? entry.models as readonly FallbackModelEntry[]
       : entry?.model ? [{ model: entry.model, ...(entry.variant ? { variant: entry.variant } : {}) }] : [];
     const resolved = resolvedByKey.get(name) ?? null;
-    const requestVerified = requestVerifiedByKey.get(name) ?? null;
+    const request = requestVerifiedByKey.get(name) ?? null;
+    const requestVerified = request === null ? null : { modelID: request.modelID, providerID: request.providerID };
     const providerConnected = v2 && configured.length > 0
       ? (() => {
           const cm = configured[0]?.model;
@@ -760,11 +763,11 @@ export async function collectAgentModelState(
         if (configuredModel === undefined || !isConnected) {
           effectiveness = "unverified";
         } else {
-          const requestedModel = requestVerified === null ? null : `${requestVerified.providerID}/${requestVerified.modelID}`;
-          if (requestedModel === configuredModel) {
-            effectiveness = "effective";
-          } else {
+          if (requestVerified === null) {
             effectiveness = "awaiting_request";
+          } else {
+            const requestedModel = `${requestVerified.providerID}/${requestVerified.modelID}`;
+            effectiveness = configured.some((entry) => entry.model === requestedModel) ? "effective" : "runtime_mismatch";
           }
         }
       } else {
@@ -787,6 +790,7 @@ export async function collectAgentModelState(
       configured,
       resolved,
       requestVerified,
+      lastSuccessfulRequestAt: request?.completedAt ?? null,
       providerConnected,
       source,
       pinned: pinnedAgents.has(name),

@@ -1,7 +1,6 @@
 import type { DashboardRuntimeProfile, ProviderSummary, SubagentSummary } from "./dashboard-aggregates";
 import type { LeanCtxAppliedSnapshot } from "./leanctx-applied-snapshot";
 import type { AgentModelEntry } from "./agent-model-types";
-import type { ProviderMeta } from "./provider-meta";
 
 export const FIXTURE_RUNTIME_PROFILES: Record<string, DashboardRuntimeProfile> = {
   appliedLite: {
@@ -193,8 +192,10 @@ export function makeAgentEntry(overrides: Partial<AgentModelEntry>): AgentModelE
     configured: [],
     resolved: null,
     requestVerified: null,
+    lastSuccessfulRequestAt: null,
     providerConnected: true,
     source: "configured",
+    pinned: false,
     invalid: false,
     effectiveness: "effective",
     ...overrides,

@@ -795,7 +795,7 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
 });
 
 describe("V2 readiness honors canonical JSON head without Markdown comparison", () => {
-  test("Given V2 librarian configured gemma-4-31b and Markdown reports gemma-4-26b, When verifying readiness Then verified (canonical) not runtime_mismatch", async () => {
+  test("Given V2 librarian configured gemma-4-31b and Markdown reports gemma-4-26b, When verifying readiness Then configured not runtime_mismatch", async () => {
     const previous = process.env.OMO_ENABLED;
     process.env.OMO_ENABLED = "0";
     try {
@@ -825,8 +825,8 @@ describe("V2 readiness honors canonical JSON head without Markdown comparison", 
         "readiness",
       );
       expect(result.ok).toBe(true);
-      expect(result.status).toBe("verified");
-      if (!result.ok) throw new Error(`expected verified result, got ${result.status}`);
+      expect(`${result.status}`).toBe("configured");
+      if (!result.ok) throw new Error(`expected configured result, got ${result.status}`);
       expect(result.resolved).not.toBeNull();
       ctx.cleanup();
     } finally {
@@ -902,7 +902,36 @@ describe("V2 readiness honors canonical JSON head without Markdown comparison", 
     }
   });
 
-  test("Given V2 inference with matching pinned request, When verifying Then verified with requestVerified", async () => {
+  test("Given V2 request used a configured fallback, When collecting state Then the agent is effective", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const fakeLib: AgentModelStateSource = {
+        readRoutingConfig: async () => ({
+          version: 1 as const,
+          chains: { librarian: { chain: [{ model: "nvidia/primary" }, { model: "openrouter/fallback" }] } },
+        }),
+        readAgentModelsConfig: async () => ({}),
+        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
+        fetchProviderSnapshot: async () => ({ connectedProviders: ["nvidia", "openrouter"], catalog: ["nvidia/primary", "openrouter/fallback"] }),
+        fetchSubagentNames: async () => [],
+        fetchRecentRequestModels: async () => ({
+          models: [{ agent: "librarian", modelID: "fallback", providerID: "openrouter", completedAt: 10 }],
+          truncated: false,
+        }),
+      };
+
+      const state = await collectAgentModelState(fakeLib, "testpass");
+
+      expect(state.agents.find((entry) => entry.name === "librarian")?.effectiveness).toBe("effective");
+      expect(state.agents.find((entry) => entry.name === "librarian")?.lastSuccessfulRequestAt).toBe(10);
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("Given V2 inference with a matching agent-routed request, When verifying Then verified with requestVerified", async () => {
     const previous = process.env.OMO_ENABLED;
     process.env.OMO_ENABLED = "0";
     try {
@@ -940,8 +969,9 @@ describe("V2 readiness honors canonical JSON head without Markdown comparison", 
       expect(result.requestVerified).toEqual({ modelID: "longcat-2.5-preview-free", providerID: "opencode" });
       const requestCall = ctx.calls.find((command) => command.includes("/api/session/${SESSION}/prompt"));
       expect(requestCall).toBeDefined();
-      expect(requestCall).toContain(Buffer.from("longcat-2.5-preview-free").toString("base64"));
-      expect(requestCall).toContain(Buffer.from("opencode").toString("base64"));
+      expect(requestCall).not.toContain(Buffer.from("longcat-2.5-preview-free").toString("base64"));
+      expect(requestCall).not.toContain(Buffer.from("opencode").toString("base64"));
+      expect(requestCall).toContain("{agent:$agent,text:");
       ctx.cleanup();
     } finally {
       if (previous === undefined) delete process.env.OMO_ENABLED;
@@ -984,7 +1014,7 @@ describe("V2 readiness honors canonical JSON head without Markdown comparison", 
       expect(result.ok).toBe(false);
       expect(result.status).toBe("runtime_mismatch");
       if (!("error" in result)) throw new Error(`expected mismatch error, got ${result.status}`);
-      expect(result.error).toContain("did not match request-verified");
+      expect(result.error).toContain("did not include request-verified");
       ctx.cleanup();
     } finally {
       if (previous === undefined) delete process.env.OMO_ENABLED;
