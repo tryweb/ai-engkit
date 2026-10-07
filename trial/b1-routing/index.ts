@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadRoutingConfigFromPaths, parseModelString, getMaxFallbackAttempts } from "./routing-config";
 import type { RoutingConfig, ChainEntry } from "./routing-config";
 import { createRoutingStateStore } from "./routing-state";
-import { resolveHeadEnforcement } from "./head-enforcement";
+import { extractSessionModel, isHeadModel, resolveHeadEnforcement } from "./head-enforcement";
 import { isTokenLimitError, isUnrecoverableRequestError, isRetryableModelError, toErrorInfo, getStatusCode } from "./error-classifier";
 
 const PLUGIN_ID = "b1-routing";
@@ -146,25 +146,40 @@ export const plugin = Plugin.define({
             const maybeAg = (promptObj as Record<string, unknown> | undefined)?.["agent"] ?? rec["agent"];
             if (typeof maybeAg === "string" && maybeAg.length > 0) agentForHead = maybeAg;
           }
-          if (!agentForHead) {
-            try {
-              const info = await ctx.session.get({ sessionID: sid });
-              const unwrapped = (info as Record<string, unknown>)["data"] as Record<string, unknown> | undefined;
-              const src = unwrapped ?? (info as Record<string, unknown>);
-              if (src && typeof src["agent"] === "string") agentForHead = src["agent"] as string;
-            } catch (error) {
-              log(`head session lookup failed sid=${sid.slice(0,8)} err=${String(error)}`);
+          let sessionInfo: unknown;
+          async function getSessionInfo(): Promise<unknown> {
+            if (sessionInfo === undefined) {
+              try {
+                sessionInfo = await ctx.session.get({ sessionID: sid });
+              } catch (error) {
+                sessionInfo = null;
+                log(`head session lookup failed sid=${sid.slice(0,8)} err=${String(error)}`);
+              }
             }
+            return sessionInfo;
+          }
+          if (!agentForHead) {
+            const info = await getSessionInfo();
+            const unwrapped = (info as Record<string, unknown> | null)?.["data"] as Record<string, unknown> | undefined;
+            const src = unwrapped ?? (info as Record<string, unknown>);
+            if (src && typeof src["agent"] === "string") agentForHead = src["agent"] as string;
           }
           if (!agentForHead) agentForHead = "build";
           const headState = store.get(sid);
           const decision = resolveHeadEnforcement(routingConfig, agentForHead, headState);
           if (decision) {
-            try {
-              await ctx.session.switchModel({ sessionID: sid, model: decision.payload });
-              log(`head enforce sid=${sid.slice(0,8)} agent=${agentForHead} -> ${decision.parsed.providerID}/${decision.parsed.modelID} variant=${decision.entry.variant ?? "-"}`);
-            } catch (e) {
-              log(`head switchModel failed sid=${sid.slice(0,8)} err=${String(e)}`);
+            const current = extractSessionModel(await getSessionInfo());
+            if (current && !isHeadModel(current, decision)) {
+              log(`head skip user override sid=${sid.slice(0,8)} agent=${agentForHead} current=${current.providerID}/${current.id} head=${decision.parsed.providerID}/${decision.parsed.modelID}`);
+            } else if (current) {
+              log(`head already sid=${sid.slice(0,8)} agent=${agentForHead} model=${current.providerID}/${current.id}`);
+            } else {
+              try {
+                await ctx.session.switchModel({ sessionID: sid, model: decision.payload });
+                log(`head enforce sid=${sid.slice(0,8)} agent=${agentForHead} -> ${decision.parsed.providerID}/${decision.parsed.modelID} variant=${decision.entry.variant ?? "-"}`);
+              } catch (e) {
+                log(`head switchModel failed sid=${sid.slice(0,8)} err=${String(e)}`);
+              }
             }
           } else {
             if (headState && (headState.cursor > 0 || headState.attemptCount > 0)) {

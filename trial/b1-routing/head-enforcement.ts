@@ -13,6 +13,34 @@ export function shouldEnforceHead(state: SessionRoutingState | undefined): boole
   return state.cursor === 0 && state.attemptCount === 0;
 }
 
+export type SessionModel = {
+  readonly id: string;
+  readonly providerID: string;
+  readonly variant?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function extractSessionModel(info: unknown): SessionModel | undefined {
+  const src = isRecord(info) && isRecord(info["data"]) ? info["data"] : info;
+  if (!isRecord(src) || !isRecord(src["model"])) return undefined;
+  const model = src["model"];
+  if (typeof model["id"] !== "string" || typeof model["providerID"] !== "string") return undefined;
+  const result: { id: string; providerID: string; variant?: string } = {
+    id: model["id"],
+    providerID: model["providerID"],
+  };
+  if (typeof model["variant"] === "string") result.variant = model["variant"];
+  return result;
+}
+
+export function isHeadModel(current: SessionModel | undefined, head: HeadEnforcementResult): boolean {
+  if (!current) return false;
+  return current.providerID === head.parsed.providerID && current.id === head.parsed.modelID;
+}
+
 export function resolveHeadEnforcement(
   config: RoutingConfig | undefined,
   agent: string,

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { parseRoutingConfig } from "./routing-config";
 import type { RoutingConfig } from "./routing-config";
 import type { SessionRoutingState } from "./routing-state";
-import { resolveHeadEnforcement, shouldEnforceHead } from "./head-enforcement";
+import { extractSessionModel, isHeadModel, resolveHeadEnforcement, shouldEnforceHead } from "./head-enforcement";
 
 function makeConfig(chains: Record<string, { model: string; variant?: string }[]>): RoutingConfig {
   const raw: unknown = {
@@ -97,5 +97,35 @@ describe("head-enforcement - resolveHeadEnforcement", () => {
     const result = resolveHeadEnforcement(cfg, "plan", state);
     expect(result).toBeDefined();
     expect(result?.entry.model).toBe("p/head");
+  });
+});
+
+describe("head-enforcement - user override respect", () => {
+  test("extractSessionModel reads wrapped {data:{model}} shape", () => {
+    const info = { data: { id: "ses_1", agent: "sisyphus", model: { id: "m", providerID: "p", variant: "default" } } };
+    expect(extractSessionModel(info)).toEqual({ id: "m", providerID: "p", variant: "default" });
+  });
+
+  test("extractSessionModel reads unwrapped {model} shape", () => {
+    const info = { agent: "sisyphus", model: { id: "m", providerID: "p" } };
+    expect(extractSessionModel(info)).toEqual({ id: "m", providerID: "p" });
+  });
+
+  test("extractSessionModel returns undefined when model is absent or malformed", () => {
+    expect(extractSessionModel({ data: { agent: "sisyphus" } })).toBeUndefined();
+    expect(extractSessionModel({ data: { model: null } })).toBeUndefined();
+    expect(extractSessionModel({ data: { model: { id: 42, providerID: "p" } } })).toBeUndefined();
+    expect(extractSessionModel(null)).toBeUndefined();
+    expect(extractSessionModel("ses_1")).toBeUndefined();
+  });
+
+  test("isHeadModel matches provider and id, ignoring variant", () => {
+    const cfg = makeConfig({ sisyphus: [{ model: "nvidia/glm" }] });
+    const head = resolveHeadEnforcement(cfg, "sisyphus", undefined);
+    expect(head).toBeDefined();
+    expect(isHeadModel({ id: "glm", providerID: "nvidia", variant: "default" }, head!)).toBe(true);
+    expect(isHeadModel({ id: "other", providerID: "nvidia" }, head!)).toBe(false);
+    expect(isHeadModel({ id: "glm", providerID: "openai" }, head!)).toBe(false);
+    expect(isHeadModel(undefined, head!)).toBe(false);
   });
 });
