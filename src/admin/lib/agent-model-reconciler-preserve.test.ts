@@ -23,6 +23,7 @@ function makeDeps(handlers: Array<{ match: RegExp; stdout?: string }>): { deps: 
     exec: async (cmd: string): Promise<ExecResult> => {
       calls.push(cmd);
       for (const h of handlers) if (h.match.test(cmd)) return { stdout: h.stdout ?? "", stderr: "", exitCode: 0 };
+      if (cmd.includes("dGl0bGU=")) return { stdout: JSON.stringify({ info: { role: "assistant", modelID: "free-model", providerID: "openai" } }), stderr: "", exitCode: 0 };
       if (cmd.includes("snap_r=") || cmd.includes("snapshot")) return { stdout: "/tmp/snap_r:/tmp/snap_o", stderr: "", exitCode: 0 };
       if (cmd.includes("cat") && cmd.includes("routing.json")) return { stdout: '{"version":1,"chains":{}}', stderr: "", exitCode: 0 };
       if (cmd.includes("agent-model-policy.json")) return { stdout: '{"mode":"free"}', stderr: "", exitCode: 0 };
@@ -165,5 +166,83 @@ describe("free/economy/performance policy differences", () => {
     expect(freeOut.suggestions.get("oracle")?.model).toBe("openai/free-a");
     expect(econOut.suggestions.get("oracle")?.model).toBe("openai/free-a");
     expect(perfOut.suggestions.get("oracle")?.model).toBe("openai/strong-c");
+  });
+});
+
+describe("pinned manual configuration", () => {
+  test("keeps pinned chain even when policy would replace it", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    const payload = {
+      openai: { models: {
+        "free-model": { cost: { input: 0, output: 0 }, limit: { context: 32000, output: 4000 }, reasoning: false, tool_call: true },
+      }},
+    };
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(async (): Promise<Response> => jsonRes(payload), { preconnect: Reflect.get(origFetch, "preconnect") });
+    try {
+      const routing = JSON.stringify({
+        version: 1,
+        chains: {
+          explore: { chain: [{ model: "custom/old-model" }] },
+        },
+      });
+      const handlers = [
+        { match: /agent-model-pinned\.json/, stdout: JSON.stringify({ version: 1, agents: ["explore"] }) },
+        { match: /agent-model-policy\.json/, stdout: '{"mode":"free"}' },
+        { match: /routing\.json/, stdout: routing },
+        { match: /\/api\/provider/, stdout: JSON.stringify({ data: [{ id: "openai" }] }) },
+        { match: /\/api\/model/, stdout: JSON.stringify({ data: [{ id: "free-model", providerID: "openai" }] }) },
+        { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [{ id: "openai", models: { "free-model": { capabilities: { toolcall: true } } } }] }) },
+        { match: /\/api\/agent/, stdout: JSON.stringify({ data: [{ id: "explore", mode: "subagent", model: { id: "free-model", providerID: "openai" } }] }) },
+      ];
+      const { deps, calls } = makeDeps(handlers);
+      const rec = createAgentModelReconciler(deps);
+      const summary = await rec.reconcileAll();
+      expect(summary.agents.includes("explore")).toBe(false);
+      expect(summary.failed).toBe(0);
+      expect(calls.some((c) => c.includes("del(.chains") || c.includes(".chains[$agent].chain ="))).toBe(false);
+    } finally {
+      globalThis.fetch = origFetch;
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("unpinned agent with same setup gets policy replacement", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    const payload = {
+      openai: { models: {
+        "free-model": { cost: { input: 0, output: 0 }, limit: { context: 32000, output: 4000 }, reasoning: false, tool_call: true },
+      }},
+    };
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(async (): Promise<Response> => jsonRes(payload), { preconnect: Reflect.get(origFetch, "preconnect") });
+    try {
+      const routing = JSON.stringify({
+        version: 1,
+        chains: {
+          explore: { chain: [{ model: "custom/old-model" }] },
+        },
+      });
+      const handlers = [
+        { match: /agent-model-pinned\.json/, stdout: JSON.stringify({ version: 1, agents: [] }) },
+        { match: /agent-model-policy\.json/, stdout: '{"mode":"free"}' },
+        { match: /routing\.json/, stdout: routing },
+        { match: /\/api\/provider/, stdout: JSON.stringify({ data: [{ id: "openai" }] }) },
+        { match: /\/api\/model/, stdout: JSON.stringify({ data: [{ id: "free-model", providerID: "openai" }] }) },
+        { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [{ id: "openai", models: { "free-model": { capabilities: { toolcall: true } } } }] }) },
+        { match: /\/api\/agent/, stdout: JSON.stringify({ data: [{ id: "explore", mode: "subagent", model: { id: "free-model", providerID: "openai" } }] }) },
+      ];
+      const { deps } = makeDeps(handlers);
+      const rec = createAgentModelReconciler(deps);
+      const summary = await rec.reconcileAll();
+      expect(summary.agents.includes("explore")).toBe(true);
+    } finally {
+      globalThis.fetch = origFetch;
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
   });
 });
