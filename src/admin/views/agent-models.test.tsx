@@ -10,8 +10,9 @@ function render(state: Partial<Parameters<typeof AgentModelsPage>[0]> = {}): str
           configured: [],
           resolved: null,
           requestVerified: null,
+          lastSuccessfulRequestAt: null,
           source: "inherited",
-          effectiveness: "n/a",
+          effectiveness: "plugin",
           invalid: false,
         } as never,
         {
@@ -19,6 +20,7 @@ function render(state: Partial<Parameters<typeof AgentModelsPage>[0]> = {}): str
           configured: [{ model: "openai/gpt-4" }],
           resolved: { providerID: "openai", modelID: "gpt-4" },
           requestVerified: null,
+          lastSuccessfulRequestAt: null,
           source: "configured",
           effectiveness: "effective",
           invalid: false,
@@ -58,6 +60,30 @@ describe("AgentModelsPage unhealthy model warnings", () => {
   });
 });
 
+describe("AgentModelsPage batch failure navigation", () => {
+  it("gives each agent row an anchor id", () => {
+    const html = render();
+    expect(html).toContain('id="row-general"');
+    expect(html).toContain('id="row-plan"');
+  });
+
+  it("renders clickable failure anchors and row highlight hooks", () => {
+    const html = render();
+    expect(html).toContain('href="#row-');
+    expect(html).toContain('batch-failed');
+    expect(html).toContain('batch-ok');
+    expect(html).toContain('Click a name to jump to its row');
+  });
+});
+
+describe("AgentModelsPage empty suggestions state", () => {
+  it("tells the user there is nothing to apply instead of pointing at Apply", () => {
+    const html = render();
+    expect(html).toContain('nothing to apply');
+    expect(html).toContain("added === 0");
+  });
+});
+
 describe("AgentModelsPage pinned badge", () => {
   it("shows pinned badge for manually configured agents", () => {
     const html = render({
@@ -67,6 +93,7 @@ describe("AgentModelsPage pinned badge", () => {
           configured: [{ model: "openai/gpt-4" }],
           resolved: null,
           requestVerified: null,
+          lastSuccessfulRequestAt: null,
           source: "configured",
           effectiveness: "awaiting_request",
           invalid: false,
@@ -74,13 +101,71 @@ describe("AgentModelsPage pinned badge", () => {
         } as never,
       ],
     });
-    expect(html).toContain("pinned");
-    expect(html).toContain("preserved on restart");
+    expect(html).toContain("Pinned");
+    expect(html).toContain("Manual pin");
   });
 
   it("omits pinned badge when not pinned", () => {
     const html = render();
     expect(html).not.toContain("● pinned");
+  });
+});
+
+describe("AgentModelsPage concise route status and diagnostics", () => {
+  it("shows the configured route and latest successful model while hiding the API default in diagnostics", () => {
+    const html = render({
+      agents: [{
+        name: "plan",
+        configured: [{ model: "nvidia/z-ai/glm-5.3" }, { model: "openrouter/free-fallback" }],
+        resolved: { providerID: "opencode-go", modelID: "kimi-k3" },
+        requestVerified: { providerID: "openrouter", modelID: "free-fallback" },
+        lastSuccessfulRequestAt: Date.UTC(2026, 9, 7, 1, 2),
+        providerConnected: true,
+        source: "configured",
+        pinned: true,
+        invalid: false,
+        effectiveness: "effective",
+      }],
+    });
+    const diagnosticsStart = html.indexOf("Diagnostics");
+
+    expect(html).toContain("Configured route");
+    expect(html).toContain("Last successful model");
+    expect(html).toContain("Status");
+    expect(html).toContain("nvidia/z-ai/glm-5.3 → openrouter/free-fallback");
+    expect(html).toContain("free-fallback @ openrouter");
+    expect(html).toContain("2026-10-07 01:02 UTC");
+    expect(diagnosticsStart).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf("OpenCode agent default", diagnosticsStart)).toBeGreaterThan(diagnosticsStart);
+    expect(html.indexOf("Configuration source", diagnosticsStart)).toBeGreaterThan(diagnosticsStart);
+    expect(html.indexOf("Agent API model")).toBe(-1);
+  });
+
+  it("marks agents with no successful request as not yet verified", () => {
+    expect(render()).toContain("Not yet verified");
+  });
+
+  it("shows a runtime model mismatch in the main Status column", () => {
+    const html = render({
+      agents: [{
+        name: "plan",
+        configured: [{ model: "nvidia/z-ai/glm-5.3" }],
+        resolved: { providerID: "opencode-go", modelID: "kimi-k3" },
+        requestVerified: { providerID: "openrouter", modelID: "other-model" },
+        lastSuccessfulRequestAt: Date.UTC(2026, 9, 7, 1, 2),
+        providerConnected: true,
+        source: "configured",
+        pinned: false,
+        invalid: false,
+        effectiveness: "runtime_mismatch",
+      }],
+    });
+    const statusStart = html.indexOf('data-label="Status"');
+    const statusEnd = html.indexOf("</td>", statusStart);
+    const statusCell = html.slice(statusStart, statusEnd);
+
+    expect(statusCell).toContain("Model mismatch");
+    expect(statusCell).toContain("status-pill--danger");
   });
 });
 
@@ -217,8 +302,9 @@ describe("AgentModelsPage mode-aware suggestions", () => {
         configured: [],
         resolved: null,
         requestVerified: null,
+        lastSuccessfulRequestAt: null,
         source: "inherited",
-        effectiveness: "n/a",
+        effectiveness: "plugin",
         invalid: false,
       }] as never,
       catalog: ['provider/model" onfocus="alert(1)'],

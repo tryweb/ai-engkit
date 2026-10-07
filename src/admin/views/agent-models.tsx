@@ -14,6 +14,14 @@ interface AgentModelsState {
 }
 
 const VARIANTS = ["low", "medium", "high", "xhigh", "max"];
+const STATUS_DISPLAY = {
+  effective: { label: "Effective", tone: "success" },
+  runtime_mismatch: { label: "Model mismatch", tone: "danger" },
+  awaiting_request: { label: "Awaiting request", tone: "neutral" },
+  invalid: { label: "Invalid", tone: "danger" },
+  plugin: { label: "Automatic", tone: "neutral" },
+  unverified: { label: "Unverified", tone: "warning" },
+} satisfies Record<AgentModelEntry["effectiveness"], { readonly label: string; readonly tone: "success" | "danger" | "neutral" | "warning" }>;
 
 const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
   const json = raw(
@@ -40,9 +48,10 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         build) are not configurable here.
       </p>
       <p class="text-sm text-muted" style="margin-top:8px;">
-        <strong>Assigned model</strong> is OpenCode's current agent assignment. <strong>Last successful request</strong>
-        is the model metadata returned by the most recent real request. A model is <strong>effective</strong> only when both
-        match the configured model and its provider is connected.
+        Configured route is the primary model followed by fallbacks. Last successful model comes from the latest completed request;
+        its timestamp is UTC. Status separates pinning from request effectiveness. Expand Diagnostics for the OpenCode agent default
+        (before V2 routing), source, and provider/config details. “Not yet verified” means no successful request is recorded;
+        readiness checks provider connectivity only.
       </p>
 
       {!state.hasPassword && (
@@ -65,14 +74,14 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           <span id="batch-count" class="text-sm" style="font-weight:600;"></span>
           <div style="display:flex; gap:8px; align-items:center;">
             <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted);">
-              <input type="checkbox" id="verify-inference" /> Verify usability (may consume quota)
+              <input type="checkbox" id="verify-inference" /> Verify SubAgent request (may consume quota)
             </label>
-            <button id="btn-discard" class="btn-outline" onclick="discardPending()" style="padding:6px 12px;">Discard</button>
-            <button id="btn-apply" onclick="applyPending()" style="padding:6px 16px; background:var(--warning); color:#000; font-weight:600;">Apply</button>
+            <button id="btn-discard" type="button" class="btn-outline" onclick="discardPending()" style="padding:6px 12px;">Discard</button>
+            <button id="btn-apply" type="button" onclick="applyPending()" style="padding:6px 16px; background:var(--warning); color:#000; font-weight:600;">Apply</button>
           </div>
         </div>
         <div id="batch-status" class="text-sm" style="margin-top:8px;"></div>
-        <div id="verify-warning" class="text-sm" style="display:none; margin-top:6px; color:var(--warning);">⚠ Inference verification sends a real model request and may consume provider quota or incur cost. Readiness verification (default) checks configuration without inference.</div>
+        <div id="verify-warning" class="text-sm" style="display:none; margin-top:6px; color:var(--warning);">⚠ Inference verification sends a normal request through each configured SubAgent and may consume provider quota or incur cost. Readiness verification (default) confirms configuration and provider connectivity only; it does not test an agent response.</div>
       </div>
 
       <div class="card" style="margin-bottom:16px;">
@@ -82,7 +91,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             Generate a reasonable configured model from the selected providers. Manual edits are kept.
           </p>
           <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;">
-            <label for="suggestion-mode" style="display:inline-flex;align-items:center;gap:8px;font-weight:600;">
+            <label for="suggestion-mode" style="display:inline-flex;align-items:center;gap:8px;font-weight:600;white-space:nowrap;">
               Mode
               <select
                 id="suggestion-mode"
@@ -109,7 +118,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             </label>
             <span id="provider-options" style="display:inline-flex;flex-wrap:wrap;gap:12px 16px;">
               {state.providers.map((provider) => (
-                <label style="display:inline-flex;align-items:center;gap:8px;">
+                <label key={provider} style="display:inline-flex;align-items:center;gap:8px;">
                   <input class="provider-option" type="checkbox" value={provider} checked disabled={!state.catalogAvailable || !state.hasPassword} />
                   {provider}
                 </label>
@@ -118,6 +127,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           </div>
           <button
             id="btn-generate"
+            type="button"
             class="btn-outline"
             onclick="generateSuggestions()"
             disabled={!state.catalogAvailable || !state.hasPassword || state.providers.length === 0}
@@ -129,7 +139,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             All connected providers are selected.
           </span>
           <div id="suggestion-meta" class="text-sm text-muted" style="margin-top:12px;display:none;overflow-wrap:anywhere;word-break:break-word;" aria-live="polite"></div>
-          <div id="suggestion-list" role="list" style="margin-top:12px;display:none;overflow-wrap:anywhere;word-break:break-word;min-width:0;"></div>
+          <ul id="suggestion-list" style="margin-top:12px;display:none;overflow-wrap:anywhere;word-break:break-word;min-width:0;list-style:none;padding:0;"></ul>
         </fieldset>
       </div>
 
@@ -184,6 +194,41 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           @keyframes spin {
             to { transform: rotate(360deg); }
           }
+          tr.batch-failed > td:first-child {
+            box-shadow: inset 3px 0 0 var(--danger);
+          }
+          tr.batch-failed {
+            background: rgba(239, 68, 68, 0.07);
+          }
+          tr.batch-ok > td:first-child {
+            box-shadow: inset 3px 0 0 var(--success);
+          }
+          #agent-models-table th {
+            white-space: nowrap;
+          }
+          #agent-models-table td {
+            vertical-align: top;
+          }
+          #agent-models-table td:last-child button {
+            white-space: nowrap;
+            min-height: 44px;
+          }
+          .agent-model-diagnostics summary {
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            cursor: pointer;
+          }
+          .agent-model-diagnostics__fields {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 4px;
+            margin: 8px 0 0;
+          }
+          .agent-model-diagnostics__fields dd {
+            margin: 0 0 4px;
+            overflow-wrap: anywhere;
+          }
           .dirty-dot {
             display: inline-block;
             width: 8px;
@@ -197,90 +242,63 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         <div class="agent-models-table-wrap">
           <table id="agent-models-table">
           <tr>
-            <th>Subagent</th>
-            <th>Configured model</th>
-            <th>Assigned model</th>
-            <th>Last successful request</th>
-            <th>Source / status</th>
+            <th>Agent</th>
+            <th>Configured route</th>
+            <th>Last successful model</th>
+            <th>Status</th>
             <th></th>
           </tr>
-          {state.agents.map((a) => (
-            <tr data-agent={a.name}>
-              <td data-label="Subagent"><code>{a.name}</code></td>
-              <td data-label="Configured model">
-                <span class="configured-value">
-                    {a.configured.length === 0 ? (
-                    <span class="text-muted">—</span>
-                  ) : (
-                    (() => {
-                      const e = a.configured[0];
-                      if (!e) return "—";
-                      const suffix = a.configured.length > 1 ? ` (+${a.configured.length - 1} fallback${a.configured.length > 2 ? "s" : ""})` : "";
-                      return `${e.model}${e.variant ? ` (${e.variant})` : ""}${suffix}`;
-                    })()
-                  )}
-                </span>
+          {state.agents.map((a) => {
+            const status = STATUS_DISPLAY[a.effectiveness];
+            const configuredRoute = a.configured.map((entry) => `${entry.model}${entry.variant ? ` (${entry.variant})` : ""}`).join(" → ");
+            const lastSuccessfulAt = a.lastSuccessfulRequestAt === null ? null : new Date(a.lastSuccessfulRequestAt).toISOString();
+            return (
+            <tr key={a.name} data-agent={a.name} id={"row-" + a.name}>
+              <td data-label="Agent">
+                <code>{a.name}</code>
+                <details class="agent-model-diagnostics" style="margin-top:4px;">
+                  <summary class="text-sm text-muted">Diagnostics</summary>
+                  <dl class="text-sm agent-model-diagnostics__fields">
+                    <dt>OpenCode agent default</dt>
+                    <dd>{a.resolved ? <code>{a.resolved.modelID} @ {a.resolved.providerID}</code> : "Not available"}</dd>
+                    <dt>Configuration source</dt>
+                    <dd>{a.source}</dd>
+                    <dt>Provider</dt>
+                    <dd>{a.providerConnected ? "Connected" : "Not connected"}</dd>
+                    <dt>Manual pin</dt>
+                    <dd>{a.pinned ? "Pinned" : "Not pinned"}</dd>
+                    <dt>Configuration</dt>
+                    <dd>{a.invalid ? "Invalid" : "Valid"}</dd>
+                  </dl>
+                </details>
+              </td>
+              <td data-label="Configured route">
+                {configuredRoute ? <code>{configuredRoute}</code> : <span class="text-muted">Automatic</span>}
                 <span class="dirty-dot" style="display:none;" title="Pending change"></span>
                 <div class="pending-value text-sm" style="display:none; color:var(--warning);"></div>
                 <div class="batch-result text-sm" style="display:none;"></div>
               </td>
-              <td data-label="Assigned model">
-                {a.resolved ? (
-                  <code>
-                    {a.resolved.modelID} @ {a.resolved.providerID}
-                  </code>
+              <td data-label="Last successful model">
+                {a.requestVerified && lastSuccessfulAt ? (
+                  <div>
+                    <code>{a.requestVerified.modelID} @ {a.requestVerified.providerID}</code>
+                    <div class="text-sm text-muted">
+                      <time dateTime={lastSuccessfulAt}>{lastSuccessfulAt.slice(0, 16).replace("T", " ")} UTC</time>
+                    </div>
+                  </div>
                 ) : (
-                  <span class="text-muted">n/a</span>
+                  <span class="text-muted">Not yet verified</span>
                 )}
               </td>
-              <td data-label="Last successful request">
-                {a.requestVerified ? (
-                  <code>
-                    {a.requestVerified.modelID} @ {a.requestVerified.providerID}
-                  </code>
-                ) : (
-                  <span class="text-muted">not verified</span>
-                )}
-              </td>
-              <td data-label="Source / status">
-                {a.invalid && (
-                  <span
-                    title="Config has keys the OMO plugin no longer recognizes (e.g. permission). Fix or remove them for overrides to take effect."
-                    style={{ color: "#ef4444", fontSize: "0.75rem", marginRight: "0.5rem" }}
-                  >
-                    ⚠ invalid
-                  </span>
-                )}
-                {" "}
-                <span
-                  style={{
-                    color:
-                      a.source === "configured"
-                        ? "var(--success)"
-                        : a.source === "inherited"
-                          ? "var(--warning)"
-                          : "#94a3b8",
-                    fontSize: "0.75rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.03em",
-                  }}
-                >
-                  {a.source}
-                </span>
-                {a.pinned && (
-                  <span
-                    title="Manually configured — preserved on restart instead of policy reassignment. Clear the model to unpin."
-                    style={{ color: "var(--accent, #38bdf8)", fontSize: "0.75rem", marginLeft: "0.5rem" }}
-                  >
-                    ● pinned
-                  </span>
-                )}
-                <span class="text-muted" style="font-size:0.75rem;margin-left:0.5rem;">
-                  {a.effectiveness}
-                </span>
+              <td data-label="Status">
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                  {a.pinned && <span class="status-pill status-pill--neutral">Pinned</span>}
+                  <span class={`status-pill status-pill--${status.tone}`}>{status.label}</span>
+                </div>
               </td>
               <td data-label="Actions">
                 <button
+                  type="button"
                   class="btn-outline"
                   style={{
                     padding: "4px 8px",
@@ -296,7 +314,8 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
                 </button>
               </td>
             </tr>
-          ))}
+            );
+          })}
           </table>
         </div>
       </div>
@@ -310,9 +329,9 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           </p>
           <div id="model-rows"></div>
           <div class="flex gap-2" style="justify-content:flex-end;margin-top:14px;">
-            <button id="btn-cancel" class="btn-outline" onclick="closeModal()">Cancel</button>
-            <button id="btn-clear" class="btn-outline" style="display:none;" onclick="clearAgent()">Use automatic model</button>
-            <button id="btn-save" onclick="saveAgent()">Save to pending</button>
+            <button id="btn-cancel" type="button" class="btn-outline" onclick="closeModal()">Cancel</button>
+            <button id="btn-clear" type="button" class="btn-outline" style="display:none;" onclick="clearAgent()">Use automatic model</button>
+            <button id="btn-save" type="button" onclick="saveAgent()">Save to pending</button>
           </div>
           <div id="save-result" class="text-sm" style="margin-top:12px;"></div>
         </div>
@@ -525,9 +544,15 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             }
             updateRowDirtyState();
             updateBatchBar();
-            status.style.color = 'var(--success)';
-            status.textContent = 'Added ' + added + ' suggestions. Review them, then Apply.';
-            banner.innerHTML = '<span class="spinner"></span> Suggestions ready. Review the pending changes before Apply.';
+            if (added === 0) {
+              status.style.color = 'var(--success)';
+              status.textContent = 'Suggestions match the current configuration — nothing to apply.';
+              banner.innerHTML = 'Suggestions match the current configuration — nothing to apply.';
+            } else {
+              status.style.color = 'var(--success)';
+              status.textContent = 'Added ' + added + ' suggestions. Review them, then Apply.';
+              banner.innerHTML = '<span class="spinner"></span> Suggestions ready. Review the pending changes before Apply.';
+            }
             restartStatus.textContent = 'Suggestions ready ✔';
             setTimeout(function () { banner.remove(); restartStatus.textContent = ''; }, 1800);
           } catch (e) {
@@ -684,6 +709,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               }
               if (configuredEl) configuredEl.style.opacity = '0.5';
               if (batchResultEl) batchResultEl.style.display = 'none';
+              tr.classList.remove('batch-failed', 'batch-ok');
             } else {
               if (dot) dot.style.display = 'none';
               if (pendingEl) pendingEl.style.display = 'none';
@@ -719,6 +745,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           updateRowDirtyState();
           updateBatchBar();
           document.querySelectorAll('.batch-result').forEach(function (el) { el.style.display = 'none'; el.textContent = ''; });
+          document.querySelectorAll('#agent-models-table tr.batch-failed, #agent-models-table tr.batch-ok').forEach(function (tr) { tr.classList.remove('batch-failed', 'batch-ok'); });
           document.getElementById('batch-status').textContent = '';
           var meta = document.getElementById('suggestion-meta');
           var list = document.getElementById('suggestion-list');
@@ -749,15 +776,22 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             if (!batchResultEl) return;
             batchResultEl.style.display = 'block';
             if (r.ok) {
+              tr.classList.remove('batch-failed');
+              tr.classList.add('batch-ok');
               if (r.status === 'applied_with_quota_warning') {
                 batchResultEl.style.color = 'var(--warning)';
                 var warning = r.warning || r.error || 'provider quota exhausted';
                 batchResultEl.textContent = 'applied with quota warning → ' + (r.resolved ? r.resolved.modelID + ' @ ' + r.resolved.providerID : 'n/a') + ' (' + warning + ')';
+              } else if (r.status === 'configured') {
+                batchResultEl.style.color = 'var(--warning)';
+                batchResultEl.textContent = 'configured; SubAgent request not tested';
               } else {
                 batchResultEl.style.color = 'var(--success)';
                 batchResultEl.textContent = r.status === 'cleared' ? 'cleared → ' + (r.resolved ? r.resolved.modelID + ' @ ' + r.resolved.providerID : 'n/a') : 'verified → ' + (r.requestVerified ? r.requestVerified.modelID + ' @ ' + r.requestVerified.providerID : r.resolved ? r.resolved.modelID + ' @ ' + r.resolved.providerID : 'n/a');
               }
             } else {
+              tr.classList.remove('batch-ok');
+              tr.classList.add('batch-failed');
               var message = batchResultMessage(r);
               batchResultEl.style.color = message.color;
               batchResultEl.textContent = message.text;
@@ -870,13 +904,16 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
                 batchStatus.textContent = 'Applied with quota warning for ' + quotaWarned.join(', ') + '. Configuration kept; check provider quota. Reloading…';
               } else {
                 batchStatus.style.color = 'var(--success)';
-                batchStatus.textContent = 'Applied and restarted (' + Object.keys(results).length + ' agents). Reloading…';
+                var configuredOnly = Object.keys(results).some(function (agent) { return results[agent].status === 'configured'; });
+                batchStatus.textContent = 'Applied and restarted (' + Object.keys(results).length + ' agents).' + (configuredOnly ? ' Provider connectivity checked; SubAgent requests not tested.' : '') + ' Reloading…';
               }
-              status.textContent = quotaWarned.length > 0 ? 'Applied with warning ⚠' : 'Restarted ✔';
+              status.textContent = quotaWarned.length > 0 ? 'Applied with warning ⚠' : Object.keys(results).some(function (agent) { return results[agent].status === 'configured'; }) ? 'Configured ✔' : 'Verified ✔';
               setTimeout(function () { status.textContent = ''; batchStatus.textContent = ''; applyBtn.disabled = false; discardBtn.disabled = false; enableTableRows(); applyInProgress = false; pending.clear(); updateRowDirtyState(); updateBatchBar(); location.reload(); }, 2500);
             } else {
               batchStatus.style.color = 'var(--danger)';
-              batchStatus.textContent = failed.length + ' failed: ' + failed.join(', ') + '. See per-row status.';
+              batchStatus.innerHTML = failed.length + ' failed: ' + failed.map(function (name) {
+                return '<a href="#row-' + name.replace(/"/g, '') + '">' + name.replace(/</g, '&lt;') + '</a>';
+              }).join(', ') + '. Click a name to jump to its row.';
               applyBtn.disabled = false;
               discardBtn.disabled = false;
               enableTableRows();
@@ -968,6 +1005,9 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               var automatic = data.resolved ? data.resolved.modelID + ' @ ' + data.resolved.providerID : 'n/a';
               el.style.color = 'var(--success)';
               el.textContent = 'Configured model cleared. Automatic model: ' + automatic;
+            } else if (data.ok && data.status === 'configured') {
+              el.style.color = 'var(--warning)';
+              el.textContent = 'Applied and restarted. Provider connected; SubAgent request not tested.';
             } else if (data.ok && data.status === 'verified') {
               var resolved = data.resolved ? data.resolved.modelID + ' @ ' + data.resolved.providerID : 'n/a';
               var requestVerified = data.requestVerified ? data.requestVerified.modelID + ' @ ' + data.requestVerified.providerID : 'not verified';
@@ -996,7 +1036,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               el.textContent = data.error || 'Unknown error';
             }
             if (data.ok === true) {
-              status.textContent = data.status === 'applied_with_quota_warning' ? 'Applied with warning ⚠' : 'Restarted ✔';
+              status.textContent = data.status === 'applied_with_quota_warning' ? 'Applied with warning ⚠' : data.status === 'configured' ? 'Configured ✔' : 'Verified ✔';
               setTimeout(function () { status.textContent = ''; btn.disabled = false; clearBtn.disabled = false; if (cancelBtn) cancelBtn.disabled = false; enableTableRows(); applyInProgress = false; location.reload(); }, 2500);
             } else {
               btn.disabled = false;
