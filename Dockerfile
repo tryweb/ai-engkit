@@ -174,6 +174,18 @@ RUN rm -rf ~/.bun/install/cache && \
     rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-* && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
     rm -rf ~/.bun/install/cache
+# Fail the build loudly if the installed CLIs do not match the requested pins
+# (a V1/V2 bin shadowing or a wrong-track install must never ship silently).
+RUN set -eu; \
+    echo "gate: OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-opencode-ai} OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-} OPENCHAMBER_VERSION=${OPENCHAMBER_VERSION:-}"; \
+    echo "gate: opencode=$(opencode --version 2>&1 | head -1)"; \
+    echo "gate: openchamber=$(openchamber --version 2>&1 | head -1)"; \
+    if [ "${OPENCODE_CLI_PACKAGE:-opencode-ai}" = "opencode-ai" ]; then \
+      opencode --version | grep -q "1\."; \
+    else \
+      opencode --version | grep -q "2\."; \
+    fi; \
+    test "$(openchamber --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" = "${OPENCHAMBER_VERSION}"
 
 # OpenChamber ships PNG/SVG favicons but browsers also request /favicon.ico.
 # Wrap the existing PNG in an ICO container so the request is served locally
