@@ -148,3 +148,7 @@ M3 persistent-continuation release evidence is now COMPLETE. Total session spend
 - Known remaining gaps (not release-blocking, documented): OAuth `complete` needs real IdP login; B1 fallback replay default text; M3 injection check-then-set race; `tmp-test` fixture predates this round.
 
 **Running total (rounds 1–4): <$0.002.** Trial config restored (librarian unconfigured); trial test sessions created today deleted.
+
+### Round 6 — B1 respects user model override (2026-10-07)
+
+User report: switching models in OpenChamber always snapped back to the chain head (`GLM-5.3-Flash`), because the B1 prompt hook unconditionally `switchModel`ed every fresh session to `chain[0]`. Fix: the hook now reads the session's current model first — already-on-head → skip switch (`head already`); user-selected different model → skip enforcement (`head skip user override`); only unknown (lookup failed) keeps the legacy blind enforce. Live on `ai-engkit-v2`: `head skip user override … current=opencode-go/space-bunny-free head=nvidia/z-ai/glm-5.3-flash` (no switch issued, user choice stood). Contrast line minutes earlier on the old bundle: `head enforce … -> nvidia/z-ai/glm-5.3-flash`. `bun test trial/b1-routing`: 16 pass. Test session deleted afterwards. Spend $0 (prompt admitted, execution failed on unrelated model availability).
