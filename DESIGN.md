@@ -45,6 +45,14 @@ Compact rounded status indicator. Tones: `success`, `danger`, `warning`,
 `neutral`. Used for container status, auth state, version mismatch, Center state, Runtime Profile fields, AI Runtime rows. Accepts an
 optional `ariaLabel` for glyph-only labels (e.g. `✓` / `✗`).
 
+### Agent Models apply attention
+Failed agent-model applies remain visible in a page-level linked attention summary
+and their rows until that agent is successfully applied. Saving a new route shows
+`Pending recheck`; the most recently edited agent shows `Recently changed`. These
+labels remain distinct from the previous failure so a pending edit is never
+mistaken for a verified fix. Failure and latest-change markers persist in the
+current browser tab across reloads.
+
 ### MetricCard — `.metric-card` (+ `.metric-card--accent`)
 Overview metric surface. Rendered as `<dl>` with `<dt>` title, `<dd>` value,
 optional `<dd>` sub and foot (foot separated by a top border). Accent tone adds
