@@ -10,6 +10,9 @@
 - CI: run the compose-isolation guard in `build-v2`; the guard now also checks
   `docker-compose.v2.yml` (`-v2` volume suffixes, no volume/port collision with
   prod/dev, no OMO residue).
+- CI: `test/test-v2-trial.sh cell1` asserts the baked V2 plugins actually load
+  (waits for the plugins' `setup start` log marker under the opencode data
+  volume), not just that they are deployed.
 
 ### Changed
 - V2 compose drops the OMO runtime residue: the `omo-config-v2` and

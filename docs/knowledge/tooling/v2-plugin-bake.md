@@ -84,13 +84,14 @@ with `Could not resolve "@opencode/plugin"`).
   `loading plugin id=~/.config/opencode/plugins/b1-routing.js` +
   `.../m3-enforcer.js`.
 - `bun add @opencode/plugin@2.0.24` installs from npm (269 packages).
-- CI scope (verified with gh, 2026-10-09): the `build-v2` smoke asserts the two
-  `/opt/opencode/v2-plugins/*.js` files exist, and `test/test-v2-trial.sh cell1`
-  asserts they are deployed to `~/.config/opencode/plugins/` (boot log:
-  `V2 plugins deployed to ... b1-routing.js m3-enforcer.js`). **No CI step
-  asserts the runtime actually loads the plugins** — the
-  `loading plugin id=...b1-routing.js` evidence above is from a local trial,
-  not from a CI log. Treat "deployed" and "loaded" as separate claims.
+- CI scope: the `build-v2` smoke asserts the two `/opt/opencode/v2-plugins/*.js`
+  files exist, and `test/test-v2-trial.sh cell1` asserts they are deployed to
+  `~/.config/opencode/plugins/` (boot log:
+  `V2 plugins deployed to ... b1-routing.js m3-enforcer.js`) **and that they
+  actually load**: each plugin appends `setup start` to
+  `~/.local/share/opencode/log/<id>.log` when the managed OpenCode server loads
+  it, and cell1 waits (up to 60s) for that marker. "Deployed" and "loaded"
+  remain separate claims, but both are now asserted in CI.
 - `docker compose -f docker-compose.v2.yml config` parses after removing the
   `omo-config-v2` volume and the `OH_MY_OPENAGENT_VERSION` build arg.
 

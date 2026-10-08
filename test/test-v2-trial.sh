@@ -48,6 +48,25 @@ cell1() {
   done
   echo "PASS: v2 plugins deployed to global plugins dir"
 
+  # Prove they actually LOAD, not just deploy: each baked plugin appends
+  # "setup start" to its log under the opencode data volume when the managed
+  # OpenCode server loads it (see v2-plugin-bake.md). Bounded wait for first load.
+  for p in b1-routing m3-enforcer; do
+    loaded=0
+    for _ in $(seq 1 30); do
+      if docker exec ai-engkit-v2 grep -q 'setup start' "/home/devuser/.local/share/opencode/log/$p.log" 2>/dev/null; then
+        loaded=1
+        break
+      fi
+      sleep 2
+    done
+    if [ "$loaded" -ne 1 ]; then
+      echo "FAIL: $p plugin did not log 'setup start' within 60s (not loaded)" >&2
+      return 1
+    fi
+    echo "PASS: $p plugin loaded (setup start logged)"
+  done
+
   # Reachable base: localhost works from a host shell; from inside a sibling
   # container (DooD) use the compose bridge gateway instead
   local base=""
