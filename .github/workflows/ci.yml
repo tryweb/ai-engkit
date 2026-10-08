@@ -114,7 +114,9 @@ jobs:
       - name: V2 image smoke (CLI + baked plugins)
         run: |
           set -euo pipefail
-          docker run --rm --entrypoint /home/devuser/.bun/bin/opencode ai-engkit-ai-v2 --version | grep -Eq '^2\.'
+          OPENCODE_VERSION=$(docker run --rm --entrypoint /home/devuser/.bun/bin/opencode ai-engkit-ai-v2 --version)
+          echo "OpenCode CLI version: ${OPENCODE_VERSION}"
+          printf '%s\n' "$OPENCODE_VERSION" | grep -Eq '(^|[[:space:]])v?2\.[0-9]+\.[0-9]+([[:space:]]|$)'
           docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/b1-routing.js
           docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/m3-enforcer.js
           echo "PASS: V2 image builds with baked routing/enforcer plugins"
