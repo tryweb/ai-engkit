@@ -13,6 +13,11 @@
   `ohmyopencode-cache-v2` volumes and the `OH_MY_OPENAGENT_VERSION` build arg
   (the V2 line carries no OMO runtime; see `trial/DECISIONS.md` D1/D2).
 
+### Fixed
+- V2 chain writes seed `~/.config/opencode/routing.json` when it is absent, so
+  the first Admin agent-models write and startup reconciliation no longer fail
+  with `jq routing write failed` on a fresh V2 volume.
+
 ### Breaking Changes
 - The V2 release line runs OpenCode 2 + OpenChamber 2 with no
   `oh-my-openagent` runtime and disjoint `-v2` volumes. The v1→v2 upgrade is
