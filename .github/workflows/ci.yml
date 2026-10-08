@@ -89,6 +89,85 @@ jobs:
           path: /tmp/image.tar
           retention-days: 7
 
+  build-v2:
+    name: Build V2 Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.head_sha || github.event.pull_request.head.sha || github.ref }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create .env for Compose
+        run: cp .env.example .env
+
+      # Pins come from docker-compose.v2.yml (single source of truth for the
+      # V2 line: OpenCode 2 CLI package/version, OpenChamber 2.x, no OMO).
+      - name: Build V2 image
+        run: docker compose -f docker-compose.v2.yml build ai-dev
+
+      - name: V2 image smoke (CLI + baked plugins)
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /home/devuser/.bun/bin/opencode ai-engkit-ai-v2 --version | grep -Eq '^2\.'
+          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/b1-routing.js
+          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/m3-enforcer.js
+          echo "PASS: V2 image builds with baked routing/enforcer plugins"
+
+  trial-v2:
+    name: V2 Trial Cells
+    needs: build-v2
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create .env for Compose
+        run: cp .env.example .env
+
+      - name: Build and start V2 trial stack
+        run: |
+          docker compose -f docker-compose.v2.yml build ai-dev
+          docker compose -f docker-compose.v2.yml up -d
+
+      - name: Wait for OpenChamber
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -m 5 -o /dev/null "http://localhost:8002/"; then
+              echo "OpenChamber ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::OpenChamber did not become ready"
+          docker compose -f docker-compose.v2.yml logs --tail=50 || true
+          exit 1
+
+      - name: V2 trial cells
+        run: |
+          bash test/test-v2-trial.sh cell1
+          bash test/test-v2-trial.sh cell2
+          bash test/test-v2-trial.sh cell3
+
+      - name: V2 trial logs
+        if: always()
+        run: docker compose -f docker-compose.v2.yml logs --tail=80 || true
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.v2.yml down -v --remove-orphans || true
+
   test:
     name: Integration Tests
     needs: build
