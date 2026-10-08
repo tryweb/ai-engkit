@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { __resetExecForTest, __setExecForTest } from "./opencode-v2";
 import type { ExecResult } from "./docker";
 
 describe("opencode-v2 adapter", () => {
   beforeEach(() => {
+    __resetExecForTest();
+  });
+
+  afterEach(() => {
     __resetExecForTest();
   });
 
