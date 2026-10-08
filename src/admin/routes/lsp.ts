@@ -20,6 +20,7 @@ export interface LspRoutesDeps {
   readonly readOverrides: () => LspServersOverrides;
   readonly saveOverrides: (overrides: LspServersOverrides) => { readonly ok: boolean; readonly error?: string };
   readonly readCatalog: () => readonly LspCatalogEntry[];
+  readonly isOpenCodeV2: () => Promise<boolean>;
 }
 
 const REAL_DEPS: LspRoutesDeps = (() => {
@@ -47,6 +48,7 @@ const REAL_DEPS: LspRoutesDeps = (() => {
       return { ok: true };
     },
     readCatalog: () => LSP_CATALOG,
+    isOpenCodeV2,
   };
 })();
 
@@ -66,7 +68,7 @@ export function createLspRoutes(options: Partial<LspRoutesDeps> = {}): Hono {
 
   async function isV2(): Promise<boolean> {
     try {
-      return await isOpenCodeV2();
+      return await deps.isOpenCodeV2();
     } catch {
       return false;
     }

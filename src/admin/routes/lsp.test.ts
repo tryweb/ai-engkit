@@ -49,6 +49,7 @@ function depsWith(overrides: Partial<LspRoutesDeps> = {}) {
       return { ok: true };
     },
     readCatalog: () => LSP_CATALOG,
+    isOpenCodeV2: async () => false,
     ...overrides,
   };
   return { deps, state };
@@ -196,73 +197,50 @@ describe("GET /lsp", () => {
 
 describe("OpenCode v2 gate", () => {
   test("PUT rejects writes on v2 without persisting", async () => {
-    const { __setExecForTest, __resetExecForTest } = await import("../lib/opencode-v2");
-    __setExecForTest((async () => ({ stdout: "opencode v2.0.15", stderr: "", exitCode: 0 })) as never);
-    try {
-      const { deps, state } = depsWith();
-      const key = LSP_CATALOG[0].serverKey;
-      const response = await createLspRoutes(deps).request("http://localhost/api/lsp", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides: { [key]: { enabled: true, version: null } } }),
-      });
-      expect(response.status).toBe(409);
-      expect(state.saved).toBeNull();
-    } finally {
-      __resetExecForTest();
-    }
+    const { deps, state } = depsWith({ isOpenCodeV2: async () => true });
+    const key = LSP_CATALOG[0].serverKey;
+    const response = await createLspRoutes(deps).request("http://localhost/api/lsp", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ overrides: { [key]: { enabled: true, version: null } } }),
+    });
+    expect(response.status).toBe(409);
+    expect(state.saved).toBeNull();
   });
 
   test("POST /api/lsp/apply is blocked on v2 without applying", async () => {
-    const { __setExecForTest, __resetExecForTest } = await import("../lib/opencode-v2");
     let applied = false;
-    __setExecForTest((async () => ({ stdout: "opencode v2.0.15", stderr: "", exitCode: 0 })) as never);
-    try {
-      const { deps } = depsWith({
-        apply: async () => {
-          applied = true;
-          return { ok: true, changed: 0, applied: 0, failed: 0, servers: summary({}).servers };
-        },
-      });
-      const response = await createLspRoutes(deps).request("http://localhost/api/lsp/apply", { method: "POST" });
-      expect(response.status).toBe(409);
-      expect(applied).toBe(false);
-    } finally {
-      __resetExecForTest();
-    }
+    const { deps } = depsWith({
+      isOpenCodeV2: async () => true,
+      apply: async () => {
+        applied = true;
+        return { ok: true, changed: 0, applied: 0, failed: 0, servers: summary({}).servers };
+      },
+    });
+    const response = await createLspRoutes(deps).request("http://localhost/api/lsp/apply", { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(applied).toBe(false);
   });
 
   test("GET /lsp renders v2 banner with disabled controls", async () => {
-    const { __setExecForTest, __resetExecForTest } = await import("../lib/opencode-v2");
-    __setExecForTest((async () => ({ stdout: "opencode v2.0.15", stderr: "", exitCode: 0 })) as never);
-    try {
-      const { deps } = depsWith();
-      const response = await createLspRoutes(deps).request("http://localhost/lsp");
-      expect(response.status).toBe(200);
-      const text = await response.text();
-      expect(text).toContain("lsp-v2-notice");
-      expect(text).toContain("Apply Changes");
-    } finally {
-      __resetExecForTest();
-    }
+    const { deps } = depsWith({ isOpenCodeV2: async () => true });
+    const response = await createLspRoutes(deps).request("http://localhost/lsp");
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toContain("lsp-v2-notice");
+    expect(text).toContain("Apply Changes");
   });
 
   test("V1 behavior is unchanged when version detection fails", async () => {
-    const { __setExecForTest, __resetExecForTest } = await import("../lib/opencode-v2");
-    __setExecForTest((async () => ({ stdout: "", stderr: "no docker", exitCode: 1 })) as never);
-    try {
-      const { deps, state } = depsWith();
-      const key = LSP_CATALOG[0].serverKey;
-      const response = await createLspRoutes(deps).request("http://localhost/api/lsp", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides: { [key]: { enabled: true, version: null } } }),
-      });
-      expect(response.status).toBe(200);
-      expect(state.saved?.[key]).toEqual({ enabled: true, version: null });
-    } finally {
-      __resetExecForTest();
-    }
+    const { deps, state } = depsWith({ isOpenCodeV2: async () => { throw new Error("no docker"); } });
+    const key = LSP_CATALOG[0].serverKey;
+    const response = await createLspRoutes(deps).request("http://localhost/api/lsp", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ overrides: { [key]: { enabled: true, version: null } } }),
+    });
+    expect(response.status).toBe(200);
+    expect(state.saved?.[key]).toEqual({ enabled: true, version: null });
   });
 });
 
