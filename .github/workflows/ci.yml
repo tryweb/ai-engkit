@@ -139,6 +139,10 @@ jobs:
       - name: Create .env for Compose
         run: cp .env.example .env
 
+      - name: Configure V2 trial diagnostics
+        run: |
+          printf '\nBREW_PACKAGES="go"\nBUN_PACKAGES="pyright @biomejs/biome typescript@5.8.3"\n' >> .env
+
       - name: Build and start V2 trial stack
         run: |
           docker compose -f docker-compose.v2.yml build ai-dev
