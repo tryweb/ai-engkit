@@ -202,7 +202,7 @@ jobs:
         run: bash test/test-v2-admin-integration.sh
 
       - name: V2 Admin integration unit tests
-        run: docker exec ai-engkit-admin-v2 bun --cwd /opt/admin test
+        run: docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2 bun --cwd /opt/admin test
 
       - name: V2 Admin integration typecheck
         run: docker exec ai-engkit-admin-v2 bun run --cwd /opt/admin typecheck
