@@ -1,15 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const reconcileAll = mock(async () => {});
-mock.module("../lib/agent-model-reconciler", () => ({
-  createAgentModelReconciler: () => ({ reconcileAll }),
-}));
-
-const { default: providersOAuth } = await import("./providers-oauth");
+const { default: providersOAuth, __resetReconcileAgentModelsForTest, __setReconcileAgentModelsForTest } = await import("./providers-oauth");
+const reconcileAgentModels = mock(async () => {});
 
 interface OAuthFixture {
   binPath: string;
@@ -92,8 +88,13 @@ async function startFlow(): Promise<string> {
 
 describe("providers OAuth routes", () => {
   beforeEach(() => {
-    reconcileAll.mockClear();
+    reconcileAgentModels.mockClear();
+    __setReconcileAgentModelsForTest(reconcileAgentModels);
     rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    __resetReconcileAgentModelsForTest();
   });
 
   test("POST /start returns a non-sensitive flow payload", async () => {
@@ -187,7 +188,7 @@ describe("providers OAuth routes", () => {
       });
       expect(apply.status).toBe(200);
       expect(await apply.json()).toEqual({ ok: true, connected: true });
-      expect(reconcileAll).toHaveBeenCalledTimes(1);
+      expect(reconcileAgentModels).toHaveBeenCalledTimes(1);
       const commands = await waitForExecCommand(f.execCallsPath, "agent-model-health.json");
       expect(commands.some((command) => command.includes("agent-model-health.json"))).toBe(true);
       expect(commands.some((command) => command.includes("/provider"))).toBe(true);
@@ -230,6 +231,7 @@ describe("providers OAuth routes", () => {
       expect(body.error).toContain("ai-dev restart failed");
       expect(body.error).toContain("connection reverted");
       expect(body.error).toContain("rollback incomplete");
+      expect(reconcileAgentModels).not.toHaveBeenCalled();
       const commands = await readExecCommands(f.execCallsPath);
       expect(commands.some((command) => command.includes("agent-model-health.json"))).toBe(false);
     } finally {
@@ -256,6 +258,7 @@ describe("providers OAuth routes", () => {
       const response = await providersOAuth.request("http://localhost/disconnect", { method: "POST" });
 
       expect(response.status).toBe(200);
+      expect(reconcileAgentModels).toHaveBeenCalledTimes(1);
       const commands = await waitForExecCommand(f.execCallsPath, "agent-model-health.json");
       expect(commands.some((command) => command.includes("agent-model-health.json"))).toBe(true);
       expect(commands.some((command) => command.includes("/provider"))).toBe(true);

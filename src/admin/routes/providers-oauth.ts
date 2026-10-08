@@ -15,6 +15,8 @@ import {
   pollDeviceToken,
   requestDeviceUserCode,
   startPendingFlow,
+  type DeviceUserCode,
+  type OAuthAuthEntry,
 } from "../lib/openai-oauth";
 import { restartAiDev } from "../lib/restart-ai-dev";
 import { invalidateProbeCacheForProvider } from "../lib/model-probe";
@@ -26,6 +28,18 @@ import { execInAiDev } from "../lib/docker";
 const OAUTH_PROVIDER = "openai";
 
 const providersOAuth = new Hono();
+type OAuthReconcile = () => Promise<unknown>;
+
+const reconcileAgentModels: OAuthReconcile = () => createAgentModelReconciler(REAL_DEPS).reconcileAll();
+let runReconcileAgentModels: OAuthReconcile = reconcileAgentModels;
+
+export function __setReconcileAgentModelsForTest(reconcile: OAuthReconcile): void {
+  runReconcileAgentModels = reconcile;
+}
+
+export function __resetReconcileAgentModelsForTest(): void {
+  runReconcileAgentModels = reconcileAgentModels;
+}
 
 async function triggerAgentModelReconciliation(providerID: string): Promise<void> {
   try {
@@ -34,7 +48,7 @@ async function triggerAgentModelReconciliation(providerID: string): Promise<void
     return;
   }
   try {
-    void createAgentModelReconciler(REAL_DEPS).reconcileAll().catch(() => {});
+    void runReconcileAgentModels().catch(() => {});
   } catch {
     return;
   }
@@ -77,7 +91,7 @@ function rollbackMessage(base: string, failures: string[]): string {
 }
 
 providersOAuth.post("/start", async (c) => {
-  let info;
+  let info: DeviceUserCode;
   try {
     info = await requestDeviceUserCode();
   } catch (error: unknown) {
@@ -132,7 +146,7 @@ providersOAuth.post("/apply", async (c) => {
     previousRaw = null;
   }
 
-  let entry;
+  let entry: OAuthAuthEntry;
   try {
     const tokens = await exchangeAuthorizationCode(flow.authorizationCode, flow.codeVerifier);
     entry = buildOAuthEntry(tokens);
