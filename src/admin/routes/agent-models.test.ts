@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
@@ -6,7 +6,12 @@ import { listHandlers, stubDeps } from "./agent-models-test-support";
 const { createAgentModelsRoutes } = await import("./agent-models");
 
 beforeEach(() => {
+  process.env.OMO_ENABLED = "1";
   rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
+});
+
+afterEach(() => {
+  process.env.OMO_ENABLED = "1";
 });
 
 describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
