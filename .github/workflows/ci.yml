@@ -115,6 +115,12 @@ jobs:
       - name: Create .env for Compose
         run: cp .env.example .env
 
+      - name: Install Compose guard dependencies
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Compose isolation guard
+        run: bash test/test-compose-isolation.sh
+
       # Pins come from docker-compose.v2.yml (single source of truth for the
       # V2 line: OpenCode 2 CLI package/version, OpenChamber 2.x, no OMO).
       - name: Build V2 image

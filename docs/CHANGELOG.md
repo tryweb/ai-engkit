@@ -7,6 +7,9 @@
   `OMO_ENABLED=0`). Bundles are built self-contained because the runtime does
   not resolve `@opencode/plugin` for local file plugins.
 - CI: build the V2 image (`build-v2`) and run the V2 trial cells (`trial-v2`).
+- CI: run the compose-isolation guard in `build-v2`; the guard now also checks
+  `docker-compose.v2.yml` (`-v2` volume suffixes, no volume/port collision with
+  prod/dev, no OMO residue).
 
 ### Changed
 - V2 compose drops the OMO runtime residue: the `omo-config-v2` and

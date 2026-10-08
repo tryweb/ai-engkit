@@ -75,4 +75,46 @@ if rg -n 'ai-engkit_default' test/test-admin.sh test/test-admin-ui.sh; then
   fail "an admin test hardcodes the production network name"
 fi
 
+# --- V2 line isolation (docker-compose.v2.yml) ---
+# DECISIONS D2: the v2 line must share no mutable state with the v1 lines.
+# Every v2 volume is a distinct '-v2' named volume, the project resolves to
+# 'v2', host ports do not collide with prod/dev, and the OMO runtime residue
+# stays out. A regression here (a dropped suffix, a re-added omo volume) would
+# silently let v2 read or clobber v1/prod data.
+[ -f .env ] || fail "compose isolation guard needs .env (run: cp .env.example .env)"
+v2_json="$(docker compose -f docker-compose.v2.yml config --format json)"
+v2_project="$(printf '%s' "$v2_json" | jq -r '.name')"
+[ "$v2_project" = "v2" ] || fail "docker-compose.v2.yml resolves to project '$v2_project', expected 'v2'"
+
+v2_volumes="$(printf '%s' "$v2_json" | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]')"
+while IFS= read -r vol; do
+  [ -n "$vol" ] || continue
+  case "$vol" in
+    *-v2) ;;
+    *) fail "v2 volume '$vol' is not '-v2' suffixed" ;;
+  esac
+done <<< "$v2_volumes"
+
+for other in docker-compose.yml docker-compose.dev.yml; do
+  other_volumes="$(docker compose -f "$other" config --format json | jq -r '[.volumes // {} | keys[]] | unique[]')"
+  while IFS= read -r vol; do
+    [ -n "$vol" ] || continue
+    if printf '%s\n' "$other_volumes" | grep -qxF "$vol"; then
+      fail "v2 volume '$vol' collides with a $other volume"
+    fi
+  done <<< "$v2_volumes"
+done
+
+if rg -n 'omo-config|ohmyopencode-cache|OH_MY_OPENAGENT_VERSION' docker-compose.v2.yml | rg -v '^[0-9]+:[[:space:]]*#'; then
+  fail "docker-compose.v2.yml still references OMO runtime residue"
+fi
+
+v2_published_ports="$(printf '%s' "$v2_json" | jq -r '[.services[] | .ports[]?.published] | unique[]')"
+while IFS= read -r port; do
+  [ -n "$port" ] || continue
+  case "$port" in
+    8000 | 8080 | 8001 | 8081) fail "v2 published port $port collides with a prod/dev port" ;;
+  esac
+done <<< "$v2_published_ports"
+
 printf 'compose isolation: PASS\n'

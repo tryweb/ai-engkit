@@ -47,6 +47,22 @@ Production commands remain separate and must use `docker-compose.yml` with the p
 - `./test/test-compose-isolation.sh` fails before the safeguard and passes after it.
 - The dev stack is verified through `dev_default` and published ports `8001` and `8081`.
 
+## V2 Line Isolation (guard extended 2026-10-09)
+
+The same guard now also validates `docker-compose.v2.yml`, because the V2 line
+shares no mutable state with prod/dev (`trial/DECISIONS.md` D2). It asserts:
+
+- the project resolves to `v2`;
+- every named volume used by V2 services is `-v2` suffixed and does not
+  exact-name-collide with a volume defined by `docker-compose.yml` or
+  `docker-compose.dev.yml`;
+- no OMO runtime residue (`omo-config`, `ohmyopencode-cache`,
+  `OH_MY_OPENAGENT_VERSION`) in non-comment lines;
+- no V2 host port collides with a prod/dev port (`8000`/`8080`/`8001`/`8081`).
+
+It runs in CI in both `build` and `build-v2`, so a dropped `-v2` suffix or a
+re-added OMO volume fails fast before an image is built.
+
 ## Related Files
 
 - `docker-compose.dev.yml`
