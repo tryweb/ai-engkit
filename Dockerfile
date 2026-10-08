@@ -345,6 +345,7 @@ RUN set -eu; \
 # ── ai-admin dashboard ─────────────────────────────────
 COPY src/admin/ /opt/admin/
 RUN bun install --cwd /opt/admin --no-cache 2>/dev/null || true
+RUN if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then rm -rf /root/.bun/install/cache/@typescript; fi
 
 # ── Admin test fixtures (compose-overlay integration suite) ──
 # compose-overlay.integration.test.ts shells out to real `docker compose`
