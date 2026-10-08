@@ -314,6 +314,30 @@ COPY --chmod=0755 scripts/agent-model-health.sh /opt/ai-engkit/scripts/agent-mod
 COPY .opencode/baked-skills /opt/opencode/baked-skills
 RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 
+# ── V2 line plugins (routing/fallback + todo continuation) ─────────────
+# Baked self-contained because a local file plugin under
+# ~/.config/opencode/plugins/ does NOT get `@opencode/plugin` resolved by the
+# runtime ("Cannot find package '@opencode/plugin'"); each bundle must inline
+# it. Built here with the matching @opencode/plugin version; single .js files
+# ship, and entrypoint.d/08-deploy-v2-plugins.sh deploys them only on the V2
+# line (OMO_ENABLED=0). Sources: trial/b1-routing, trial/m3-enforcer (see
+# trial/B1-VERIFY.md, trial/M3-VERIFY.md). The build dir is discarded.
+# Runs in the root section (USER root above): /opt/opencode is app-owned here,
+# so the COPY'd build dir must be removed as root and the output re-chowned.
+COPY trial/b1-routing /opt/opencode/v2-plugins-build/src/b1-routing
+COPY trial/m3-enforcer /opt/opencode/v2-plugins-build/src/m3-enforcer
+RUN set -eu; \
+    rm -rf /opt/opencode/v2-plugins-build/src/*/dist && \
+    mkdir -p /opt/opencode/v2-plugins && \
+    cd /opt/opencode/v2-plugins-build && \
+    bun init -y >/dev/null 2>&1 && \
+    bun add "@opencode/plugin@${OPENCODE_CLI_VERSION}" >/dev/null 2>&1 && \
+    bun build ./src/b1-routing/index.ts --outfile /opt/opencode/v2-plugins/b1-routing.js --target bun --format esm && \
+    bun build ./src/m3-enforcer/index.ts --outfile /opt/opencode/v2-plugins/m3-enforcer.js --target bun --format esm && \
+    rm -rf /opt/opencode/v2-plugins-build && \
+    chown -R ${USERNAME}:${USERNAME} /opt/opencode/v2-plugins && \
+    ls -la /opt/opencode/v2-plugins
+
 # ── ai-admin dashboard ─────────────────────────────────
 COPY src/admin/ /opt/admin/
 RUN bun install --cwd /opt/admin --no-cache 2>/dev/null || true

@@ -38,6 +38,16 @@ cell1() {
   [ "$(docker exec ai-engkit-v2 find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in trial workspace"
 
+  # Baked V2 plugins: self-contained bundles shipped in the image and deployed
+  # to the global OpenCode config plugins dir at boot (v2-plugin-bake.md).
+  docker exec ai-engkit-v2 test -f /opt/opencode/v2-plugins/b1-routing.js
+  docker exec ai-engkit-v2 test -f /opt/opencode/v2-plugins/m3-enforcer.js
+  echo "PASS: baked v2 plugins present in image"
+  for p in b1-routing m3-enforcer; do
+    docker exec ai-engkit-v2 test -f "/home/devuser/.config/opencode/plugins/$p.js"
+  done
+  echo "PASS: v2 plugins deployed to global plugins dir"
+
   # Reachable base: localhost works from a host shell; from inside a sibling
   # container (DooD) use the compose bridge gateway instead
   local base=""

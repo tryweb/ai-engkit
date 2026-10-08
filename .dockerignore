@@ -36,3 +36,8 @@ install.sh
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Local tooling / indexes (never needed in the image; .codegraph also carries
+# a unix socket that legacy build context tar cannot archive)
+.codegraph/
+.sisyphus/
