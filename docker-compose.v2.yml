@@ -27,6 +27,8 @@ services:
         - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
         - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.0.24}
         - OPENCHAMBER_VERSION=2.1.1
+        - BUILDX_VERSION=0.38.0
+        - GLAB_VERSION=1.121.0
         - AI_ENGKIT_VERSION=v2trial
     container_name: ai-engkit-v2
     ports:
