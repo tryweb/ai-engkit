@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
-import { getGhStatus, startDeviceFlow, logoutGh } from "../lib/gh-auth";
+import { getGhStatus, startDeviceFlow, logoutGh, parseScopes } from "../lib/gh-auth";
 
 const ghAuth = new Hono();
 
@@ -14,7 +14,7 @@ interface GhUserInfo {
 async function getGhUserInfo(): Promise<GhUserInfo | null> {
   const profileResult = await execInAiDev("gh api user 2>/dev/null || true", 10_000);
   const scopesResult = await execInAiDev(
-    "gh auth status 2>&1 | grep -oP \"Token scopes: '\\K[^']+\" || true",
+    "gh auth status 2>&1 | sed -n 's/.*Token scopes: //p' || true",
     10_000,
   );
 
@@ -28,9 +28,7 @@ async function getGhUserInfo(): Promise<GhUserInfo | null> {
     return null;
   }
 
-  const scopes = scopesResult.stdout
-    ? scopesResult.stdout.trim().split(",").map((s: string) => s.trim())
-    : [];
+  const scopes = parseScopes(scopesResult.stdout);
 
   return { login, avatar_url, name, scopes };
 }
