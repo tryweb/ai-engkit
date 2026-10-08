@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Added
+- Bake the V2 routing (`b1-routing`) and todo-continuation (`m3-enforcer`)
+  plugins into the image and deploy them to the global OpenCode plugins
+  directory on the V2 line (`entrypoint.d/08-deploy-v2-plugins.sh`, gated on
+  `OMO_ENABLED=0`). Bundles are built self-contained because the runtime does
+  not resolve `@opencode/plugin` for local file plugins.
+- CI: build the V2 image (`build-v2`) and run the V2 trial cells (`trial-v2`).
+
+### Changed
+- V2 compose drops the OMO runtime residue: the `omo-config-v2` and
+  `ohmyopencode-cache-v2` volumes and the `OH_MY_OPENAGENT_VERSION` build arg
+  (the V2 line carries no OMO runtime; see `trial/DECISIONS.md` D1/D2).
+
+### Breaking Changes
+- The V2 release line runs OpenCode 2 + OpenChamber 2 with no
+  `oh-my-openagent` runtime and disjoint `-v2` volumes. The v1→v2 upgrade is
+  one-shot and forward-only; AI-EngKit's major version follows the break
+  (2.0.0). A `!:`/`BREAKING CHANGE` commit is required for the release tooling
+  to compute the major bump.
 
 ## [1.19.3] - 2026-09-21
 
