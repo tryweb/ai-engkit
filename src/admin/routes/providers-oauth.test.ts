@@ -1,8 +1,13 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+const reconcileAll = mock(async () => {});
+mock.module("../lib/agent-model-reconciler", () => ({
+  createAgentModelReconciler: () => ({ reconcileAll }),
+}));
 
 const { default: providersOAuth } = await import("./providers-oauth");
 
@@ -87,6 +92,7 @@ async function startFlow(): Promise<string> {
 
 describe("providers OAuth routes", () => {
   beforeEach(() => {
+    reconcileAll.mockClear();
     rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
   });
 
@@ -181,6 +187,7 @@ describe("providers OAuth routes", () => {
       });
       expect(apply.status).toBe(200);
       expect(await apply.json()).toEqual({ ok: true, connected: true });
+      expect(reconcileAll).toHaveBeenCalledTimes(1);
       const commands = await waitForExecCommand(f.execCallsPath, "agent-model-health.json");
       expect(commands.some((command) => command.includes("agent-model-health.json"))).toBe(true);
       expect(commands.some((command) => command.includes("/provider"))).toBe(true);
