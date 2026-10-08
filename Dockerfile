@@ -327,16 +327,20 @@ RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 COPY trial/b1-routing /opt/opencode/v2-plugins-build/src/b1-routing
 COPY trial/m3-enforcer /opt/opencode/v2-plugins-build/src/m3-enforcer
 RUN set -eu; \
-    rm -rf /opt/opencode/v2-plugins-build/src/*/dist && \
-    mkdir -p /opt/opencode/v2-plugins && \
-    cd /opt/opencode/v2-plugins-build && \
-    bun init -y >/dev/null 2>&1 && \
-    bun add "@opencode/plugin@${OPENCODE_CLI_VERSION}" >/dev/null 2>&1 && \
-    bun build ./src/b1-routing/index.ts --outfile /opt/opencode/v2-plugins/b1-routing.js --target bun --format esm && \
-    bun build ./src/m3-enforcer/index.ts --outfile /opt/opencode/v2-plugins/m3-enforcer.js --target bun --format esm && \
-    rm -rf /opt/opencode/v2-plugins-build && \
-    chown -R ${USERNAME}:${USERNAME} /opt/opencode/v2-plugins && \
-    ls -la /opt/opencode/v2-plugins
+    if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then \
+      rm -rf /opt/opencode/v2-plugins-build/src/*/dist && \
+      mkdir -p /opt/opencode/v2-plugins && \
+      cd /opt/opencode/v2-plugins-build && \
+      bun init -y >/dev/null 2>&1 && \
+      bun add "@opencode/plugin@${OPENCODE_CLI_VERSION}" >/dev/null 2>&1 && \
+      bun build ./src/b1-routing/index.ts --outfile /opt/opencode/v2-plugins/b1-routing.js --target bun --format esm && \
+      bun build ./src/m3-enforcer/index.ts --outfile /opt/opencode/v2-plugins/m3-enforcer.js --target bun --format esm && \
+      rm -rf /opt/opencode/v2-plugins-build && \
+      chown -R ${USERNAME}:${USERNAME} /opt/opencode/v2-plugins && \
+      ls -la /opt/opencode/v2-plugins; \
+    else \
+      rm -rf /opt/opencode/v2-plugins-build; \
+    fi
 
 # ── ai-admin dashboard ─────────────────────────────────
 COPY src/admin/ /opt/admin/
