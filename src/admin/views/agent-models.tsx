@@ -1,6 +1,6 @@
 import { html, raw } from "hono/html";
 import type { FC } from "hono/jsx";
-import { Layout } from "./layout";
+import { AGENT_MODELS_ASSET_VERSION, Layout } from "./layout";
 import type { AgentModelEntry } from "../lib/agent-models";
 
 interface AgentModelsState {
@@ -17,7 +17,7 @@ const VARIANTS = ["low", "medium", "high", "xhigh", "max"];
 const STATUS_DISPLAY = {
   effective: { label: "Effective", tone: "success" },
   runtime_mismatch: { label: "Model mismatch", tone: "danger" },
-  awaiting_request: { label: "Awaiting request", tone: "neutral" },
+  awaiting_request: { label: "Needs request", tone: "warning" },
   invalid: { label: "Invalid", tone: "danger" },
   plugin: { label: "Automatic", tone: "neutral" },
   unverified: { label: "Unverified", tone: "warning" },
@@ -83,6 +83,12 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         <div id="batch-status" class="text-sm" style="margin-top:8px;"></div>
         <div id="verify-warning" class="text-sm" style="display:none; margin-top:6px; color:var(--warning);">⚠ Inference verification sends a normal request through each configured SubAgent and may consume provider quota or incur cost. Readiness verification (default) confirms configuration and provider connectivity only; it does not test an agent response.</div>
       </div>
+
+      <section id="agent-models-attention" class="agent-models-attention card" role="status" aria-live="polite" hidden>
+        <strong class="agent-models-attention__title"></strong>
+        <p class="text-sm text-muted">A successful Apply clears that agent's previous failure. Pending edits are not verified yet.</p>
+        <ul class="agent-models-attention__list"></ul>
+      </section>
 
       <div class="card" style="margin-bottom:16px;">
         <fieldset id="provider-filter" style="border:0;padding:0;margin:0;">
@@ -294,6 +300,8 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
                 <div style="display:flex;flex-wrap:wrap;gap:4px;">
                   {a.pinned && <span class="status-pill status-pill--neutral">Pinned</span>}
                   <span class={`status-pill status-pill--${status.tone}`}>{status.label}</span>
+                  <span class="status-pill status-pill--warning pending-verification" style="display:none;">Pending recheck</span>
+                  <span class="status-pill status-pill--neutral recently-changed" style="display:none;">Recently changed</span>
                 </div>
               </td>
               <td data-label="Actions">
@@ -342,7 +350,6 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         var editAgentName = null;
         var pending = new Map();
         var applyInProgress = false;
-
         function selectedProviders() {
           var options = Array.from(document.querySelectorAll('.provider-option'));
           var selected = options.filter(function (option) { return option.checked; }).map(function (option) { return option.value; });
@@ -701,19 +708,24 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             var pendingEl = tr.querySelector('.pending-value');
             var configuredEl = tr.querySelector('.configured-value');
             var batchResultEl = tr.querySelector('.batch-result');
+            var pendingVerificationEl = tr.querySelector('.pending-verification');
             if (pendingEntries !== undefined) {
+              tr.classList.add('batch-pending');
+              tr.classList.remove('batch-ok');
               if (dot) dot.style.display = 'inline-block';
               if (pendingEl) {
                 pendingEl.style.display = 'block';
-                pendingEl.textContent = '→ ' + (pendingEntries.length ? pendingEntries[0].model + (pendingEntries[0].variant ? ' (' + pendingEntries[0].variant + ')' : '') : 'automatic');
+                pendingEl.textContent = 'Pending change → ' + (pendingEntries.length ? pendingEntries[0].model + (pendingEntries[0].variant ? ' (' + pendingEntries[0].variant + ')' : '') : 'automatic');
               }
               if (configuredEl) configuredEl.style.opacity = '0.5';
-              if (batchResultEl) batchResultEl.style.display = 'none';
-              tr.classList.remove('batch-failed', 'batch-ok');
+              if (pendingVerificationEl) pendingVerificationEl.style.display = 'inline-flex';
+              if (batchResultEl && !tr.classList.contains('batch-failed')) batchResultEl.style.display = 'none';
             } else {
+              tr.classList.remove('batch-pending');
               if (dot) dot.style.display = 'none';
               if (pendingEl) pendingEl.style.display = 'none';
               if (configuredEl) configuredEl.style.opacity = '1';
+              if (pendingVerificationEl) pendingVerificationEl.style.display = 'none';
             }
           });
         }
@@ -721,20 +733,15 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         function saveAgent() {
           var entries = collectEntries();
           pending.set(editAgentName, entries);
+          window.AgentModelsAttention.markChanged(editAgentName);
           updateRowDirtyState();
           updateBatchBar();
           closeModal();
-          var resultEl = document.getElementById('save-result');
-          // Clear any previous batch result for this agent
-          var tr = document.querySelector('tr[data-agent="' + CSS.escape(editAgentName) + '"]');
-          if (tr) {
-            var batchResultEl = tr.querySelector('.batch-result');
-            if (batchResultEl) batchResultEl.style.display = 'none';
-          }
         }
 
         function clearAgent() {
           pending.set(editAgentName, []);
+          window.AgentModelsAttention.markChanged(editAgentName);
           updateRowDirtyState();
           updateBatchBar();
           closeModal();
@@ -744,8 +751,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           pending.clear();
           updateRowDirtyState();
           updateBatchBar();
-          document.querySelectorAll('.batch-result').forEach(function (el) { el.style.display = 'none'; el.textContent = ''; });
-          document.querySelectorAll('#agent-models-table tr.batch-failed, #agent-models-table tr.batch-ok').forEach(function (tr) { tr.classList.remove('batch-failed', 'batch-ok'); });
+          window.AgentModelsAttention.clearRecent();
           document.getElementById('batch-status').textContent = '';
           var meta = document.getElementById('suggestion-meta');
           var list = document.getElementById('suggestion-list');
@@ -770,6 +776,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         function renderBatchResults(results) {
           Object.keys(results).forEach(function (agent) {
             var r = results[agent];
+            window.AgentModelsAttention.setApplyFailure(agent, !r.ok);
             var tr = document.querySelector('tr[data-agent="' + CSS.escape(agent) + '"]');
             if (!tr) return;
             var batchResultEl = tr.querySelector('.batch-result');
@@ -884,6 +891,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             var data = await res.json();
             clearInterval(timer);
             if (!res.ok) {
+              pending.forEach(function (entries, agent) { window.AgentModelsAttention.setApplyFailure(agent, true); });
               batchStatus.style.color = 'var(--danger)';
               batchStatus.textContent = data.error || ('HTTP ' + res.status);
               applyBtn.disabled = false;
@@ -933,6 +941,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               batchStatus.textContent = errMsg;
               status.textContent = '';
             }
+            pending.forEach(function (entries, agent) { window.AgentModelsAttention.setApplyFailure(agent, true); });
             applyBtn.disabled = false;
             discardBtn.disabled = false;
             enableTableRows();
@@ -945,6 +954,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         async function submitAgentModel(entries, confirmation) {
           if (applyInProgress) return;
           if (!confirm(confirmation)) return;
+          window.AgentModelsAttention.markChanged(editAgentName);
           var verifyEl = document.getElementById('verify-inference');
           var verification = verifyEl && verifyEl.checked ? 'inference' : 'readiness';
           if (verification === 'inference' && !confirm('Inference verification will send a real model request and may consume provider quota or incur cost. Continue?')) return;
@@ -989,6 +999,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
             var data = await res.json();
             clearInterval(timer);
             if (!res.ok) {
+              window.AgentModelsAttention.setApplyFailure(editAgentName, true);
               var el = document.getElementById('save-result');
               el.style.color = 'var(--danger)';
               el.textContent = data.error || ('HTTP ' + res.status);
@@ -1001,6 +1012,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
               return;
             }
             var el = document.getElementById('save-result');
+            window.AgentModelsAttention.setApplyFailure(editAgentName, !data.ok);
             if (data.ok && data.status === 'cleared') {
               var automatic = data.resolved ? data.resolved.modelID + ' @ ' + data.resolved.providerID : 'n/a';
               el.style.color = 'var(--success)';
@@ -1049,6 +1061,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           } catch (e) {
             clearTimeout(timeoutId);
             clearInterval(timer);
+            window.AgentModelsAttention.setApplyFailure(editAgentName, true);
             var el = document.getElementById('save-result');
             el.style.color = 'var(--danger)';
             var errMsg2 = e && typeof e.message === 'string' ? e.message : String(e);
@@ -1078,6 +1091,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
 
         markUnhealthyRows();
       `}</script>
+      <script src={`/static/agent-models-attention.js?v=${AGENT_MODELS_ASSET_VERSION}`} />
     </div>
   );
 };

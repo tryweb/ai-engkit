@@ -76,6 +76,21 @@ describe("AgentModelsPage batch failure navigation", () => {
   });
 });
 
+describe("AgentModelsPage unresolved apply attention", () => {
+  it("loads the attention module after markup and delegates apply state to it", () => {
+    const html = render();
+
+    expect(html).toContain('id="agent-models-attention"');
+    expect(html).toContain('class="agent-models-attention__list"');
+    expect(html).toContain("Pending recheck");
+    expect(html).toContain("Recently changed");
+    expect(html).toContain('src="/static/agent-models-attention.js?v=');
+    expect(html).toContain("window.AgentModelsAttention.setApplyFailure");
+    expect(html).toContain("window.AgentModelsAttention.markChanged");
+    expect(html).not.toContain("function restoreApplyFailures");
+  });
+});
+
 describe("AgentModelsPage empty suggestions state", () => {
   it("tells the user there is nothing to apply instead of pointing at Apply", () => {
     const html = render();
@@ -312,7 +327,7 @@ describe("AgentModelsPage mode-aware suggestions", () => {
     expect(html).toContain('onclick="editAgent(this)"');
     expect(html).not.toContain("onclick=\"editAgent('evil');alert(1)//')\"");
     expect(html).toContain("escapeHtml(m)");
-    expect(html).toContain("CSS.escape(editAgentName)");
+    expect(html).toContain("CSS.escape(agent)");
   });
 
   it("describes batch rollback statuses as not applied", () => {
