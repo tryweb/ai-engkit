@@ -76,3 +76,21 @@ export async function startDeviceFlow(command: GhCommand = execInAiDev): Promise
 export async function logoutGh(command: GhCommand = execInAiDev): Promise<void> {
   await command("gh auth logout 2>/dev/null || true", 15_000);
 }
+
+/**
+ * Point git at gh's credential helper for github.com (idempotent).
+ *
+ * `gh auth login` run non-interactively (no TTY stdin, as the Admin device
+ * flow does) skips the "Authenticate Git with your GitHub credentials?"
+ * prompt, so git never learns the token and HTTPS pushes fail with
+ * "could not read Username for 'https://github.com'". `gh auth setup-git`
+ * writes the per-host `credential.https://github.com.helper` config. The guard
+ * makes this a one-time no-op once the helper is configured.
+ */
+export async function ensureGitCredentialHelper(command: GhCommand = execInAiDev): Promise<void> {
+  await command(
+    "if ! git config --global --get-all credential.https://github.com.helper >/dev/null 2>&1; then gh auth setup-git 2>/dev/null || true; fi",
+    15_000,
+  );
+}
+

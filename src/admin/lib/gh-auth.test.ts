@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExecResult } from "./docker";
-import { getGhStatus, startDeviceFlow, parseScopes } from "./gh-auth";
+import { getGhStatus, startDeviceFlow, parseScopes, ensureGitCredentialHelper } from "./gh-auth";
 
 function fakeCommand(handler: (command: string) => Partial<ExecResult>): (command: string, timeoutMs: number) => Promise<ExecResult> {
   return async (command) => ({ stdout: "", stderr: "", exitCode: 0, ...handler(command) });
@@ -64,5 +64,17 @@ describe("parseScopes", () => {
   test("returns an empty array for empty output", () => {
     expect(parseScopes("")).toEqual([]);
     expect(parseScopes("   \n")).toEqual([]);
+  });
+});
+
+describe("ensureGitCredentialHelper", () => {
+  test("runs gh auth setup-git behind a guard so it is a one-time no-op", async () => {
+    let seen = "";
+    await ensureGitCredentialHelper(fakeCommand((command) => {
+      seen = command;
+      return {};
+    }));
+    expect(seen).toContain("git config --global --get-all credential.https://github.com.helper");
+    expect(seen).toContain("gh auth setup-git");
   });
 });
