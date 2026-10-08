@@ -14,7 +14,7 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches: [main, trial/opencode-v2]
     paths-ignore:
       - '**.md'
       - 'docs/**'
