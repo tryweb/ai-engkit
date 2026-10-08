@@ -31,9 +31,9 @@ cell1() {
   docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.24'
   echo "PASS: opencode 2.0.24 in trial container"
 
-  [ "$(docker exec ai-engkit-v2 jq -c '.plugin' ~/.config/opencode/opencode.json)" = "[]" ]
+  [ "$(docker exec ai-engkit-v2 jq -c '.plugin' /home/devuser/.config/opencode/opencode.json)" = "[]" ]
   echo "PASS: opencode.json plugin-free"
-  docker exec ai-engkit-v2 test ! -f ~/.omo/omo.jsonc
+  docker exec ai-engkit-v2 test ! -f /home/devuser/.omo/omo.jsonc
   echo "PASS: no ~/.omo/omo.jsonc (OMO lifecycle skipped)"
   [ "$(docker exec ai-engkit-v2 find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in trial workspace"
