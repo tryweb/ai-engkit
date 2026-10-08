@@ -126,14 +126,20 @@ export function buildRoutingWriteCommand(agent: string, chain: readonly ChainEnt
   const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   const routingTmp = "/tmp/routing.json.tmp";
   const opencodeTmp = "/tmp/opencode.json.tmp";
+  // routing.json is absent on a fresh V2 volume: nothing seeds it, and the B1
+  // plugin treats absence as "routing disabled" (see v2-plugin-bake.md). jq
+  // exits 2 reading a missing input file, so every chain write failed with
+  // "jq routing write failed" (startup reconcile: changed=12 applied=0
+  // failed=12). Seed the empty shape so the first write creates it.
+  const seedRouting = `[ -f ${routingPath} ] || printf '%s\\n' '{"version":1,"chains":{}}' > ${routingPath}`;
   if (chain.length === 0) {
-    return `tmp_routing=$(mktemp "${routingTmp}.XXXXXX") && tmp_opencode=$(mktemp "${opencodeTmp}.XXXXXX") && jq --arg agent ${shellQuote(agent)} 'del(.chains[$agent])' ${routingPath} > "$tmp_routing" 2>/dev/null && chmod 600 "$tmp_routing" && mv "$tmp_routing" ${routingPath} && jq --arg agent ${shellQuote(agent)} 'del(.agent[$agent])' ${opencodePath} > "$tmp_opencode" 2>/dev/null && chmod 600 "$tmp_opencode" && mv "$tmp_opencode" ${opencodePath}`;
+    return `${seedRouting} && tmp_routing=$(mktemp "${routingTmp}.XXXXXX") && tmp_opencode=$(mktemp "${opencodeTmp}.XXXXXX") && jq --arg agent ${shellQuote(agent)} 'del(.chains[$agent])' ${routingPath} > "$tmp_routing" 2>/dev/null && chmod 600 "$tmp_routing" && mv "$tmp_routing" ${routingPath} && jq --arg agent ${shellQuote(agent)} 'del(.agent[$agent])' ${opencodePath} > "$tmp_opencode" 2>/dev/null && chmod 600 "$tmp_opencode" && mv "$tmp_opencode" ${opencodePath}`;
   }
   const chainJson = JSON.stringify(chain);
   const head = chain[0]!;
   const variantPart = head.variant ? ` | .agent[$agent].variant = $variant` : ` | del(.agent[$agent].variant)`;
   const variantArg = head.variant ? ` --arg variant ${shellQuote(head.variant)}` : "";
-  return `tmp_routing=$(mktemp "${routingTmp}.XXXXXX") && tmp_opencode=$(mktemp "${opencodeTmp}.XXXXXX") && jq --arg agent ${shellQuote(agent)} --argjson chain ${shellQuote(chainJson)} '.chains[$agent].chain = $chain' ${routingPath} > "$tmp_routing" 2>/dev/null && chmod 600 "$tmp_routing" && mv "$tmp_routing" ${routingPath} && jq --arg agent ${shellQuote(agent)} --arg model ${shellQuote(head.model)}${variantArg} '.agent[$agent].model = $model${variantPart}' ${opencodePath} > "$tmp_opencode" 2>/dev/null && chmod 600 "$tmp_opencode" && mv "$tmp_opencode" ${opencodePath}`;
+  return `${seedRouting} && tmp_routing=$(mktemp "${routingTmp}.XXXXXX") && tmp_opencode=$(mktemp "${opencodeTmp}.XXXXXX") && jq --arg agent ${shellQuote(agent)} --argjson chain ${shellQuote(chainJson)} '.chains[$agent].chain = $chain' ${routingPath} > "$tmp_routing" 2>/dev/null && chmod 600 "$tmp_routing" && mv "$tmp_routing" ${routingPath} && jq --arg agent ${shellQuote(agent)} --arg model ${shellQuote(head.model)}${variantArg} '.agent[$agent].model = $model${variantPart}' ${opencodePath} > "$tmp_opencode" 2>/dev/null && chmod 600 "$tmp_opencode" && mv "$tmp_opencode" ${opencodePath}`;
 }
 
 export function displayNameToKey(displayName: string, knownKeys: ReadonlySet<string>): string | null {

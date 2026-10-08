@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   displayNameToKey,
   OMO_CONFIG,
   validateFallbackModels,
@@ -116,5 +120,58 @@ describe("displayNameToKey", () => {
   test("returns null for unknown built-ins", () => {
     expect(displayNameToKey("build", keys)).toBeNull();
     expect(displayNameToKey("compaction", keys)).toBeNull();
+  });
+});
+
+describe("buildRoutingWriteCommand", () => {
+  test("creates routing.json when absent (fresh V2 volume) instead of failing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "routing-home-"));
+    const routingPath = join(dir, "routing.json");
+    const opencodePath = join(dir, "opencode.json");
+    // opencode.json is entrypoint-guaranteed; routing.json is NOT seeded on a
+    // fresh V2 volume. Before the fix jq exited 2 reading the missing file and
+    // every chain write reported "jq routing write failed".
+    writeFileSync(opencodePath, "{}\n");
+    try {
+      const command = buildRoutingWriteCommand("plan", [{ model: "opencode/space-bunny-free" }], routingPath, opencodePath);
+      const proc = Bun.spawn(["sh", "-c", command], { stdout: "pipe", stderr: "pipe" });
+      const stderr = await new Response(proc.stderr).text();
+      const exitCode = await proc.exited;
+      expect(stderr).toBe("");
+      expect(exitCode).toBe(0);
+      expect(existsSync(routingPath)).toBe(true);
+      const routing = JSON.parse(readFileSync(routingPath, "utf-8")) as {
+        version: number;
+        chains: Record<string, { chain: unknown[] }>;
+      };
+      expect(routing.version).toBe(1);
+      expect(routing.chains.plan?.chain).toEqual([{ model: "opencode/space-bunny-free" }]);
+      const opencode = JSON.parse(readFileSync(opencodePath, "utf-8")) as {
+        agent: Record<string, { model: string }>;
+      };
+      expect(opencode.agent.plan?.model).toBe("opencode/space-bunny-free");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("empty chain also seeds routing.json before deleting the agent entry", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "routing-home-"));
+    const routingPath = join(dir, "routing.json");
+    const opencodePath = join(dir, "opencode.json");
+    writeFileSync(opencodePath, '{"agent":{"plan":{"model":"p/m"}}}\n');
+    try {
+      const command = buildRoutingWriteCommand("plan", [], routingPath, opencodePath);
+      const proc = Bun.spawn(["sh", "-c", command], { stdout: "pipe", stderr: "pipe" });
+      const exitCode = await proc.exited;
+      expect(exitCode).toBe(0);
+      expect(existsSync(routingPath)).toBe(true);
+      const opencode = JSON.parse(readFileSync(opencodePath, "utf-8")) as {
+        agent: Record<string, unknown>;
+      };
+      expect(opencode.agent.plan).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
