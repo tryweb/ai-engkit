@@ -61,7 +61,8 @@ shares no mutable state with prod/dev (`trial/DECISIONS.md` D2). It asserts:
 - no V2 host port collides with a prod/dev port (`8000`/`8080`/`8001`/`8081`).
 
 It runs in CI in both `build` and `build-v2`, so a dropped `-v2` suffix or a
-re-added OMO volume fails fast before an image is built.
+re-added OMO volume fails fast before an image is built. Confirmed in CI run
+`37862545802`: `compose isolation: PASS` inside the `build-v2` job.
 
 ## Related Files
 

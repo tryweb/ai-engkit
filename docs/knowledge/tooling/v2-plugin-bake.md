@@ -91,7 +91,9 @@ with `Could not resolve "@opencode/plugin"`).
   actually load**: each plugin appends `setup start` to
   `~/.local/share/opencode/log/<id>.log` when the managed OpenCode server loads
   it, and cell1 waits (up to 60s) for that marker. "Deployed" and "loaded"
-  remain separate claims, but both are now asserted in CI.
+  remain separate claims, but both are now asserted in CI. Confirmed in CI run
+  `37862545802`: cell1 logged `PASS: b1-routing plugin loaded (setup start
+  logged)` and `PASS: m3-enforcer plugin loaded (setup start logged)`.
 - `docker compose -f docker-compose.v2.yml config` parses after removing the
   `omo-config-v2` volume and the `OH_MY_OPENAGENT_VERSION` build arg.
 

@@ -69,6 +69,13 @@ paths, which share `buildRoutingWriteCommand`.
   plus both files updated.
 - Admin suite in CI mode (`OMO_ENABLED=1`): `1296 pass`, `2 skip`, `0 fail`
   across 96 files; `bun run typecheck` clean.
+- CI run `37862545802` (commit `e533508`, branch `trial/opencode-v2`) passed all
+  V2 jobs: `build-v2` Admin unit tests `1296 pass / 0 fail`, `compose
+  isolation: PASS`; `trial-v2` log now reads
+  `[agent-models] reconciled: changed=12 applied=12 failed=0` (was
+  `applied=0 failed=12`); `cell1` reported `b1-routing`/`m3-enforcer`
+  `plugin loaded (setup start logged)`; `scan-v2` and the GHCR trial push
+  passed.
 
 ## Related Files
 
