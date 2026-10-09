@@ -1,35 +1,20 @@
-# V2 Compose — Isolated from V1 (prod/dev)
-# Rationale: opencode #42260 — V2 binary migrates shared opencode.db in place
-# and breaks V1 (no such table: session_context_epoch on /move).
-# Therefore opencode-data AND opencode-config are fully suffixed (-v2),
-# not shared with V1/prod/dev volumes.
-# All other stateful volumes (omo-config, openchamber-data, caches,
-# lean-ctx-*, git/ssh/gh/glab, admin-data) are also suffixed -v2 for
-# complete isolation. Workspace is a NAMED volume (workspace-v2), deliberately
-# NOT a host-path bind: under DooD the daemon resolves host paths in its own
-# namespace and a ./v2-workspace bind silently diverges (writes on each
-# side invisible to the other). Seed V2 files with `docker cp` (streams
-# through the daemon) instead. See
-# docs/knowledge/troubleshooting/dood-relative-workspace-path.md.
-# Production uses 8000/8080, dev 8001/8081, V2 8002/8082.
+# V2 Production Compose — isolated from V1 (prod/dev) and the V2 dev stack.
+# Coexists on one host:
+#   V1 prod 8000/8080 · V1 dev 8001/8081 · V2 prod 8002/8082 · V2 dev 8003/8083.
+# Rationale: opencode #42260 — the V2 binary migrates the shared opencode.db in
+# place and breaks V1, so every V2 volume is `-v2` suffixed and never shared
+# with V1 prod/dev or the V2 dev stack (`-v2dev`).
+# Pulable V2 channel: `:v2` (override with AI_ENGKIT_VERSION). Published by
+# ci.yml's push-v2 job; the V2 dev stack builds the image locally instead.
+# The ai-admin service keeps the host bind mounts the Admin UI upgrade path
+# writes (compose, .env, admin-data, backups) — unlike the V2 dev stack, which
+# runs entirely from volumes.
 # See docs/knowledge/tooling/opencode-v2-migration-watch.md
 name: v2
 
 services:
   ai-dev:
-    image: ai-engkit-ai-v2
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # V2 line carries no OMO runtime (D1); OH_MY_OPENAGENT_VERSION is
-        # intentionally not passed (the image ARG default is unused here).
-        - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
-        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.0.24}
-        - OPENCHAMBER_VERSION=2.1.1
-        - BUILDX_VERSION=0.38.0
-        - GLAB_VERSION=1.121.0
-        - AI_ENGKIT_VERSION=v2
+    image: ghcr.io/tryweb/ai-engkit:${AI_ENGKIT_VERSION:-v2}
     container_name: ai-engkit-v2
     ports:
       - "${CHAMBER_V2_PORT:-8002}:3000"
@@ -48,75 +33,47 @@ services:
       - glab-config-v2:/home/devuser/.config/glab-cli
       - /var/run/docker.sock:/var/run/docker.sock
     env_file:
-      - path: .env
+      - path: .env.v2
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
-      # Cell 2b key chase: provider key arrives via shell-exported env at
-      # V2 bring-up (value never committed); empty when unset.
-      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
-      # Cell 1 no-OMO baseline: entrypoint skips plugin[] + ~/.omo lifecycle
+      # V2 line carries no OMO runtime (D1).
       OMO_ENABLED: 0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   ai-admin:
-    image: ai-engkit-ai-v2
+    image: ghcr.io/tryweb/ai-engkit:${AI_ENGKIT_VERSION:-v2}
     container_name: ai-engkit-admin-v2
-    depends_on:
-      - ai-dev
+    entrypoint: ["/usr/bin/tini", "--", "/entrypoint.sh"]
     working_dir: /opt/admin
-    env_file:
-      - .env
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        sudo find /opt/ai-engkit -path /opt/ai-engkit/extensions -prune -o -exec chown devuser:devuser {} +
-        mkdir -p /opt/ai-engkit/backups
-        [ -f /opt/ai-engkit/VERSION ] || echo dev > /opt/ai-engkit/VERSION
-         [ -f /opt/ai-engkit/.env ] || env | grep -v -E '^(HOME|PATH|BUN_|NODE_|npm_|HOSTNAME|PWD|SHLVL|TERM|TZ|LS_COLORS|LESS[ _]|PAGER|EDITOR|LC_|LANG|SHELL|USER|SUDO_|TMPDIR|OLDPWD|_|LOGNAME|PLAYWRIGHT_|DEBIAN_|CLAUDE_)' > /opt/ai-engkit/.env
-         if [ "$${OPENCODE_PROVIDER+x}" = x ]; then
-           env_tmp="$$(mktemp /opt/ai-engkit/.env.sync.XXXXXX)"
-           persisted_provider="$$(sed -n 's/^[[:space:]]*OPENCODE_PROVIDER=//p' /opt/ai-engkit/.env | tail -n 1)"
-           merged_provider="$$(jq -cn \
-             --arg persisted "$$persisted_provider" \
-             --arg compose "$$OPENCODE_PROVIDER" \
-             'def providers: try fromjson catch {} | if type == "object" then . else {} end; ($$persisted | providers) * ($$compose | providers)')"
-           grep -vE '^[[:space:]]*OPENCODE_PROVIDER=' /opt/ai-engkit/.env > "$$env_tmp" || true
-           printf 'OPENCODE_PROVIDER=%s\n' "$$merged_provider" >> "$$env_tmp"
-           mv "$$env_tmp" /opt/ai-engkit/.env
-         fi
-         mkdir -p /opt/ai-engkit/admin-data
-         mkdir -p /opt/ai-engkit/extensions
-         [ -f /opt/ai-engkit/compose-upgrade-base.yml ] || : > /opt/ai-engkit/compose-upgrade-base.yml
-        if [ -d /opt/ai-engkit/provider-state/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/provider-state/provider-keys.json.legacy.$$(date +%s); fi
-        if [ -f /opt/ai-engkit/provider-state/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
-        if [ -f /opt/ai-engkit/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
-        if [ -d /opt/ai-engkit/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/provider-keys.json.legacy.$$(date +%s); fi
-        [ -f /opt/ai-engkit/admin-data/provider-keys.json ] || printf '%s\n' '{"providers":{}}' > /opt/ai-engkit/admin-data/provider-keys.json
-        bun run /opt/admin/server.ts
+    command: ["bun", "run", "/opt/admin/server.ts"]
     ports:
       - "${ADMIN_V2_PORT:-8082}:8080"
     volumes:
-      - admin-data-v2:/opt/ai-engkit
-      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
+      - ./.env.v2:/opt/ai-engkit/.env:rw
+      - ./docker-compose.v2.yml:/opt/ai-engkit/compose.yml:rw
+      - ./admin-data-v2:/opt/ai-engkit/admin-data:rw
+      - ./admin-data-v2/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
       - ./extensions:/opt/ai-engkit/extensions:ro
+      - ./backups-v2:/opt/ai-engkit/backups:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - ADMIN_PORT=8080
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-testadmin123}
-      - AGENT_MODELS_DEBUG=1
-      # Same no-OMO gate as ai-dev: without this, Admin TS takes V1
-      # (omo.jsonc) paths even on the v2 line (verified live 2026-10-03:
-      # isNativeV2Enabled()=false → empty knownAgents → PUT 403).
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Same no-OMO gate as ai-dev: without this, Admin TS takes V1 (omo.jsonc)
+      # paths even on the V2 line.
       - OMO_ENABLED=0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
-  admin-data-v2:
   workspace-v2:
   opencode-data-v2:
   lean-ctx-data-v2:

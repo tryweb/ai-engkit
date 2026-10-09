@@ -1,5 +1,5 @@
 # Fixture compose for CHECK_V2_LINE=1: the v2 line is the source of truth for
-# the pins it overrides. Mirrors docker-compose.v2.yml's build-args shape.
+# the pins it overrides. Mirrors docker-compose.v2.dev.yml's build-args shape.
 services:
   ai-dev:
     build:

@@ -75,46 +75,60 @@ if rg -n 'ai-engkit_default' test/test-admin.sh test/test-admin-ui.sh; then
   fail "an admin test hardcodes the production network name"
 fi
 
-# --- V2 line isolation (docker-compose.v2.yml) ---
-# DECISIONS D2: the v2 line must share no mutable state with the v1 lines.
-# Every v2 volume is a distinct '-v2' named volume, the project resolves to
-# 'v2', host ports do not collide with prod/dev, and the OMO runtime residue
-# stays out. A regression here (a dropped suffix, a re-added omo volume) would
-# silently let v2 read or clobber v1/prod data.
+# --- V2 line isolation (prod: docker-compose.v2.yml, dev: docker-compose.v2.dev.yml) ---
+# DECISIONS D2: the v2 line must share no mutable state with the v1 lines or
+# with its own dev stack. Each V2 compose uses a distinct '<suffix>' named
+# volume set, resolves to its own project, keeps OMO runtime residue out, and
+# does not collide with prod/dev (or the sibling V2) volumes/ports.
 [ -f .env ] || fail "compose isolation guard needs .env (run: cp .env.example .env)"
-v2_json="$(docker compose -f docker-compose.v2.yml config --format json)"
-v2_project="$(printf '%s' "$v2_json" | jq -r '.name')"
-[ "$v2_project" = "v2" ] || fail "docker-compose.v2.yml resolves to project '$v2_project', expected 'v2'"
 
-v2_volumes="$(printf '%s' "$v2_json" | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]')"
-while IFS= read -r vol; do
-  [ -n "$vol" ] || continue
-  case "$vol" in
-    *-v2) ;;
-    *) fail "v2 volume '$vol' is not '-v2' suffixed" ;;
-  esac
-done <<< "$v2_volumes"
+check_v2_compose() { # $1 = file, $2 = expected project, $3 = volume suffix, $4 = forbidden-port regex
+  local file="$1" project="$2" suffix="$3" ports_re="$4" json vols
+  json="$(docker compose -f "$file" config --format json)"
+  [ "$(printf '%s' "$json" | jq -r '.name')" = "$project" ] \
+    || fail "$file resolves to project '$(printf '%s' "$json" | jq -r '.name')', expected '$project'"
 
+  vols="$(printf '%s' "$json" | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]')"
+  while IFS= read -r vol; do
+    [ -n "$vol" ] || continue
+    case "$vol" in
+      *-"$suffix") ;;
+      *) fail "$file volume '$vol' is not '-$suffix' suffixed" ;;
+    esac
+  done <<< "$vols"
+
+  if rg -n 'omo-config|ohmyopencode-cache|OH_MY_OPENAGENT_VERSION' "$file" | rg -v '^[0-9]+:[[:space:]]*#'; then
+    fail "$file still references OMO runtime residue"
+  fi
+
+  while IFS= read -r port; do
+    [ -n "$port" ] || continue
+    if printf '%s' "$port" | grep -Eq "$ports_re"; then
+      fail "$file published port $port collides with a prod/dev/V2 port"
+    fi
+  done <<< "$(printf '%s' "$json" | jq -r '[.services[] | .ports[]?.published] | unique[]')"
+}
+
+# Every V2 named volume (both stacks) must not collide with a v1 prod/dev volume.
+all_v2_vols="$(
+  for f in docker-compose.v2.yml docker-compose.v2.dev.yml; do
+    docker compose -f "$f" config --format json \
+      | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]'
+  done | sort -u
+)"
 for other in docker-compose.yml docker-compose.dev.yml; do
   other_volumes="$(docker compose -f "$other" config --format json | jq -r '[.volumes // {} | keys[]] | unique[]')"
   while IFS= read -r vol; do
     [ -n "$vol" ] || continue
     if printf '%s\n' "$other_volumes" | grep -qxF "$vol"; then
-      fail "v2 volume '$vol' collides with a $other volume"
+      fail "V2 volume '$vol' collides with a $other volume"
     fi
-  done <<< "$v2_volumes"
+  done <<< "$all_v2_vols"
 done
 
-if rg -n 'omo-config|ohmyopencode-cache|OH_MY_OPENAGENT_VERSION' docker-compose.v2.yml | rg -v '^[0-9]+:[[:space:]]*#'; then
-  fail "docker-compose.v2.yml still references OMO runtime residue"
-fi
-
-v2_published_ports="$(printf '%s' "$v2_json" | jq -r '[.services[] | .ports[]?.published] | unique[]')"
-while IFS= read -r port; do
-  [ -n "$port" ] || continue
-  case "$port" in
-    8000 | 8080 | 8001 | 8081) fail "v2 published port $port collides with a prod/dev port" ;;
-  esac
-done <<< "$v2_published_ports"
+# V2 prod (8002/8082) must avoid prod/dev (8000/8080/8001/8081) and V2 dev (8003/8083).
+check_v2_compose docker-compose.v2.yml     v2     v2     '^(8000|8080|8001|8081|8003|8083)$'
+# V2 dev (8003/8083) must avoid prod/dev and V2 prod (8002/8082).
+check_v2_compose docker-compose.v2.dev.yml v2dev  v2dev  '^(8000|8080|8001|8081|8002|8082)$'
 
 printf 'compose isolation: PASS\n'

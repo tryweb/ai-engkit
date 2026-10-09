@@ -1,0 +1,127 @@
+# V2 Dev Compose — build/validation stack for the V2 line.
+# Coexists on one host with V1 prod/dev and the V2 prod stack:
+#   V1 prod 8000/8080 · V1 dev 8001/8081 · V2 prod 8002/8082 · V2 dev 8003/8083.
+# Rationale: opencode #42260 — the V2 binary migrates the shared opencode.db in
+# place and breaks V1, so every V2 volume is suffixed (-v2dev here, -v2 for V2
+# prod) and never shared with V1 prod/dev. Workspace is a NAMED volume
+# (workspace-v2dev), deliberately NOT a host-path bind: under DooD the daemon
+# resolves host paths in its own namespace and a ./v2dev-workspace bind silently
+# diverges. Seed files with `docker cp` (streams through the daemon) instead.
+# See docs/knowledge/troubleshooting/dood-relative-workspace-path.md.
+# See docs/knowledge/tooling/opencode-v2-migration-watch.md
+name: v2dev
+
+services:
+  ai-dev:
+    image: ai-engkit-ai-v2dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # V2 line carries no OMO runtime (D1); OH_MY_OPENAGENT_VERSION is
+        # intentionally not passed (the image ARG default is unused here).
+        - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
+        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.0.24}
+        - OPENCHAMBER_VERSION=2.1.1
+        - BUILDX_VERSION=0.38.0
+        - GLAB_VERSION=1.121.0
+        - AI_ENGKIT_VERSION=v2dev
+    container_name: ai-engkit-v2dev
+    ports:
+      - "${CHAMBER_V2DEV_PORT:-8003}:3000"
+    volumes:
+      - workspace-v2dev:/home/devuser/workspace
+      - opencode-data-v2dev:/home/devuser/.local/share/opencode
+      - lean-ctx-data-v2dev:/home/devuser/.local/share/lean-ctx
+      - lean-ctx-state-v2dev:/home/devuser/.local/state/lean-ctx
+      - lean-ctx-config-v2dev:/home/devuser/.config/lean-ctx
+      - opencode-config-v2dev:/home/devuser/.config/opencode
+      - opencode-cache-v2dev:/home/devuser/.cache/opencode
+      - openchamber-data-v2dev:/home/devuser/.config/openchamber
+      - git-config-v2dev:/home/devuser/.config/git
+      - ssh-keys-v2dev:/home/devuser/.ssh
+      - gh-config-v2dev:/home/devuser/.config/gh
+      - glab-config-v2dev:/home/devuser/.config/glab-cli
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      # Cell 2b key chase: provider key arrives via shell-exported env at
+      # V2 bring-up (value never committed); empty when unset.
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      # Cell 1 no-OMO baseline: entrypoint skips plugin[] + ~/.omo lifecycle
+      OMO_ENABLED: 0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  ai-admin:
+    image: ai-engkit-ai-v2dev
+    container_name: ai-engkit-admin-v2dev
+    depends_on:
+      - ai-dev
+    working_dir: /opt/admin
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        sudo find /opt/ai-engkit -path /opt/ai-engkit/extensions -prune -o -exec chown devuser:devuser {} +
+        mkdir -p /opt/ai-engkit/backups
+        [ -f /opt/ai-engkit/VERSION ] || echo dev > /opt/ai-engkit/VERSION
+         [ -f /opt/ai-engkit/.env ] || env | grep -v -E '^(HOME|PATH|BUN_|NODE_|npm_|HOSTNAME|PWD|SHLVL|TERM|TZ|LS_COLORS|LESS[ _]|PAGER|EDITOR|LC_|LANG|SHELL|USER|SUDO_|TMPDIR|OLDPWD|_|LOGNAME|PLAYWRIGHT_|DEBIAN_|CLAUDE_)' > /opt/ai-engkit/.env
+         if [ "$${OPENCODE_PROVIDER+x}" = x ]; then
+           env_tmp="$$(mktemp /opt/ai-engkit/.env.sync.XXXXXX)"
+           persisted_provider="$$(sed -n 's/^[[:space:]]*OPENCODE_PROVIDER=//p' /opt/ai-engkit/.env | tail -n 1)"
+           merged_provider="$$(jq -cn \
+             --arg persisted "$$persisted_provider" \
+             --arg compose "$$OPENCODE_PROVIDER" \
+             'def providers: try fromjson catch {} | if type == "object" then . else {} end; ($$persisted | providers) * ($$compose | providers)')"
+           grep -vE '^[[:space:]]*OPENCODE_PROVIDER=' /opt/ai-engkit/.env > "$$env_tmp" || true
+           printf 'OPENCODE_PROVIDER=%s\n' "$$merged_provider" >> "$$env_tmp"
+           mv "$$env_tmp" /opt/ai-engkit/.env
+         fi
+         mkdir -p /opt/ai-engkit/admin-data
+         mkdir -p /opt/ai-engkit/extensions
+         [ -f /opt/ai-engkit/compose-upgrade-base.yml ] || : > /opt/ai-engkit/compose-upgrade-base.yml
+        if [ -d /opt/ai-engkit/provider-state/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/provider-state/provider-keys.json.legacy.$$(date +%s); fi
+        if [ -f /opt/ai-engkit/provider-state/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-state/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
+        if [ -f /opt/ai-engkit/provider-keys.json ] && [ ! -e /opt/ai-engkit/admin-data/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/admin-data/provider-keys.json; fi
+        if [ -d /opt/ai-engkit/provider-keys.json ]; then mv /opt/ai-engkit/provider-keys.json /opt/ai-engkit/provider-keys.json.legacy.$$(date +%s); fi
+        [ -f /opt/ai-engkit/admin-data/provider-keys.json ] || printf '%s\n' '{"providers":{}}' > /opt/ai-engkit/admin-data/provider-keys.json
+        bun run /opt/admin/server.ts
+    ports:
+      - "${ADMIN_V2DEV_PORT:-8083}:8080"
+    volumes:
+      - admin-data-v2dev:/opt/ai-engkit
+      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
+      - ./extensions:/opt/ai-engkit/extensions:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - ADMIN_PORT=8080
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-testadmin123}
+      - AGENT_MODELS_DEBUG=1
+      # Same no-OMO gate as ai-dev: without this, Admin TS takes V1
+      # (omo.jsonc) paths even on the v2 line (verified live 2026-10-03:
+      # isNativeV2Enabled()=false → empty knownAgents → PUT 403).
+      - OMO_ENABLED=0
+    restart: unless-stopped
+
+volumes:
+  admin-data-v2dev:
+  workspace-v2dev:
+  opencode-data-v2dev:
+  lean-ctx-data-v2dev:
+  lean-ctx-state-v2dev:
+  lean-ctx-config-v2dev:
+  opencode-config-v2dev:
+  opencode-cache-v2dev:
+  openchamber-data-v2dev:
+  git-config-v2dev:
+  ssh-keys-v2dev:
+  gh-config-v2dev:
+  glab-config-v2dev:

@@ -59,7 +59,7 @@ TIMEOUT="${CHECK_VERSIONS_TIMEOUT:-15}"
 # OpenChamber), and drops the OMO pin (D1: v2 carries no OMO runtime).
 # Default (unset/empty) = V1 behavior, byte-identical output to before.
 V2_LINE="${CHECK_V2_LINE:-}"
-COMPOSE_V2="${CHECK_COMPOSE_FILE:-docker-compose.v2.yml}"
+COMPOSE_V2="${CHECK_COMPOSE_FILE:-docker-compose.v2.dev.yml}"
 
 # compose_arg NAME → default value from "- NAME=${NAME:-default}" or
 # "- NAME=value" lines in the v2 compose file; empty when absent.

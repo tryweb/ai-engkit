@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CHAMBER_URL="${CHAMBER_V2_URL:-http://localhost:8002}"
-ADMIN_URL="${ADMIN_V2_URL:-http://localhost:8082}"
+CHAMBER_URL="${CHAMBER_V2_URL:-http://localhost:8003}"
+ADMIN_URL="${ADMIN_V2_URL:-http://localhost:8083}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-testadmin123}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

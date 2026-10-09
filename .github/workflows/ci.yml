@@ -147,29 +147,29 @@ jobs:
       - name: Version-pin checker regression
         run: bash test/test-check-versions.sh
 
-      # Pins come from docker-compose.v2.yml (single source of truth for the
+      # Pins come from docker-compose.v2.dev.yml (single source of truth for the
       # V2 line: OpenCode 2 CLI package/version, OpenChamber 2.x, no OMO).
       - name: Build V2 image
-        run: docker compose -f docker-compose.v2.yml build ai-dev
+        run: docker compose -f docker-compose.v2.dev.yml build ai-dev
 
       - name: V2 image smoke (CLI + baked plugins)
         run: |
           set -euo pipefail
-          OPENCODE_VERSION=$(docker run --rm --entrypoint /home/devuser/.bun/bin/opencode ai-engkit-ai-v2 --version)
+          OPENCODE_VERSION=$(docker run --rm --entrypoint /home/devuser/.bun/bin/opencode ai-engkit-ai-v2dev --version)
           echo "OpenCode CLI version: ${OPENCODE_VERSION}"
           printf '%s\n' "$OPENCODE_VERSION" | grep -Eq '(^|[[:space:]])v?2\.[0-9]+\.[0-9]+([[:space:]]|$)'
-          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/b1-routing.js
-          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2 -f /opt/opencode/v2-plugins/m3-enforcer.js
+          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2dev -f /opt/opencode/v2-plugins/b1-routing.js
+          docker run --rm --entrypoint /usr/bin/test ai-engkit-ai-v2dev -f /opt/opencode/v2-plugins/m3-enforcer.js
           echo "PASS: V2 image builds with baked routing/enforcer plugins"
 
       - name: V2 Admin unit tests
-        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2 --cwd /opt/admin test
+        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev --cwd /opt/admin test
 
       - name: V2 Admin typecheck
-        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2 run --cwd /opt/admin typecheck
+        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev run --cwd /opt/admin typecheck
 
       - name: Save V2 image artifact
-        run: docker save ai-engkit-ai-v2 -o /tmp/image-v2.tar
+        run: docker save ai-engkit-ai-v2dev -o /tmp/image-v2.tar
 
       - name: Upload V2 image artifact
         uses: actions/upload-artifact@v7
@@ -207,19 +207,19 @@ jobs:
           printf '\nBREW_PACKAGES="go"\nBUN_PACKAGES="pyright @biomejs/biome typescript@5.8.3"\n' >> .env
 
       - name: Start V2 integration stack
-        run: docker compose -f docker-compose.v2.yml up --no-build -d
+        run: docker compose -f docker-compose.v2.dev.yml up --no-build -d
 
       - name: Wait for V2 services
         run: |
           for i in $(seq 1 30); do
-            if curl -sf -m 5 -o /dev/null "http://localhost:8002/" && \
-               curl -sf -m 5 -o /dev/null "http://localhost:8082/healthz"; then
+            if curl -sf -m 5 -o /dev/null "http://localhost:8003/" && \
+               curl -sf -m 5 -o /dev/null "http://localhost:8083/healthz"; then
               echo "V2 OpenChamber and Admin ready"; exit 0
             fi
             sleep 2
           done
           echo "::error::V2 OpenChamber or Admin did not become ready"
-          docker compose -f docker-compose.v2.yml logs --tail=50 || true
+          docker compose -f docker-compose.v2.dev.yml logs --tail=50 || true
           exit 1
 
       - name: V2 runtime and diagnostics cells
@@ -234,18 +234,18 @@ jobs:
         run: bash test/test-v2-admin-integration.sh
 
       - name: V2 Admin integration unit tests
-        run: docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2 bun --cwd /opt/admin test --parallel=4
+        run: docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2dev bun --cwd /opt/admin test --parallel=4
 
       - name: V2 Admin integration typecheck
-        run: docker exec ai-engkit-admin-v2 bun run --cwd /opt/admin typecheck
+        run: docker exec ai-engkit-admin-v2dev bun run --cwd /opt/admin typecheck
 
       - name: V2 integration logs
         if: always()
-        run: docker compose -f docker-compose.v2.yml logs --tail=80 || true
+        run: docker compose -f docker-compose.v2.dev.yml logs --tail=80 || true
 
       - name: Teardown
         if: always()
-        run: docker compose -f docker-compose.v2.yml down -v --remove-orphans || true
+        run: docker compose -f docker-compose.v2.dev.yml down -v --remove-orphans || true
 
   scan-v2:
     name: V2 Vulnerability Scan
@@ -298,7 +298,7 @@ jobs:
       - name: Scan V2 candidate image for release gate
         uses: anchore/scan-action@v7
         with:
-          image: ai-engkit-ai-v2
+          image: ai-engkit-ai-v2dev
           output-format: json
           output-file: grype-v2-candidate-results.json
           severity-cutoff: negligible
@@ -307,7 +307,7 @@ jobs:
       - name: Run Grype scan for V2 Security tab
         uses: anchore/scan-action@v7
         with:
-          image: ai-engkit-ai-v2
+          image: ai-engkit-ai-v2dev
           output-format: sarif
           output-file: grype-v2-results.sarif
           severity-cutoff: critical
@@ -352,8 +352,8 @@ jobs:
       - name: Tag and push V2 image
         run: |
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
-          docker tag ai-engkit-ai-v2 "${IMAGE}:v2"
-          docker tag ai-engkit-ai-v2 "${IMAGE}:sha-${{ github.sha }}"
+          docker tag ai-engkit-ai-v2dev "${IMAGE}:v2"
+          docker tag ai-engkit-ai-v2dev "${IMAGE}:sha-${{ github.sha }}"
           docker push "${IMAGE}:v2"
           docker push "${IMAGE}:sha-${{ github.sha }}"
 

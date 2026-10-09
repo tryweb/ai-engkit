@@ -8,8 +8,9 @@
   not resolve `@opencode/plugin` for local file plugins.
 - CI: build the V2 image (`build-v2`) and run the V2 integration cells (`test-v2`).
 - CI: run the compose-isolation guard in `build-v2`; the guard now also checks
-  `docker-compose.v2.yml` (`-v2` volume suffixes, no volume/port collision with
-  prod/dev, no OMO residue).
+  the V2 composes (`docker-compose.v2.yml` prod and `docker-compose.v2.dev.yml`
+  dev: `-v2`/`-v2dev` volume suffixes, no volume/port collision with prod/dev or
+  the sibling V2 stack, no OMO residue).
 - CI: `test/test-v2.sh cell1` asserts the baked V2 plugins actually load
   (waits for the plugins' `setup start` log marker under the opencode data
   volume), not just that they are deployed.
