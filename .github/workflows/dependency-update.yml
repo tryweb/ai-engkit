@@ -500,6 +500,9 @@ jobs:
       - name: Verify Compose isolation guard
         run: bash test/test-compose-isolation.sh
 
+      - name: Version-pin checker regression
+        run: bash test/test-check-versions.sh
+
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 

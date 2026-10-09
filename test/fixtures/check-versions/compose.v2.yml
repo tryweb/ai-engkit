@@ -1,0 +1,9 @@
+# Fixture compose for CHECK_V2_LINE=1: the v2 line is the source of truth for
+# the pins it overrides. Mirrors docker-compose.v2.yml's build-args shape.
+services:
+  ai-dev:
+    build:
+      args:
+        - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
+        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.0.24}
+        - OPENCHAMBER_VERSION=2.1.1

@@ -21,8 +21,7 @@
 # Also asserts .github/workflows/dependency-update.yml tracks BUN_VERSION and
 # expects 15 pins (14 existing + BUN_VERSION).
 #
-# Exits 0 when all cases pass, 1 otherwise. Currently RED: the checker has no
-# BUN_VERSION support yet, and the workflow has 12 pins / no BUN_VERSION.
+# Exits 0 when all cases pass, 1 otherwise. Runs offline (curl shim) in CI.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -65,6 +64,13 @@ json_field() { # $1 = json, $2 = jq expression
   printf '%s' "$1" | jq -r "$2" 2>/dev/null || echo "unparseable"
 }
 
+# Run the real checker in V2-line mode against a fixture Dockerfile + compose.
+run_checker_v2() { # $1 = fixture Dockerfile, $2 = fixture compose
+  CV_FIXTURE_DIR="$FIXTURES" CV_PKG_MODE="${3:-aligned}" CHECK_VERSIONS_TIMEOUT=5 \
+    CHECK_V2_LINE=1 CHECK_COMPOSE_FILE="$2" \
+    PATH="$MOCK_BIN:$PATH" bash "$CHECKER" json "$1" 2>/dev/null
+}
+
 assert_bun_status() { # $1 = label, $2 = expected status, $3 = dockerfile, $4 = mode
   local label="$1" expected="$2" dockerfile="$3" mode="$4" out status
   out="$(run_checker "$dockerfile" "$mode")"
@@ -101,6 +107,21 @@ assert_eq "openchamber-row-is-current" "current" \
 assert_eq "bun-derived-version-surfaced" "1.3.14" \
   "$(json_field "$aligned_out" '.BUN_VERSION.latest // "absent"')"
 
+echo "== V2 line mode (CHECK_V2_LINE=1) =="
+
+# The v2 trial compose is the source of truth for the pins it overrides; the
+# OMO pin is dropped (D1: the v2 line carries no OMO runtime).
+v2_out="$(run_checker_v2 "$FIXTURES/Dockerfile.v2" "$FIXTURES/compose.v2.yml")"
+[ -n "$v2_out" ] || v2_out='{}'
+assert_eq "v2-openchamber-pin-comes-from-compose" "2.1.1" \
+  "$(json_field "$v2_out" '.OPENCHAMBER_VERSION.pinned // "absent"')"
+assert_eq "v2-opencode-cli-pin-comes-from-compose" "2.0.24" \
+  "$(json_field "$v2_out" '.OPENCODE_CLI_VERSION.pinned // "absent"')"
+assert_eq "v2-drops-omo-pin" "absent" \
+  "$(json_field "$v2_out" '.OH_MY_OPENAGENT_VERSION.pinned // "absent"')"
+assert_eq "v2-superseded-opencode-row-absent" "absent" \
+  "$(json_field "$v2_out" '.OPENCODE_VERSION.pinned // "absent"')"
+
 echo "== CI workflow contract =="
 
 if grep -q 'BUN_VERSION' "$WORKFLOW"; then
@@ -110,7 +131,10 @@ else
 fi
 
 # Count pinned case arms of the form:  NAME_VERSION)   source='...'
-pin_count="$(grep -cE '^[[:space:]]+[A-Z_]+_VERSION\)[[:space:]]+source=' "$WORKFLOW")"
+# Count pinned case arms. The char class includes "|" so the combined
+# OpenCode arm introduced by the V2 cross-major switch
+# (`OPENCODE_VERSION|OPENCODE_CLI_VERSION)`) counts once, not zero.
+pin_count="$(grep -cE '^[[:space:]]+[A-Z_|]+_VERSION\)[[:space:]]+source=' "$WORKFLOW")"
 assert_eq "ci-workflow-expects-15-pins" "15" "$pin_count"
 
 echo ""

@@ -81,6 +81,9 @@ jobs:
       - name: Compose isolation guard
         run: bash test/test-compose-isolation.sh
 
+      - name: Version-pin checker regression
+        run: bash test/test-check-versions.sh
+
       - name: Admin unit tests
         run: docker run --rm ai-engkit:ci bun --cwd /opt/admin test
 
@@ -120,6 +123,9 @@ jobs:
 
       - name: Compose isolation guard
         run: bash test/test-compose-isolation.sh
+
+      - name: Version-pin checker regression
+        run: bash test/test-check-versions.sh
 
       # Pins come from docker-compose.v2.yml (single source of truth for the
       # V2 line: OpenCode 2 CLI package/version, OpenChamber 2.x, no OMO).
