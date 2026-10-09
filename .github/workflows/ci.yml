@@ -19,7 +19,7 @@ on:
     # source of truth). Renaming the v2 branch therefore requires updating BOTH
     # this line AND the V2_BRANCH repository variable — see
     # docs/knowledge/tooling/v2-branch-wiring.md.
-    branches: [main, trial/opencode-v2]
+    branches: [main, v2]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -48,7 +48,7 @@ jobs:
       - name: Require the V2_BRANCH repository variable
         run: |
           if [ -z "${{ vars.V2_BRANCH }}" ]; then
-            echo "::error::Repository variable V2_BRANCH is not set. V2 CI gating (build-v2/trial-v2/scan-v2/push-v2-trial) reads it, and an empty value disables the whole V2 pipeline. Set it under Settings -> Secrets and variables -> Actions -> Variables to the v2 branch name (e.g. trial/opencode-v2)."
+            echo "::error::Repository variable V2_BRANCH is not set. V2 CI gating (build-v2/trial-v2/scan-v2/push-v2-trial) reads it, and an empty value disables the whole V2 pipeline. Set it under Settings -> Secrets and variables -> Actions -> Variables to the v2 branch name (e.g. v2)."
             exit 1
           fi
           echo "V2_BRANCH=${{ vars.V2_BRANCH }}"

@@ -4,8 +4,8 @@
 
 `ci.yml` routes work to the V1 or V2 line by branch name: `build` runs for the
 V1 line, and `build-v2`/`trial-v2`/`scan-v2`/`push-v2-trial` run for the V2
-line. The V2 branch started as `trial/opencode-v2` and is expected to be renamed
-once the line stabilizes.
+line. The V2 branch was `trial/opencode-v2` and was renamed to `v2` on
+2026-10-09 (the rename this wiring was built for).
 
 ## Problem
 
@@ -13,6 +13,8 @@ The branch name was hardcoded in seven places in `ci.yml` (the `build` gate ×2,
 the `build-v2` gate ×3, the `push-v2-trial` gate, and the `on.push.branches`
 list). Renaming the branch without editing every copy makes the V2 jobs match
 nothing — **the V2 pipeline silently stops running** (no error, just no jobs).
+This wiring was added specifically so the `trial/opencode-v2` → `v2` rename
+(2026-10-09) was a two-step change instead of a seven-file hunt.
 
 ## Solution
 
@@ -63,8 +65,9 @@ and annotated. The guard converts the silent-failure mode into a red run.
 
 - Before: seven `trial/opencode-v2` literals in `ci.yml`; no guard.
 - After: six gate comparisons use `vars.V2_BRANCH`; `on.push.branches` keeps the
-  literal with a sync comment; `config-guard` added. `V2_BRANCH` set to
-  `trial/opencode-v2` via `gh variable set`.
+  literal (`[main, v2]`) with a sync comment; `config-guard` added. The
+  `trial/opencode-v2` → `v2` rename was applied on 2026-10-09: branch renamed
+  via the GitHub API and `V2_BRANCH` set to `v2` via `gh variable set`.
 - `python3 -c yaml.safe_load` passes on `ci.yml`.
 
 ## Related Files
