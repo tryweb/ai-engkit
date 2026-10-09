@@ -29,7 +29,9 @@ Determine which line this checkout follows before running anything:
 git branch --show-current
 ```
 
-- **`trial/opencode-v2` (or any v2 trial branch)** → V2 mode: prefix every
+- **The v2 line branch** (currently `trial/opencode-v2`; its name is tracked by
+  the `V2_BRANCH` repository variable — see
+  `docs/knowledge/tooling/v2-branch-wiring.md`) → V2 mode: prefix every
   `check-versions.sh` invocation with `CHECK_V2_LINE=1`. In V2 mode the script
   resolves `OPENCODE_CLI_PACKAGE`/`OPENCODE_CLI_VERSION`/`OPENCHAMBER_VERSION`
   from `docker-compose.v2.yml` build args (the trial's effective pins) and

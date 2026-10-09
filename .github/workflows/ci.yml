@@ -14,6 +14,11 @@ concurrency:
 
 on:
   push:
+    # NOTE: `on:` cannot read the `vars` context, so the v2 branch is listed
+    # literally here while every `if:` gate uses vars.V2_BRANCH (the single
+    # source of truth). Renaming the v2 branch therefore requires updating BOTH
+    # this line AND the V2_BRANCH repository variable — see
+    # docs/knowledge/tooling/v2-branch-wiring.md.
     branches: [main, trial/opencode-v2]
     paths-ignore:
       - '**.md'
@@ -33,13 +38,28 @@ on:
         default: ''
 
 jobs:
+  config-guard:
+    name: CI config guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # V2 gating reads vars.V2_BRANCH; an unset variable would silently
+      # disable build-v2/trial-v2/scan-v2/push-v2-trial. Fail loudly instead.
+      - name: Require the V2_BRANCH repository variable
+        run: |
+          if [ -z "${{ vars.V2_BRANCH }}" ]; then
+            echo "::error::Repository variable V2_BRANCH is not set. V2 CI gating (build-v2/trial-v2/scan-v2/push-v2-trial) reads it, and an empty value disables the whole V2 pipeline. Set it under Settings -> Secrets and variables -> Actions -> Variables to the v2 branch name (e.g. trial/opencode-v2)."
+            exit 1
+          fi
+          echo "V2_BRANCH=${{ vars.V2_BRANCH }}"
+
   build:
     name: Build Image
     if: |
       github.ref == 'refs/heads/main' ||
       startsWith(github.ref, 'refs/tags/v1.') ||
-      (github.event_name == 'pull_request' && github.head_ref != 'trial/opencode-v2') ||
-      (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/trial/opencode-v2')
+      (github.event_name == 'pull_request' && github.head_ref != vars.V2_BRANCH) ||
+      (github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', vars.V2_BRANCH))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -100,9 +120,9 @@ jobs:
   build-v2:
     name: Build V2 Image
     if: |
-      github.ref == 'refs/heads/trial/opencode-v2' ||
-      (github.event_name == 'pull_request' && github.head_ref == 'trial/opencode-v2') ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/trial/opencode-v2')
+      github.ref == format('refs/heads/{0}', vars.V2_BRANCH) ||
+      (github.event_name == 'pull_request' && github.head_ref == vars.V2_BRANCH) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', vars.V2_BRANCH))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -306,7 +326,7 @@ jobs:
   push-v2-trial:
     name: Push V2 Trial Image to GHCR
     needs: [trial-v2, scan-v2]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/trial/opencode-v2'
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', vars.V2_BRANCH)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
