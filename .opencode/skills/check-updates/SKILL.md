@@ -34,7 +34,7 @@ git branch --show-current
   `docs/knowledge/tooling/v2-branch-wiring.md`) → V2 mode: prefix every
   `check-versions.sh` invocation with `CHECK_V2_LINE=1`. In V2 mode the script
   resolves `OPENCODE_CLI_PACKAGE`/`OPENCODE_CLI_VERSION`/`OPENCHAMBER_VERSION`
-  from `docker-compose.v2.yml` build args (the trial's effective pins) and
+  from `docker-compose.v2.yml` build args (the V2 line's effective pins) and
   **skips `OH_MY_OPENAGENT_VERSION` entirely** (D1: the v2 line carries no OMO
   runtime). Without the prefix you get V1 defaults, including two false
   positives (`opencode-ai` 1.x track, OMO bump) and one hidden true positive
@@ -155,7 +155,7 @@ The `$schema` field is editor-only (runtime merge ignores it), but keeping it
 aligned avoids stale IDE validation after the plugin moves forward.
 
 > **V2 line: skip OMO entirely.** Do not bump `OH_MY_OPENAGENT_VERSION` and do
-> not touch `.opencode/omo.jsonc.default` — the v2 trial carries no OMO runtime
+> not touch `.opencode/omo.jsonc.default` — the V2 line carries no OMO runtime
 > (the `docker-compose.v2.yml` default is a dead parameter). The script already
 > omits the OMO row in V2 mode.
 
@@ -183,12 +183,12 @@ stack; the script's locked-pair guard only sees what you feed it.
 docker compose -p dev -f docker-compose.dev.yml build ai-dev
 ```
 
-> **V2 line:** build the trial image instead, with the `trial-b` builder (the
+> **V2 line:** build the V2 image instead, with the `v2-b` builder (the
 > default BuildKit worker fails its network prestart hook in this environment
 > with a `libnftables.so.1` error):
 >
 > ```bash
-> docker buildx build --builder trial-b --load --network=host \
+> docker buildx build --builder v2-b --load --network=host \
 >   --build-arg OPENCODE_CLI_PACKAGE=@opencode/cli \
 >   --build-arg OPENCODE_CLI_VERSION=<NEW> \
 >   --build-arg OPENCHAMBER_VERSION=<NEW> \
@@ -220,9 +220,9 @@ CONTAINER=$(docker compose -p dev -f docker-compose.dev.yml ps -q ai-dev 2>/dev/
 ./test/run-tests.sh "$CONTAINER"
 ```
 
-> **V2 line:** replace the gate with the trial gates — `test/test-v2-trial.sh`
+> **V2 line:** replace the gate with the V2 gates — `test/test-v2.sh`
 > cells, `bun test src/`, plus the Admin live checks. After any Playwright pin
-> bump, the headless Chromium launch must pass through the trial container's
+> bump, the headless Chromium launch must pass through the V2 container's
 > `pw-mcp` path specifically.
 
 If any test fails, report and stop. Do not commit.

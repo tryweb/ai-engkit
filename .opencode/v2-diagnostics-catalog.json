@@ -1,5 +1,5 @@
 {
-  "_note": "Phase 1 data file for trial/CELL3.md; consumed by test/test-v2-trial.sh cell3(). v1 json/css/html servers consolidated under biome (they shared one npm package). 8 keys.",
+  "_note": "Phase 1 data file for trial/CELL3.md; consumed by test/test-v2.sh cell3(). v1 json/css/html servers consolidated under biome (they shared one npm package). 8 keys.",
   "tools": {
     "go": {
       "kind": "global-executor",

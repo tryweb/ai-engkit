@@ -85,7 +85,7 @@ with `Could not resolve "@opencode/plugin"`).
   `.../m3-enforcer.js`.
 - `bun add @opencode/plugin@2.0.24` installs from npm (269 packages).
 - CI scope: the `build-v2` smoke asserts the two `/opt/opencode/v2-plugins/*.js`
-  files exist, and `test/test-v2-trial.sh cell1` asserts they are deployed to
+  files exist, and `test/test-v2.sh cell1` asserts they are deployed to
   `~/.config/opencode/plugins/` (boot log:
   `V2 plugins deployed to ... b1-routing.js m3-enforcer.js`) **and that they
   actually load**: each plugin appends `setup start` to

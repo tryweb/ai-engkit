@@ -39,7 +39,7 @@ missing, before the first jq read:
 
 The empty shape matches `readRoutingConfig`'s fallback (`{"version":1,"chains":{}}`)
 and adds no chain, so the "no default chain is baked" property is preserved.
-`opencode.json` is entrypoint-guaranteed (asserted by `test-v2-trial.sh cell1`)
+`opencode.json` is entrypoint-guaranteed (asserted by `test-v2.sh cell1`)
 and needs no seed.
 
 ## Why It Works

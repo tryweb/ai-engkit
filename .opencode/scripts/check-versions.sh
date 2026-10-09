@@ -54,8 +54,8 @@ set -uo pipefail
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
 TIMEOUT="${CHECK_VERSIONS_TIMEOUT:-15}"
 
-# V2-line mode: CHECK_V2_LINE=1 makes the v2 trial the source of truth for
-# pins the trial compose file overrides (opencode CLI package/version,
+# V2-line mode: CHECK_V2_LINE=1 makes the V2 line the source of truth for
+# pins the V2 compose file overrides (opencode CLI package/version,
 # OpenChamber), and drops the OMO pin (D1: v2 carries no OMO runtime).
 # Default (unset/empty) = V1 behavior, byte-identical output to before.
 V2_LINE="${CHECK_V2_LINE:-}"

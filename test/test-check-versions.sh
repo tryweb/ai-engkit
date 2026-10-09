@@ -109,7 +109,7 @@ assert_eq "bun-derived-version-surfaced" "1.3.14" \
 
 echo "== V2 line mode (CHECK_V2_LINE=1) =="
 
-# The v2 trial compose is the source of truth for the pins it overrides; the
+# The V2 compose is the source of truth for the pins it overrides; the
 # OMO pin is dropped (D1: the v2 line carries no OMO runtime).
 v2_out="$(run_checker_v2 "$FIXTURES/Dockerfile.v2" "$FIXTURES/compose.v2.yml")"
 [ -n "$v2_out" ] || v2_out='{}'

@@ -3,14 +3,14 @@
 ## Context
 
 `ci.yml` routes work to the V1 or V2 line by branch name: `build` runs for the
-V1 line, and `build-v2`/`trial-v2`/`scan-v2`/`push-v2-trial` run for the V2
+V1 line, and `build-v2`/`test-v2`/`scan-v2`/`push-v2` run for the V2
 line. The V2 branch was `trial/opencode-v2` and was renamed to `v2` on
 2026-10-09 (the rename this wiring was built for).
 
 ## Problem
 
 The branch name was hardcoded in seven places in `ci.yml` (the `build` gate ×2,
-the `build-v2` gate ×3, the `push-v2-trial` gate, and the `on.push.branches`
+the `build-v2` gate ×3, the `push-v2` gate, and the `on.push.branches`
 list). Renaming the branch without editing every copy makes the V2 jobs match
 nothing — **the V2 pipeline silently stops running** (no error, just no jobs).
 This wiring was added specifically so the `trial/opencode-v2` → `v2` rename
@@ -72,7 +72,7 @@ and annotated. The guard converts the silent-failure mode into a red run.
 
 ## Related Files
 
-- `.github/workflows/ci.yml` — `config-guard`, `build`/`build-v2`/`push-v2-trial` gates, `on.push.branches`
+- `.github/workflows/ci.yml` — `config-guard`, `build`/`build-v2`/`push-v2` gates, `on.push.branches`
 - `.opencode/skills/check-updates/SKILL.md` — release-line detection hint
 - `docs/knowledge/tooling/opencode-v2-migration-watch.md` — the V2 line context
 

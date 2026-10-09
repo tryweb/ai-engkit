@@ -1,4 +1,4 @@
-# V2 Trial Compose — Isolated from V1 (prod/dev)
+# V2 Compose — Isolated from V1 (prod/dev)
 # Rationale: opencode #42260 — V2 binary migrates shared opencode.db in place
 # and breaks V1 (no such table: session_context_epoch on /move).
 # Therefore opencode-data AND opencode-config are fully suffixed (-v2),
@@ -7,11 +7,11 @@
 # lean-ctx-*, git/ssh/gh/glab, admin-data) are also suffixed -v2 for
 # complete isolation. Workspace is a NAMED volume (workspace-v2), deliberately
 # NOT a host-path bind: under DooD the daemon resolves host paths in its own
-# namespace and a ./trial-workspace bind silently diverges (writes on each
-# side invisible to the other). Seed trial files with `docker cp` (streams
+# namespace and a ./v2-workspace bind silently diverges (writes on each
+# side invisible to the other). Seed V2 files with `docker cp` (streams
 # through the daemon) instead. See
 # docs/knowledge/troubleshooting/dood-relative-workspace-path.md.
-# Production uses 8000/8080, dev 8001/8081, trial 8002/8082.
+# Production uses 8000/8080, dev 8001/8081, V2 8002/8082.
 # See docs/knowledge/tooling/opencode-v2-migration-watch.md
 name: v2
 
@@ -29,7 +29,7 @@ services:
         - OPENCHAMBER_VERSION=2.1.1
         - BUILDX_VERSION=0.38.0
         - GLAB_VERSION=1.121.0
-        - AI_ENGKIT_VERSION=v2trial
+        - AI_ENGKIT_VERSION=v2
     container_name: ai-engkit-v2
     ports:
       - "${CHAMBER_V2_PORT:-8002}:3000"
@@ -53,7 +53,7 @@ services:
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
       # Cell 2b key chase: provider key arrives via shell-exported env at
-      # trial bring-up (value never committed); empty when unset.
+      # V2 bring-up (value never committed); empty when unset.
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       # Cell 1 no-OMO baseline: entrypoint skips plugin[] + ~/.omo lifecycle
       OMO_ENABLED: 0

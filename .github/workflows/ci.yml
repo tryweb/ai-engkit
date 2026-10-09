@@ -44,11 +44,11 @@ jobs:
     timeout-minutes: 5
     steps:
       # V2 gating reads vars.V2_BRANCH; an unset variable would silently
-      # disable build-v2/trial-v2/scan-v2/push-v2-trial. Fail loudly instead.
+      # disable build-v2/test-v2/scan-v2/push-v2. Fail loudly instead.
       - name: Require the V2_BRANCH repository variable
         run: |
           if [ -z "${{ vars.V2_BRANCH }}" ]; then
-            echo "::error::Repository variable V2_BRANCH is not set. V2 CI gating (build-v2/trial-v2/scan-v2/push-v2-trial) reads it, and an empty value disables the whole V2 pipeline. Set it under Settings -> Secrets and variables -> Actions -> Variables to the v2 branch name (e.g. v2)."
+            echo "::error::Repository variable V2_BRANCH is not set. V2 CI gating (build-v2/test-v2/scan-v2/push-v2) reads it, and an empty value disables the whole V2 pipeline. Set it under Settings -> Secrets and variables -> Actions -> Variables to the v2 branch name (e.g. v2)."
             exit 1
           fi
           echo "V2_BRANCH=${{ vars.V2_BRANCH }}"
@@ -178,7 +178,7 @@ jobs:
           path: /tmp/image-v2.tar
           retention-days: 7
 
-  trial-v2:
+  test-v2:
     name: V2 Integration Tests
     needs: build-v2
     if: github.event_name != 'pull_request' && needs.build-v2.result == 'success'
@@ -202,7 +202,7 @@ jobs:
       - name: Create .env for Compose
         run: cp .env.example .env
 
-      - name: Configure V2 trial diagnostics
+      - name: Configure V2 diagnostics
         run: |
           printf '\nBREW_PACKAGES="go"\nBUN_PACKAGES="pyright @biomejs/biome typescript@5.8.3"\n' >> .env
 
@@ -224,9 +224,9 @@ jobs:
 
       - name: V2 runtime and diagnostics cells
         run: |
-          bash test/test-v2-trial.sh cell1
-          bash test/test-v2-trial.sh cell2
-          bash test/test-v2-trial.sh cell3
+          bash test/test-v2.sh cell1
+          bash test/test-v2.sh cell2
+          bash test/test-v2.sh cell3
 
       - name: V2 Admin HTTP integration smoke
         env:
@@ -276,11 +276,11 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
-          if docker pull "${IMAGE}:v2-trial" >/dev/null 2>&1; then
-            BASELINE_IMAGE="${IMAGE}:v2-trial"
+          if docker pull "${IMAGE}:v2" >/dev/null 2>&1; then
+            BASELINE_IMAGE="${IMAGE}:v2"
           else
             # Bootstrap the first V2 scan against the current V1 stable image;
-            # subsequent trial builds compare against the previous V2 image.
+            # subsequent V2 builds compare against the previous V2 image.
             BASELINE_IMAGE="${IMAGE}:latest"
             docker pull "${BASELINE_IMAGE}"
           fi
@@ -323,9 +323,9 @@ jobs:
           sarif_file: grype-v2-results.sarif
           category: sca-grype-v2
 
-  push-v2-trial:
-    name: Push V2 Trial Image to GHCR
-    needs: [trial-v2, scan-v2]
+  push-v2:
+    name: Push V2 Image to GHCR
+    needs: [test-v2, scan-v2]
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', vars.V2_BRANCH)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -349,12 +349,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag and push V2 trial image
+      - name: Tag and push V2 image
         run: |
           IMAGE="${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}"
-          docker tag ai-engkit-ai-v2 "${IMAGE}:v2-trial"
+          docker tag ai-engkit-ai-v2 "${IMAGE}:v2"
           docker tag ai-engkit-ai-v2 "${IMAGE}:sha-${{ github.sha }}"
-          docker push "${IMAGE}:v2-trial"
+          docker push "${IMAGE}:v2"
           docker push "${IMAGE}:sha-${{ github.sha }}"
 
   test:

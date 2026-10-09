@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ============================================================
-# V2 Trial Test Script — Isolated V2 trial cells
-# Usage: ./test/test-v2-trial.sh [cell1|cell2|cell3|cell4|cell5|cell6|cell7|all]
+# V2 Test Script — isolated V2 cells
+# Usage: ./test/test-v2.sh [cell1|cell2|cell3|cell4|cell5|cell6|cell7|all]
 # ============================================================
 
 CHAMBER_V2_PORT="${CHAMBER_V2_PORT:-8002}"
@@ -21,22 +21,22 @@ cell1() {
 
   $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-v2$'
   $compose ps --status running --format '{{.Name}}' | grep -q '^ai-engkit-admin-v2$'
-  echo "PASS: trial containers running"
+  echo "PASS: V2 containers running"
 
   # Seed workspace through the daemon: host-path writes are invisible to the
-  # trial container under DooD, so `docker cp` (not cp into a bind) is required
+  # V2 container under DooD, so `docker cp` (not cp into a bind) is required
   docker exec ai-engkit-v2 rm -rf /home/devuser/workspace/.opencode/agents
   docker cp "${repo_root}/.opencode/agents" ai-engkit-v2:/home/devuser/workspace/.opencode/agents
 
   docker exec ai-engkit-v2 opencode --version 2>&1 | grep -q '2\.0\.24'
-  echo "PASS: opencode 2.0.24 in trial container"
+  echo "PASS: opencode 2.0.24 in V2 container"
 
   [ "$(docker exec ai-engkit-v2 jq -c '.plugin' /home/devuser/.config/opencode/opencode.json)" = "[]" ]
   echo "PASS: opencode.json plugin-free"
   docker exec ai-engkit-v2 test ! -f /home/devuser/.omo/omo.jsonc
   echo "PASS: no ~/.omo/omo.jsonc (OMO lifecycle skipped)"
   [ "$(docker exec ai-engkit-v2 find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
-  echo "PASS: 12 native agents visible in trial workspace"
+  echo "PASS: 12 native agents visible in V2 workspace"
 
   # Baked V2 plugins: self-contained bundles shipped in the image and deployed
   # to the global OpenCode config plugins dir at boot (v2-plugin-bake.md).
