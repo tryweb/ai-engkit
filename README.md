@@ -110,6 +110,30 @@ Host `upgrade.sh` backups use `backup_<TIMESTAMP>/` and print the corresponding 
 
 Domain deployments can preserve one local Compose overlay across upgrades, restarts, and maintenance recreates by setting `AI_ENGKIT_COMPOSE_OVERLAY` in `.env`. The overlay is validated before any recreate and may only extend the `ai-dev` service (environment, networks, named volumes, labels, healthcheck); it cannot change the image, ports, privilege settings, Docker socket mounts, or the Admin/domain worker services. The host `upgrade.sh` path is overlay-aware: it requires `jq`, validates the target base and overlay on the host, backs up the current effective inputs, and then recreates `ai-admin` and `ai-dev` from the base-plus-overlay configuration without silently falling back to base-only. The Admin API reports overlay status; there is no overlay editor or UI warning flow. See [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md).
 
+### V2 release line (OpenCode 2 + OpenChamber 2)
+
+The V2 line is a **separate release line** (branch `v2`) with no
+`oh-my-openagent` runtime and fully disjoint `-v2` volumes. It coexists on one
+host with V1:
+
+| Service | V1 prod | V1 dev | V2 prod | V2 dev |
+|---|---|---|---|---|
+| OpenChamber | 8000 | 8001 | **8002** | 8003 |
+| Admin | 8080 | 8081 | **8082** | 8083 |
+
+Install or upgrade a V2 deployment from a directory separate from any V1 install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/v2/install-v2.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/v2/upgrade-v2.sh | bash
+```
+
+The V2 prod stack is `docker-compose.v2.yml`, driven by `.env.v2`
+(`docker compose --env-file .env.v2 -f docker-compose.v2.yml up -d`); the V2 dev
+stack is `docker-compose.v2.dev.yml` (builds locally, ports 8003/8083). The V2
+line never shares state with V1 — the upgrade refuses a V1 directory and warns
+on V1 volumes.
+
 ## Configuration
 
 Copy `.env.example` to `.env` when configuring a checkout manually. The installer normally creates it for you. The optional package variables below can be added to `.env` even when they are not present in the example file.

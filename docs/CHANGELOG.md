@@ -14,6 +14,10 @@
 - CI: `test/test-v2.sh cell1` asserts the baked V2 plugins actually load
   (waits for the plugins' `setup start` log marker under the opencode data
   volume), not just that they are deployed.
+- V2 host install/upgrade/backup: `install-v2.sh` and `upgrade-v2.sh` operate on
+  the V2 prod stack (`docker-compose.v2.yml` + `.env.v2`) with `backup_v2_<TS>/`
+  backups; the upgrade refuses a V1 directory and warns on V1 volumes (DECISIONS
+  D2). `.env.v2.example` is the V2 prod env template.
 
 ### Changed
 - Rename the V2 line branch `trial/opencode-v2` → `v2` and converge the `trial`
