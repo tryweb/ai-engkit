@@ -23,11 +23,31 @@ LOW_COUNT="${LOW_COUNT:-}"
 
 VERSION_NO_V="${TAG#v}"
 
-PREV_TAG=$(git tag --sort=-version:refname | \
-  grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
-  grep -vE '(rc|beta|alpha|dev|test|pre)' | \
-  grep -v "^${TAG}$" | \
-  head -1 || true)
+# The V2 line installs from its own compose/env, so its quick start differs.
+if [[ "$TAG" == v2.* ]]; then
+  QUICK_START=(
+    'curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/v2/install-v2.sh | bash'
+  )
+else
+  QUICK_START=(
+    'cp .env.example .env'
+    'docker compose up -d'
+  )
+fi
+
+# A v2 release changes relative to the previous v2 tag, not the v1 line's tags.
+if [[ "$TAG" == v2.* ]]; then
+  PREV_TAG=$(git tag --sort=-version:refname | \
+    grep -E '^v2\.[0-9]+\.[0-9]+$' | \
+    grep -v "^${TAG}$" | \
+    head -1 || true)
+else
+  PREV_TAG=$(git tag --sort=-version:refname | \
+    grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
+    grep -vE '(rc|beta|alpha|dev|test|pre)' | \
+    grep -v "^${TAG}$" | \
+    head -1 || true)
+fi
 
 if [ -z "$PREV_TAG" ]; then
   SINCE_TAG="first release"
@@ -65,8 +85,7 @@ fi
   echo '## Quick Start'
   echo ''
   echo '```bash'
-  echo 'cp .env.example .env'
-  echo 'docker compose up -d'
+  for line in "${QUICK_START[@]}"; do echo "$line"; done
   echo '```'
   echo ''
   echo "## Changes (since ${SINCE_TAG})"

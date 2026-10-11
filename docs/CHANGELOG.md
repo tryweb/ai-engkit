@@ -14,6 +14,11 @@
 - CI: `test/test-v2.sh cell1` asserts the baked V2 plugins actually load
   (waits for the plugins' `setup start` log marker under the opencode data
   volume), not just that they are deployed.
+- V2 release pipeline: `v2.*` tags run the V2 build/test/scan pipeline, publish
+  the immutable `:v2.x.y` image tag, and cut a GitHub Release (V2 quick start).
+  Branch pushes publish the rolling `:v2-dev` channel; `promote.yml` promotes a
+  V2 tag to its own `:v2` channel (V1 keeps `:latest`, and the repo-wide
+  "latest" release flag stays on the V1 line).
 - V2 host install/upgrade/backup: `install-v2.sh` and `upgrade-v2.sh` operate on
   the V2 prod stack (`docker-compose.v2.yml` + `.env.v2`) with `backup_v2_<TS>/`
   backups; the upgrade refuses a V1 directory and warns on V1 volumes (DECISIONS

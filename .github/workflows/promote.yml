@@ -45,17 +45,32 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Re-tag the EXISTING published image — same digest, never rebuilt.
-      - name: Promote image tag to latest
+      # The V2 line promotes to its own channel (`:v2`); V1 keeps `:latest`,
+      # so a V2 promotion can never repoint what V1 users track.
+      - name: Resolve promotion channel
+        id: channel
+        run: |
+          if [[ "${{ inputs.version }}" == v2.* ]]; then
+            echo "channel=v2" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Promote image tag to the channel
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          CHANNEL="${{ steps.channel.outputs.channel }}"
           docker pull "${IMAGE}:${{ inputs.version }}"
-          docker tag "${IMAGE}:${{ inputs.version }}" "${IMAGE}:latest"
-          docker push "${IMAGE}:latest"
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}:latest" | cut -f2 -d'@')
-          echo "::notice::Promoted ${{ inputs.version }} to latest (digest sha256:${DIGEST})"
+          docker tag "${IMAGE}:${{ inputs.version }}" "${IMAGE}:${CHANNEL}"
+          docker push "${IMAGE}:${CHANNEL}"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}:${CHANNEL}" | cut -f2 -d'@')
+          echo "::notice::Promoted ${{ inputs.version }} to ${CHANNEL} (digest sha256:${DIGEST})"
 
       - name: Mark GitHub Release as latest
+        # GitHub allows a single repo-wide "latest" release; only the V1 line
+        # (the default install) claims it.
+        if: steps.channel.outputs.channel == 'latest'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -75,6 +90,10 @@ jobs:
 
       - name: Summary
         run: |
-          echo "### Promoted \`${{ inputs.version }}\` to \`latest\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Promoted \`${{ inputs.version }}\` to \`${{ steps.channel.outputs.channel }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Digest moved as-is (no rebuild)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- GitHub Release marked as latest" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.channel.outputs.channel }}" = "latest" ]; then
+            echo "- GitHub Release marked as latest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- V2 channel promotion; GitHub 'latest' flag left on the V1 line" >> "$GITHUB_STEP_SUMMARY"
+          fi
