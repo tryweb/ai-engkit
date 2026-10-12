@@ -20,12 +20,17 @@ command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 project_name="$(docker compose -p dev -f docker-compose.dev.yml config --format json | jq -r '.name')"
 [ "$project_name" = "dev" ] || fail "docker-compose.dev.yml resolves to project '$project_name', expected 'dev'"
 
-# Dev ai-admin must expose the same overlay contract mounts as production.
+# Dev ai-admin uses a named volume for state. Do not file-bind the upgrade base
+# in DooD: the host daemon can resolve the container-local source as a directory.
 admin_volumes="$(docker compose -p dev -f docker-compose.dev.yml config --format json | jq -c '[.services["ai-admin"].volumes[]?]')"
 printf '%s' "$admin_volumes" | jq -e 'any(.[]; .target == "/opt/ai-engkit/extensions" and .read_only == true and (.source | endswith("/extensions")))' >/dev/null \
   || fail "dev ai-admin is missing the read-only ./extensions:/opt/ai-engkit/extensions mount"
-printf '%s' "$admin_volumes" | jq -e 'any(.[]; .target == "/opt/ai-engkit/compose-upgrade-base.yml" and (.read_only != true) and (.source | endswith("/admin-data/upgrade-base.yml")))' >/dev/null \
-  || fail "dev ai-admin is missing the read-write ./admin-data/upgrade-base.yml mount"
+printf '%s' "$admin_volumes" | jq -e 'any(.[]; .type == "volume" and .source == "admin-data-dev" and .target == "/opt/ai-engkit")' >/dev/null \
+  || fail "dev ai-admin is missing the admin-data-dev named volume"
+printf '%s' "$admin_volumes" | jq -e 'all(.[]; .target != "/opt/ai-engkit/compose-upgrade-base.yml")' >/dev/null \
+  || fail "dev ai-admin must not file-bind compose-upgrade-base.yml under DooD"
+rg -F '[ -f /opt/ai-engkit/compose-upgrade-base.yml ] || : > /opt/ai-engkit/compose-upgrade-base.yml' docker-compose.dev.yml >/dev/null \
+  || fail "dev ai-admin does not seed compose-upgrade-base.yml inside its named volume"
 [ -f admin-data/upgrade-base.yml ] || fail "./admin-data/upgrade-base.yml must exist as a regular file before Compose starts"
 
 if rg -n 'chown -R devuser:devuser /opt/ai-engkit' docker-compose.dev.yml; then
