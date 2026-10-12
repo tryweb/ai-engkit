@@ -165,8 +165,8 @@ jobs:
           # === 3. Admin UI — smoke tests ===
           ADMIN_BASE_URL="http://localhost:8081" ./test/test-admin-ui.sh
 
-      - name: Admin unit tests (integration)
-        run: docker exec ci-test bun --cwd /opt/admin test
+      - name: Admin unit tests (isolated container)
+        run: docker run --rm ai-engkit:ci bun --cwd /opt/admin test
 
       - name: Admin typecheck (integration)
         run: docker exec ci-test bun run --cwd /opt/admin typecheck
