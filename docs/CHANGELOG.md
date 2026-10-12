@@ -35,6 +35,10 @@
   (the V2 line carries no OMO runtime; see `trial/DECISIONS.md` D1/D2).
 
 ### Fixed
+- The Admin in-app upgrade is line-aware: on the V2 line it resolves the `:v2`
+  channel and fetches `docker-compose.v2.yml` / `.env.v2.example` from the `v2`
+  branch, instead of falling back to `:latest` and fetching (and overwriting the
+  V2 stack with) the V1 compose.
 - V2 chain writes seed `~/.config/opencode/routing.json` when it is absent, so
   the first Admin agent-models write and startup reconciliation no longer fail
   with `jq routing write failed` on a fresh V2 volume.

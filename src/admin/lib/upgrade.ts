@@ -25,6 +25,7 @@ import { basename, join } from "node:path";
 import { readEnvFile, writeEnvFile, type EnvVars } from "./env";
 import { KEYS_PATH } from "./provider-keys";
 import { resolveImageRef } from "./image-ref";
+import { isNativeV2Enabled } from "./agent-model-types";
 import {
   UPGRADE_BASE_FILE,
   UPGRADE_STAGING_FILE,
@@ -45,15 +46,35 @@ const BACKUP_DIR = "/opt/ai-engkit/backups";
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
 const ENV_FILE = "/opt/ai-engkit/.env";
 const UPSTREAM_REPO = "https://raw.githubusercontent.com/tryweb/ai-engkit";
+// The V2 line's assets (docker-compose.v2.yml, .env.v2.example) live on this
+// branch; main carries only the V1 assets.
+const V2_ASSET_REF = "v2";
 
 /**
- * Upstream raw-content base for upgrade assets (compose file,
- * .env.example). Pinned installs (AI_ENGKIT_VERSION in .env) fetch assets
- * matching their running version instead of whatever main currently has.
+ * Upstream ref for upgrade assets. A pinned install fetches assets matching its
+ * running version; an unpinned one fetches the running line's default branch —
+ * `main` for V1, `v2` for V2 (its assets do not exist on main).
  */
-function upstreamBase(): string {
+function upstreamRef(): string {
   const version = readEnvFile().AI_ENGKIT_VERSION?.trim();
-  return version ? `${UPSTREAM_REPO}/${version}` : `${UPSTREAM_REPO}/main`;
+  if (version) return version;
+  return isNativeV2Enabled() ? V2_ASSET_REF : "main";
+}
+
+// Exported for tests: the line-aware asset resolution is the guard that keeps a
+// V2 upgrade from fetching (and overwriting itself with) V1 assets.
+export function upstreamBase(): string {
+  return `${UPSTREAM_REPO}/${upstreamRef()}`;
+}
+
+// The two lines ship differently-named assets. Fetching the other line's compose
+// would overwrite the running one with an incompatible file.
+export function upstreamComposePath(): string {
+  return isNativeV2Enabled() ? "docker-compose.v2.yml" : "docker-compose.yml";
+}
+
+export function upstreamEnvExamplePath(): string {
+  return isNativeV2Enabled() ? ".env.v2.example" : ".env.example";
 }
 
 /** BACKUP_RETENTION from .env: positive integer, default 5 (mirrors upgrade.sh). */
@@ -186,7 +207,7 @@ async function fetchLatestCompose(): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
   try {
-    const res = await fetch(`${upstreamBase()}/docker-compose.yml`, { signal: controller.signal });
+    const res = await fetch(`${upstreamBase()}/${upstreamComposePath()}`, { signal: controller.signal });
     if (!res.ok) return null;
     return await res.text();
   } catch {
@@ -421,7 +442,7 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
       "running",
       overlay.active
         ? `Domain overlay ${overlayLabel(overlay)} active: staging upstream base and validating the effective configuration before recreating ai-dev...`
-        : "Fetching latest docker-compose.yml, then recreating ai-dev with new image...",
+        : `Fetching latest ${upstreamComposePath()}, then recreating ai-dev with new image...`,
     );
     // Apply the latest compose file from upstream so services added since the
     // last deploy take effect. Fail closed when unreachable: throwing before
@@ -432,7 +453,7 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
     // overwriting the domain-owned active file, then the effective base+overlay
     // configuration is validated before any container is recreated.
     const latestCompose = await fetchComposeText();
-    if (latestCompose === null) throw new Error("Failed to fetch latest docker-compose.yml");
+    if (latestCompose === null) throw new Error(`Failed to fetch latest ${upstreamComposePath()}`);
     const project = await getProject();
     let effective: EffectiveCompose = {
       overlayActive: false,
