@@ -97,6 +97,16 @@ without horizontal overflow: radio select, masked value (ellipsis-truncated),
 note input, and a right-aligned action cluster (Save / Show / Delete). Key
 inputs truncate at `--text-mono`; buttons keep ≥44px min-height on mobile.
 
+### Provider catalog controls — `.provider-catalog-controls` + `.provider-view-switch` / `.provider-search-row`
+In OpenCode v2, the Providers page opens on the configured subset (connected
+credentials, stored registry keys, or custom provider definitions). The
+`Configured` and `All providers` buttons expose the current list scope and its
+count via `aria-pressed`; search filters only the selected scope. The catalog
+count remains distinct from the number configured. When the configured subset
+is empty, an inline status and `Browse all providers` action keep discovery
+available. Controls wrap on narrow screens and use existing button, input,
+text, and focus tokens.
+
 ### Key add row — `.key-add-row`
 Wrap row of "New API key" / "Note" inputs plus Add / Import actions; inputs
 flex-grow on wide screens, stack at 320px.
