@@ -19,7 +19,8 @@ export function __resetExecForTest(): void {
 export type V2IntegrationMethod =
   | { type: "key"; label?: string; form?: unknown }
   | { type: "env"; names: string[] }
-  | { type: "oauth"; id: string; label: string; form?: unknown };
+  | { type: "oauth"; id: string; label: string; form?: unknown }
+  | { type: "external"; id: string; label: string; form?: unknown };
 
 export interface V2Integration {
   id: string;
@@ -148,6 +149,8 @@ function guardIntegrationList(obj: unknown): V2IntegrationList {
         methods.push({ type: "oauth", id: method.id, label: method.label, form: method.form });
       } else if (method.type === "env" && Array.isArray(method.names) && method.names.every((name): name is string => typeof name === "string")) {
         methods.push({ type: "env", names: method.names });
+      } else if (method.type === "external" && typeof method.id === "string" && typeof method.label === "string") {
+        methods.push({ type: "external", id: method.id, label: method.label, form: method.form });
       } else {
         throw new Error("Invalid integration method");
       }

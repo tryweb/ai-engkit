@@ -26,6 +26,18 @@ describe("opencode-v2 adapter", () => {
     expect(calls[0]).toContain("/home/devuser");
   });
 
+  test("listIntegrations accepts external method (OpenCode 2.0.27+)", async () => {
+    const execMock = mock(async (): Promise<ExecResult> => ({
+      stdout: JSON.stringify({ location: { directory: "/home/devuser" }, data: [{ id: "amazon-bedrock", name: "Amazon Bedrock", methods: [{ type: "key", label: "Bedrock API key" }, { type: "env", names: ["AWS_BEARER_TOKEN_BEDROCK"] }, { id: "aws-profile", type: "external", label: "AWS profile (SSO or named profile)", form: [{ key: "profile" }] }], connections: [] }] }),
+      stderr: "",
+      exitCode: 0,
+    }));
+    __setExecForTest(execMock);
+    const { listIntegrations } = await import("./opencode-v2");
+    const res = await listIntegrations();
+    expect(res.data[0].methods.some((m) => m.type === "external")).toBe(true);
+  });
+
   test("listIntegrations propagates error when exec fails", async () => {
     const execMock = mock(async (): Promise<ExecResult> => ({ stdout: "", stderr: "fail", exitCode: 1 }));
     __setExecForTest(execMock);
