@@ -78,7 +78,6 @@ services:
       - "${ADMIN_DEV_PORT:-8081}:8080"
     volumes:
       - admin-data-dev:/opt/ai-engkit
-      - ./admin-data/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw
       - ./extensions:/opt/ai-engkit/extensions:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
