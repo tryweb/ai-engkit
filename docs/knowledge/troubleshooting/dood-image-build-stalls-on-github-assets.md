@@ -39,6 +39,12 @@ minutes" where N keeps growing while no new step appears.
   run just the new instructions, e.g.
   `FROM ai-engkit-ai-v2` + the new `COPY`/`RUN`. This reuses cached layers, needs
   no full rebuild, and is how the v2 plugin bake was verified.
+- Before using a local base tag for a V2 patch build, verify that it is the image
+  actually running the V2 `ai-dev` container. A stale `ai-engkit-ai-v2` tag can
+  point at a V1 image; derive the base image ID with
+  `docker inspect ai-engkit-v2 --format '{{.Image}}'`, tag that ID locally, and
+  confirm `docker exec ai-engkit-v2 opencode --version` reports V2 before
+  building a COPY-only layer.
 
 ## Why It Works
 
@@ -54,6 +60,9 @@ layer-scoped build (no GitHub downloads) sidesteps it.
 - The host condition may be transient (a partially upgraded daemon/nftables);
   re-check `docker run --rm ubuntu:24.04 echo ok` and a BuildKit smoke before
   assuming it is permanent.
+- Local image tags can drift from running container image IDs. Treat the
+  running V2 container and its OpenCode version as runtime truth, not the tag
+  name.
 
 ## Evidence
 
@@ -62,6 +71,11 @@ layer-scoped build (no GitHub downloads) sidesteps it.
 - Legacy: apt layer completes in seconds; `docker buildx` step container stayed
   "Up" 7+ minutes; killed at a 30-minute timeout without reaching the app layers.
 - `docker run --rm ubuntu:24.04 echo hello` and `--network=host` both succeed.
+- On 2026-10-12, the local `ai-engkit-ai-v2` tag pointed to an image where
+  `opencode --version` was `1.18.32`, while the running `ai-engkit-v2` container
+  used image `sha256:fb3e40bc1dc30cab9f4f31267a037ea5ad56ea5f28560404f12fb590fc70dc9f`
+  and reported `opencode v2.0.24`. A V2 dev patch image built from the running
+  image ID reported V2 and served the updated Providers UI.
 - From the ai-engkit container itself, `curl -sI https://github.com/...` returns
   302 and npm returns 200 quickly — so the stall is specific to build containers.
 
