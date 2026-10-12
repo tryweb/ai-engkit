@@ -1,6 +1,34 @@
 ## [Unreleased]
 
 
+## [1.20.0] - 2026-10-12
+
+### Added
+- Bump OpenCode 1.18.31 → 1.18.32, GLab 1.118.0 → 1.119.0, and OpenSpec 1.13.1 → 1.13.2
+- Bump pinned toolchain versions and OMO schema
+
+### Fixed
+- Block OpenCode/OpenChamber major-mismatched updates
+- Align the dev Compose OMO fallback with the Dockerfile pin
+- Remove the DooD-incompatible upgrade-base file bind mount that prevented ai-admin startup
+
+### Documentation
+- Revalidate the OpenCode v2 migration watch for GA
+
+### Changed
+- Upgrade Docker Engine from 29.8.1 to 29.9.0.
+- Upgrade Docker Compose from 5.5.1 to 5.6.0.
+- Upgrade Docker Buildx from 0.37.1 to 0.38.0.
+- Upgrade OpenCode from 1.18.31 to 1.19.0.
+- Upgrade GitLab CLI from 1.118.0 to 1.122.0.
+- Upgrade Playwright from 1.63.0 to 1.64.0.
+- Upgrade @playwright/mcp from 0.0.82 to 0.0.83.
+- Upgrade GitHub CLI from 2.101.0 to 2.102.0.
+- Upgrade lean-ctx from 3.10.2 to 3.11.4.
+- Upgrade oh-my-openagent from 4.19.4 to 5.1.30 and align its schema reference.
+- Upgrade OpenSpec from 1.13.1 to 1.14.1.
+- Upgrade CodeGraph from 1.6.0 to 1.6.2.
+
 ## [1.19.3] - 2026-09-21
 
 ### Fixed
@@ -2319,4 +2347,6 @@
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
-[1.19.3]: https://github.com/tryweb/ai-engkit/releases/tag/v1.19.3
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.20.0...HEAD
+[1.20.0]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v1.20.0
+[1.19.3]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...v1.19.3
