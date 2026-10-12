@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-12
+
 ### Added
 - Bake the V2 routing (`b1-routing`) and todo-continuation (`m3-enforcer`)
   plugins into the image and deploy them to the global OpenCode plugins
@@ -49,6 +51,18 @@
   one-shot and forward-only; AI-EngKit's major version follows the break
   (2.0.0). A `!:`/`BREAKING CHANGE` commit is required for the release tooling
   to compute the major bump.
+
+### Changed
+- Upgrade OpenCode CLI from 2.0.24 to 2.0.27 and OpenChamber from 2.1.1 to
+  2.3.0 (V2 compose build args; Bun stays 1.4.2, still required).
+- Upgrade Docker Engine from 29.8.2 to 29.9.0, Docker Buildx from 0.37.2 to
+  0.38.0, GitLab CLI from 1.121.0 to 1.122.0, Playwright from 1.63.0 to
+  1.64.0, and lean-ctx from 3.10.5 to 3.11.4.
+
+### Fixed
+- Accept the OpenCode 2.0.27 `external` integration-method type (AWS profile,
+  Google Cloud credentials) in the Admin integrations guard, so
+  `GET /api/providers` no longer returns 500 on the new CLI output.
 
 ## [1.19.3] - 2026-09-21
 
@@ -2189,7 +2203,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/tryweb/ai-engkit/releases/tag/v2.0.1
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
