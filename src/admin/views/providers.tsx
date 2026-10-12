@@ -139,6 +139,9 @@ export function ProvidersPage({
   const totalCount = meta.providers.length;
   const activeCount = meta.providers.filter((p) => p.authStoreKeyPresent || p.oauthConnected || p.hasApiKey).length;
   const keyManagedCount = meta.providers.filter((p) => p.keyManagement).length;
+  const configuredCount = meta.providers.filter((p) =>
+    p.authStoreKeyPresent || p.oauthConnected || p.hasApiKey || p.registry.keyCount > 0 || p.npm || p.baseURL,
+  ).length;
 
   return (
     <Layout title="Providers">
@@ -149,10 +152,17 @@ export function ProvidersPage({
         </div>
       )}
       {v2Mode && (
-        <div class="flex" style="margin-bottom:16px; gap:8px; align-items:center;">
-          <input type="text" id="provider-search" placeholder="Search providers (e.g. anthropic, openai)..." oninput="filterProviders(this.value)" style="flex:1; max-width:420px;" />
-          <span class="text-sm text-muted" id="provider-search-count"></span>
-          <button type="button" class="btn-outline" onclick="document.getElementById('provider-search').value=''; filterProviders('')">Clear</button>
+        <div class="provider-catalog-controls">
+          <fieldset class="provider-view-switch">
+            <legend class="visually-hidden">Provider list view</legend>
+            <button type="button" id="provider-view-configured" class="btn-outline" aria-pressed="true" onclick="setProviderView('configured')">Configured <span>{configuredCount}</span></button>
+            <button type="button" id="provider-view-all" class="btn-outline" aria-pressed="false" onclick="setProviderView('all')">All providers <span>{totalCount}</span></button>
+          </fieldset>
+          <div class="provider-search-row">
+            <input type="search" id="provider-search" aria-label="Search providers" placeholder="Search providers..." oninput="filterProviders(this.value)" />
+            <span class="text-sm text-muted" id="provider-search-count" aria-live="polite">{configuredCount} / {totalCount} shown</span>
+            <button type="button" class="btn-outline" onclick="document.getElementById('provider-search').value=''; filterProviders('')">Clear</button>
+          </div>
         </div>
       )}
       <div class="flex items-center justify-between mb-4">
@@ -171,7 +181,7 @@ export function ProvidersPage({
       {!meta.invalid && totalCount > 0 && (
         <div class="providers-overview-grid mb-4">
           <div class="provider-stat-card">
-            <div class="text-xs text-muted" style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Configured Providers</div>
+            <div class="text-xs text-muted" style="text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">{v2Mode ? "Provider catalog" : "Configured Providers"}</div>
             <div class="stat-number" style="font-size: var(--text-2xl);">{totalCount}</div>
           </div>
           <div class="provider-stat-card">
@@ -197,11 +207,18 @@ export function ProvidersPage({
           <button type="button" class="btn" onclick="openAddProvider()">Add Provider</button>
         </div>
       )}
+      {v2Mode && (
+        <div id="provider-empty-state" class="card provider-empty-state" role="status" hidden={configuredCount > 0}>
+          <p id="provider-empty-message">No providers configured yet.</p>
+          <button type="button" id="provider-empty-action" class="btn-outline" onclick="browseAllProviders()">Browse all providers</button>
+        </div>
+      )}
       {meta.providers.map((p) => {
         const isConnected = p.authStoreKeyPresent || p.oauthConnected || p.hasApiKey;
+        const isConfigured = isConnected || p.registry.keyCount > 0 || Boolean(p.npm || p.baseURL);
         const oauthMethods = p.oauthMethods ?? [{ id: "chatgpt-browser", label: "ChatGPT Pro/Plus" }];
         return (
-          <div key={p.name} class={`card secret-card provider-card ${isConnected ? "provider-card--active" : ""}`} data-provider={p.name} style="margin-bottom: 16px;">
+          <div key={p.name} class={`card secret-card provider-card ${isConnected ? "provider-card--active" : ""}`} data-provider={p.name} data-configured={isConfigured ? "true" : "false"} hidden={v2Mode && !isConfigured} style="margin-bottom: 16px;">
             <div class="provider-card__header flex" style="justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
               <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                 <div class="provider-icon-wrapper">
@@ -445,6 +462,23 @@ export function ProvidersPage({
       </div>
       {boot}
       {v2Mode && html`<script>
+        var providerView = 'configured';
+        function setProviderView(view) {
+          providerView = view;
+          document.getElementById('provider-view-configured').setAttribute('aria-pressed', String(view === 'configured'));
+          document.getElementById('provider-view-all').setAttribute('aria-pressed', String(view === 'all'));
+          filterProviders(document.getElementById('provider-search').value);
+        }
+        function browseAllProviders() {
+          if (providerView === 'all') {
+            var search = document.getElementById('provider-search');
+            search.value = '';
+            filterProviders('');
+            search.focus();
+            return;
+          }
+          setProviderView('all');
+        }
         function filterProviders(q) {
           var term = (q||'').toLowerCase().trim();
           var cards = document.querySelectorAll('.provider-card');
@@ -452,12 +486,23 @@ export function ProvidersPage({
           cards.forEach(function(card){
             var name = (card.getAttribute('data-provider')||'').toLowerCase();
             var label = (card.querySelector('h3')?.textContent||'').toLowerCase();
-            var show = !term || name.includes(term) || label.includes(term);
-            card.style.display = show ? '' : 'none';
+            var matchesSearch = !term || name.includes(term) || label.includes(term);
+            var show = matchesSearch && (providerView === 'all' || card.getAttribute('data-configured') === 'true');
+            card.hidden = !show;
             if(show) visible++;
           });
           var cnt = document.getElementById('provider-search-count');
           if(cnt) cnt.textContent = visible + ' / ' + cards.length + ' shown';
+          var empty = document.getElementById('provider-empty-state');
+          if(empty) {
+            empty.hidden = visible > 0;
+            document.getElementById('provider-empty-message').textContent = term
+              ? 'No providers match your search.'
+              : providerView === 'configured' ? 'No providers configured yet.' : 'No providers found.';
+            document.getElementById('provider-empty-action').textContent = providerView === 'all' && term
+              ? 'Clear search'
+              : 'Browse all providers';
+          }
         }
         document.addEventListener('DOMContentLoaded', function(){ filterProviders(''); });
       </script>`}

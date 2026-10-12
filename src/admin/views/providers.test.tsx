@@ -206,6 +206,32 @@ describe("ProvidersPage", () => {
     expect(html).not.toContain("v2-provider-unsupported");
   });
 
+  it("shows configured providers first while leaving the full catalog available", () => {
+    const html = String(ProvidersPage({
+      meta: { invalid: false, error: null, providers: [opencodeGo, openai] as never },
+      entries: {},
+      v2Mode: true,
+    }));
+    expect(html).toContain('data-provider="opencode-go"');
+    expect(html).toContain('data-configured="true"');
+    expect(html).toContain('data-provider="openai"');
+    expect(html).toContain('data-configured="false" hidden');
+    expect(html).toContain('id="provider-view-configured"');
+    expect(html).toContain('id="provider-view-all"');
+  });
+
+  it("offers the full catalog when no providers are configured", () => {
+    const html = String(ProvidersPage({
+      meta: { invalid: false, error: null, providers: [openai] as never },
+      entries: {},
+      v2Mode: true,
+    }));
+    expect(html).toContain('id="provider-empty-state"');
+    expect(html).toContain("No providers configured yet.");
+    expect(html).toContain("Browse all providers");
+    expect(html).toContain('data-provider="openai"');
+  });
+
   it("injects v2Mode flag into boot data", () => {
     const html = String(ProvidersPage({
       meta: { invalid: false, error: null, providers: [opencodeGo] as never },
