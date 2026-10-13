@@ -1,4 +1,5 @@
 permission_inheritance = "on"
+shadow_mode = false
 compression_level = "lite"
 secret_detection.enabled = true
 secret_detection.redact = true

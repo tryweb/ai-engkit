@@ -198,6 +198,17 @@ assert_valid_config_cleans_inert_keys_and_backfills_dotted_baseline_keys() {
   rm -rf "$root"
 }
 
+assert_shipped_baseline_disables_shadow_mode_and_backfills() {
+  local root
+  root="$(mktemp -d)"
+  grep -Fxq 'shadow_mode = false' "$SCRIPT_DIR/../docker/lean-ctx/config.default.toml"
+  printf '%s\n' 'compression_level = "lite"' 'shadow_mode = false' > "$root/default.toml"
+  printf '%s\n' 'compression_level = "lite"' > "$root/config.toml"
+  run_ensure "$root"
+  grep -Fxq 'shadow_mode = false' "$root/config.toml"
+  rm -rf "$root"
+}
+
 assert_malformed() {
   local name="$1"
   local content="$2"
@@ -361,6 +372,7 @@ if command -v lean-ctx >/dev/null 2>&1; then
   assert_off_config_backfills_missing_baseline_keys
   assert_lite_config_is_valid_and_idempotent
   assert_valid_config_cleans_inert_keys_and_backfills_dotted_baseline_keys
+  assert_shipped_baseline_disables_shadow_mode_and_backfills
 else
   printf 'lean-ctx not on host; skipping malformed recovery assertion\n' >&2
 fi
