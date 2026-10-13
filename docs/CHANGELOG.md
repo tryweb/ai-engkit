@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 
+## [1.20.1] - 2026-10-13
+
+### Fixed
+- Disable shadow_mode so setup keeps generated permissions
+- Persist least-privilege permissions
+
+### Documentation
+- Document opencode permission prompt fix
+
 ## [1.20.0] - 2026-10-12
 
 ### Added
@@ -2168,7 +2177,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.20.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2347,6 +2356,6 @@
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.20.0...HEAD
-[1.20.0]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v1.20.0
 [1.19.3]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...v1.19.3
+[1.20.0]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v1.20.0
+[1.20.1]: https://github.com/tryweb/ai-engkit/compare/v1.20.0...v1.20.1
