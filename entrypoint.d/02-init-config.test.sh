@@ -212,6 +212,28 @@ assert_malformed() {
   rm -rf "$root"
 }
 
+assert_opencode_permission_policy_is_least_privilege() {
+  local root policy status=0
+  root="$(mktemp -d)"
+  sed -n '/^build_opencode_permission_policy()/,/^}/p' "$ENTRYPOINT_FILE" > "$root/permission-policy.sh"
+  printf '%s\n' 'build_opencode_permission_policy' >> "$root/permission-policy.sh"
+  policy="$(bash "$root/permission-policy.sh")" || status=$?
+  rm -rf "$root"
+  test "$status" -eq 0
+  grep -Fq -- '--argjson permission "$OPENCODE_PERMISSION"' "$ENTRYPOINT_FILE"
+  grep -Fq 'permission: $permission,' "$ENTRYPOINT_FILE"
+  printf '%s\n' "$policy" | jq -e '
+    .read == "allow" and
+    .glob == "allow" and
+    .grep == "allow" and
+    .bash["*"] == "ask" and
+    .bash["git status*"] == "allow" and
+    .bash["git diff --stat*"] == "allow" and
+    .bash["git log*"] == "allow" and
+    ((.bash | keys | sort) == ["*", "git diff --stat*", "git log*", "git status*"])
+  ' >/dev/null
+}
+
 make_bootstrap_script() {
   local dest="$1"
   local version="$2"
@@ -330,6 +352,7 @@ assert_normal_sync_is_atomic_and_idempotent() {
 }
 
 assert_normal_sync_is_atomic_and_idempotent
+assert_opencode_permission_policy_is_least_privilege
 assert_migration_backup_and_marker_boundary
 if command -v lean-ctx >/dev/null 2>&1; then
   assert_off_config_still_recovers_malformed_toml

@@ -252,6 +252,22 @@ fi
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 
+build_opencode_permission_policy() {
+  jq -n '{
+    read: "allow",
+    glob: "allow",
+    grep: "allow",
+    bash: {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff --stat*": "allow",
+      "git log*": "allow"
+    }
+  }'
+}
+
+OPENCODE_PERMISSION="$(build_opencode_permission_policy)"
+
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency
 PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
 PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
@@ -288,12 +304,14 @@ LSP_BLOCK=$(jq -n --argjson enabled "$ENABLED_LSP" \
 OPCODE_CONFIG=$(jq -n \
   --argjson plugins "$PLUGIN_JSON" \
   --argjson lsp "$LSP_BLOCK" \
+  --argjson permission "$OPENCODE_PERMISSION" \
   --arg playwright_version "${PLAYWRIGHT_VERSION}" \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
   '{
     "$schema": "https://opencode.ai/config.json",
     plugin: $plugins,
     lsp: $lsp,
+    permission: $permission,
     mcp: {
       codegraph: {
         type: "local",
