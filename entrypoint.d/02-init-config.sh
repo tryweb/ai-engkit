@@ -257,12 +257,7 @@ build_opencode_permission_policy() {
     read: "allow",
     glob: "allow",
     grep: "allow",
-    bash: {
-      "*": "ask",
-      "git status*": "allow",
-      "git diff --stat*": "allow",
-      "git log*": "allow"
-    }
+    bash: "allow"
   }'
 }
 

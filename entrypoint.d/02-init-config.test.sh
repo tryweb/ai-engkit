@@ -223,7 +223,7 @@ assert_malformed() {
   rm -rf "$root"
 }
 
-assert_opencode_permission_policy_is_least_privilege() {
+assert_opencode_permission_policy_allows_shell() {
   local root policy status=0
   root="$(mktemp -d)"
   sed -n '/^build_opencode_permission_policy()/,/^}/p' "$ENTRYPOINT_FILE" > "$root/permission-policy.sh"
@@ -237,11 +237,7 @@ assert_opencode_permission_policy_is_least_privilege() {
     .read == "allow" and
     .glob == "allow" and
     .grep == "allow" and
-    .bash["*"] == "ask" and
-    .bash["git status*"] == "allow" and
-    .bash["git diff --stat*"] == "allow" and
-    .bash["git log*"] == "allow" and
-    ((.bash | keys | sort) == ["*", "git diff --stat*", "git log*", "git status*"])
+    .bash == "allow"
   ' >/dev/null
 }
 
@@ -363,7 +359,7 @@ assert_normal_sync_is_atomic_and_idempotent() {
 }
 
 assert_normal_sync_is_atomic_and_idempotent
-assert_opencode_permission_policy_is_least_privilege
+assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
 if command -v lean-ctx >/dev/null 2>&1; then
   assert_off_config_still_recovers_malformed_toml
