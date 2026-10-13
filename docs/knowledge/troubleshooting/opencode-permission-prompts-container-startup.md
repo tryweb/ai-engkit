@@ -44,3 +44,7 @@ OpenCode reads the generated permission policy as configuration rather than rely
 ## Tags
 
 opencode, permissions, always-approval, entrypoint, container-startup, lean-ctx, troubleshooting
+
+## Current Shell Policy
+
+The earlier solution above describes the initial least-privilege rollout and its historical evidence. The current `build_opencode_permission_policy()` generates `bash: "allow"` so native OpenCode shell commands do not repeatedly prompt, including after a server restart. This is independent of lean-ctx's `shell_allowlist_extra`: registering its MCP does not route native bash calls through lean-ctx. Allowing all bash commands removes OpenCode's confirmation gate for arbitrary local and remote shell commands; use this only in a trusted environment. Project or agent-specific permission rules can still override this global policy. Recreate/restart the container to regenerate `opencode.json` and restart OpenCode before checking the effective policy.
