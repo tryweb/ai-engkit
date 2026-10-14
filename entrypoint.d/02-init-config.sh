@@ -255,6 +255,16 @@ V2_MANAGED_CONFIG="{}"
 if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f "$OPCODE_CONFIG_FILE" ]; then
   V2_MANAGED_CONFIG=$(jq '{agent: (.agent // {}), providers: (.providers // {})}' "$OPCODE_CONFIG_FILE")
 fi
+# V2-only additions. The V1/OMO line gets context7 injected at runtime by the
+# oh-my-openagent plugin; with OMO_ENABLED=0 nothing injects it, so register it
+# here (remote MCP, no OAuth). The matching top-level deny keeps it off every
+# agent except librarian, which re-allows `context7_*` in
+# .opencode/agents/librarian.md (agent rules are appended last and win).
+# Kept as a literal so the V2_MANAGED_CONFIG merge slice stays self-contained.
+V2_EXTRA='{}'
+if [ "${OMO_ENABLED:-1}" = "0" ]; then
+  V2_EXTRA='{"mcp":{"servers":{"context7":{"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}}},"permissions":[{"action":"context7_*","resource":"*","effect":"deny"}]}'
+fi
 
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency.
 # Trial Cell 1 (no-OMO baseline): OMO_ENABLED=0 emits a plugin-free config and
@@ -326,7 +336,7 @@ OPCODE_CONFIG=$(jq -n \
   }')
 echo "Updating opencode.json with plugins: $PLUGINS"
 if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  OPCODE_CONFIG=$(printf '%s' "$OPCODE_CONFIG" | jq --argjson managed "$V2_MANAGED_CONFIG" '. * $managed')
+  OPCODE_CONFIG=$(printf '%s' "$OPCODE_CONFIG" | jq --argjson extra "$V2_EXTRA" '. * $extra' | jq --argjson managed "$V2_MANAGED_CONFIG" '. * $managed')
 fi
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 

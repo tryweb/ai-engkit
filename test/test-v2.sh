@@ -38,6 +38,12 @@ cell1() {
   [ "$(docker exec ai-engkit-v2dev find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in V2 workspace"
 
+  # librarian is the only agent granted context7 (registered by the entrypoint
+  # on the V2 line; see the cell2 config assertions). It uses the V2
+  # `permissions` array — never mixed with the legacy V1 `permission` map.
+  docker exec ai-engkit-v2dev grep -q 'action: context7_' /home/devuser/workspace/.opencode/agents/librarian.md
+  echo "PASS: seeded librarian grants context7_* (v2 permissions array)"
+
   # Baked V2 plugins: self-contained bundles shipped in the image and deployed
   # to the global OpenCode config plugins dir at boot (v2-plugin-bake.md).
   docker exec ai-engkit-v2dev test -f /opt/opencode/v2-plugins/b1-routing.js
@@ -102,8 +108,15 @@ cell2() {
   echo "PASS: v2 lsp block is marksman-only (no language servers)"
 
   # 2. MCP config intact (presence, not runtime).
-  [ "$(docker exec ai-engkit-v2dev jq -c '.mcp | keys | sort' /home/devuser/.config/opencode/opencode.json)" = '["codegraph","lean-ctx","playwright"]' ]
-  echo "PASS: v2 mcp block has codegraph/lean-ctx/playwright"
+  [ "$(docker exec ai-engkit-v2dev jq -c '.mcp | keys | sort' /home/devuser/.config/opencode/opencode.json)" = '["codegraph","lean-ctx","playwright","servers"]' ]
+  echo "PASS: v2 mcp block has codegraph/lean-ctx/playwright (+ servers)"
+
+  # 2b. context7 is self-registered on the V2 line (no OMO to inject it):
+  # remote transport, OAuth off, and denied everywhere except librarian.
+  docker exec ai-engkit-v2dev jq -e '.mcp.servers.context7 == {"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}' /home/devuser/.config/opencode/opencode.json >/dev/null
+  echo "PASS: v2 registers mcp.servers.context7 (remote, oauth off)"
+  docker exec ai-engkit-v2dev jq -e '.permissions | any(.action == "context7_*" and .effect == "deny")' /home/devuser/.config/opencode/opencode.json >/dev/null
+  echo "PASS: v2 denies context7_* globally (librarian re-allows)"
 
   # 3. Baked skills intact — karpathy-guidelines files ARE present in v2;
   # the v2 skill thread is scope/UI, not missing files.

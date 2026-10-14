@@ -20,6 +20,14 @@ AI-EngKit preconfigures these MCP servers for OpenCode:
 | **CodeGraph** | Code graph, symbol relationships, dependency analysis | Installed as `@colbymchenry/codegraph` |
 | **lean-ctx** | Context-aware read/search/shell workflows | Includes persistent state and knowledge volumes |
 | **Playwright** | Browser automation and UI testing | Playwright-bundled Chromium; `pw-mcp` wrapper resolves the executable path and launches `@playwright/mcp` with `--executable-path --no-sandbox --headless` |
+| **context7** (V2 line only) | Third-party library / framework documentation lookup | Self-registered when `OMO_ENABLED=0` (`mcp.servers.context7`, remote, OAuth off). On the V1/OMO line the `oh-my-openagent` plugin injects it at runtime instead, so it does not appear here. A top-level `permissions` deny restricts `context7_*` to the librarian agent |
+
+On the V1/OMO line the `oh-my-openagent` plugin additionally injects
+`websearch` (Exa), `context7`, and `grep_app` at runtime; those are **not**
+visible in `opencode mcp list` and are not registered in `opencode.json`. On the
+V2 line nothing injects them: `websearch` is covered by the native OpenCode
+`websearch` tool, docs lookup by the self-registered `context7`, and GitHub code
+search by `gh search code`.
 
 Related files:
 
