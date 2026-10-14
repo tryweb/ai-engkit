@@ -209,6 +209,36 @@ assert_shipped_baseline_disables_shadow_mode_and_backfills() {
   rm -rf "$root"
 }
 
+assert_shadow_mode_backfill_stays_at_root_after_telemetry_section() {
+  local root first_hash second_hash
+  root="$(mktemp -d)"
+  printf '%s\n' 'compression_level = "lite"' 'shadow_mode = false' > "$root/default.toml"
+  printf '%s\n' \
+    'compression_level = "lite"' \
+    '[telemetry]' \
+    'last_heartbeat = "2026-10-13"' \
+    'shadow_mode = false' > "$root/config.toml"
+  run_ensure "$root"
+  python3 - "$root/config.toml" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as config_file:
+    config = tomllib.load(config_file)
+
+assert config.get("shadow_mode") is False, config
+assert config.get("telemetry") == {
+    "last_heartbeat": "2026-10-13",
+    "shadow_mode": False,
+}, config
+PY
+  first_hash="$(sha256sum "$root/config.toml" | cut -d' ' -f1)"
+  run_ensure "$root"
+  second_hash="$(sha256sum "$root/config.toml" | cut -d' ' -f1)"
+  test "$first_hash" = "$second_hash"
+  rm -rf "$root"
+}
+
 assert_malformed() {
   local name="$1"
   local content="$2"
@@ -369,6 +399,7 @@ if command -v lean-ctx >/dev/null 2>&1; then
   assert_lite_config_is_valid_and_idempotent
   assert_valid_config_cleans_inert_keys_and_backfills_dotted_baseline_keys
   assert_shipped_baseline_disables_shadow_mode_and_backfills
+  assert_shadow_mode_backfill_stays_at_root_after_telemetry_section
 else
   printf 'lean-ctx not on host; skipping malformed recovery assertion\n' >&2
 fi

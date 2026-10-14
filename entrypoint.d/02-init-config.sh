@@ -128,11 +128,16 @@ ensure_leanctx_config() {
   [ "$leanctx_available" -eq 0 ] || return 1
 
   local compression_is_off=0
+  local root_config missing_keys updated_config
   if grep -qE '^[[:space:]]*compression_level[[:space:]]*=[[:space:]]*"off"[[:space:]]*(#.*)?$' "$LEANCTX_RUNTIME_CONFIG"; then
     compression_is_off=1
   fi
 
   if [[ -f "$LEANCTX_BASELINE_CONFIG" ]]; then
+    root_config="$(mktemp)"
+    missing_keys="$(mktemp)"
+    awk '/^[[:space:]]*\[/ { exit } { print }' "$LEANCTX_RUNTIME_CONFIG" > "$root_config"
+
     while IFS= read -r line || [[ -n "$line" ]]; do
       if [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_.]*)[[:space:]]*= ]]; then
         local key="${BASH_REMATCH[1]}"
@@ -140,12 +145,51 @@ ensure_leanctx_config() {
         if [ "$compression_is_off" -eq 1 ] && [ "$key" = "compression_level" ]; then
           continue
         fi
-        if ! grep -qE "^[[:space:]]*${key_pattern}[[:space:]]*=" "$LEANCTX_RUNTIME_CONFIG"; then
-          printf '\n%s\n' "$line" >> "$LEANCTX_RUNTIME_CONFIG"
+        if ! grep -qE "^[[:space:]]*${key_pattern}[[:space:]]*=" "$root_config"; then
+          printf '%s\n' "$line" >> "$missing_keys"
+          printf '%s\n' "$line" >> "$root_config"
           printf 'lean-ctx: migrated missing key %s\n' "$key"
         fi
       fi
     done < "$LEANCTX_BASELINE_CONFIG"
+
+    if [[ -s "$missing_keys" ]]; then
+      updated_config="$(mktemp "${LEANCTX_RUNTIME_CONFIG}.tmp.XXXXXX")"
+      if ! awk -v additions_file="$missing_keys" '
+        BEGIN {
+          while ((getline line < additions_file) > 0) additions[++count] = line
+          close(additions_file)
+        }
+        !inserted && /^[[:space:]]*\[/ {
+          print ""
+          for (i = 1; i <= count; i++) print additions[i]
+          inserted = 1
+        }
+        { print }
+        END {
+          if (!inserted) {
+            print ""
+            for (i = 1; i <= count; i++) print additions[i]
+          }
+        }
+      ' "$LEANCTX_RUNTIME_CONFIG" > "$updated_config"; then
+        rm -f "$updated_config" "$missing_keys" "$root_config"
+        printf 'lean-ctx: failed to backfill top-level keys in %s\n' "$LEANCTX_RUNTIME_CONFIG" >&2
+        return 1
+      fi
+      if ! chmod --reference="$LEANCTX_RUNTIME_CONFIG" "$updated_config"; then
+        rm -f "$updated_config" "$missing_keys" "$root_config"
+        printf 'lean-ctx: failed to preserve permissions for %s\n' "$LEANCTX_RUNTIME_CONFIG" >&2
+        return 1
+      fi
+      if ! mv "$updated_config" "$LEANCTX_RUNTIME_CONFIG"; then
+        rm -f "$updated_config" "$missing_keys" "$root_config"
+        printf 'lean-ctx: failed to update %s\n' "$LEANCTX_RUNTIME_CONFIG" >&2
+        return 1
+      fi
+    fi
+
+    rm -f "$missing_keys" "$root_config"
   fi
 }
 
