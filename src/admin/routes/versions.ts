@@ -58,6 +58,10 @@ export function buildLatestManifestCommand(): string {
   return `manifest inspect ${LITERAL_LATEST_REF} | jq -r '.config.digest'`;
 }
 
+export function buildOmoInstalledVersionCommand(): string {
+  return "jq -r .version \"$HOME/.cache/opencode/packages/oh-my-openagent@${OH_MY_OPENAGENT_VERSION}/node_modules/oh-my-openagent/package.json\" 2>/dev/null || echo 'unavailable'";
+}
+
 async function getRemoteDigest(): Promise<string | null> {
   const result = await dockerCommand(
     buildLatestManifestCommand(),
@@ -230,7 +234,7 @@ versions.get("/api/versions", async (c) => {
     },
     plugin: {
       "superpowers": "jq -r .version /opt/opencode/baked-plugins/superpowers/package.json 2>/dev/null || echo 'unavailable'",
-      "oh-my-openagent": "bunx oh-my-openagent --version 2>/dev/null || echo 'unavailable'",
+      "oh-my-openagent": buildOmoInstalledVersionCommand(),
     },
   };
 
