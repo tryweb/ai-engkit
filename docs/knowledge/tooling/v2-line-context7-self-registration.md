@@ -15,8 +15,11 @@ the V1 habit of "ask context7" has no counterpart unless one is added.
 Two decisions, both about V2 config normalization:
 
 1. How does a remote MCP get registered on the V2 line when nothing injects it?
-2. How is it restricted to a single agent, given that the config generator also
-   owns a V1-shaped `agent` map and other agents use the legacy `permission` field?
+2. How should its permission be expressed? Scoping it to one agent via a global
+   `deny` looks tidy but hides the tools from every other session, because only
+   agent-level rules are appended after global ones. The config generator also
+   owns a V1-shaped `agent` map and other agents use the legacy `permission`
+   field, so a rule written in the wrong shape is silently dropped.
 
 The trap is that V2's tolerant normalization has sharp edges: mixing the two
 formats *inside one agent* silently drops one of them.
@@ -24,13 +27,13 @@ formats *inside one agent* silently drops one of them.
 ## Solution
 
 1. `entrypoint.d/02-init-config.sh` registers context7 **on the V2 line only**,
-   as a V2-shape remote server, plus a global permission deny:
+   as a V2-shape remote server, plus a global permission allow:
 
    ```json
    {
      "mcp": { "servers": { "context7": {
        "type": "remote", "url": "https://mcp.context7.com/mcp", "oauth": false } } },
-     "permissions": [ { "action": "context7_*", "resource": "*", "effect": "deny" } ]
+     "permissions": [ { "action": "context7_*", "resource": "*", "effect": "allow" } ]
    }
    ```
 
@@ -38,8 +41,9 @@ formats *inside one agent* silently drops one of them.
    `V2_MANAGED_CONFIG` merge slice already covers, so the entrypoint test's
    concatenated slice stays self-contained.
 
-2. `.opencode/agents/librarian.md` grants it back with the **V2 `permissions`
-   array** (agent rules are appended last, so the last matching rule wins):
+2. `.opencode/agents/librarian.md` keeps its **V2 `permissions` array** naming
+   `context7_*` first in its lookup flow (agent rules are appended last, so the
+   last matching rule wins where they differ):
 
    ```yaml
    permissions:
@@ -49,6 +53,13 @@ formats *inside one agent* silently drops one of them.
      - { action: edit,         resource: "*", effect: "deny" }
      - { action: shell,        resource: "*", effect: "deny" }
    ```
+
+   An earlier iteration made the global rule a `deny` and relied on this agent
+   grant to re-allow it. That scoping backfired: a bare global `deny` hides the
+   tools from the whole session, and only *agent* rules are appended after
+   global rules, so every non-librarian session (the common case) could not call
+   context7 at all — observed live as "context7 is present in config but is not
+   exposed as a tool". Allow it globally instead.
 
 3. Replace the other two injected servers instead of re-adding them:
    `websearch` → the native OpenCode `websearch` tool (needs a provider key,
@@ -61,8 +72,16 @@ formats *inside one agent* silently drops one of them.
   coexists with the V1-shape `mcp.codegraph` / `mcp.playwright` / `mcp.lean-ctx`;
   V2 normalizes all four into `mcp.servers.*`.
 - **Permission precedence.** Rules are evaluated in order and the last match
-  wins; global-config rules are appended before agent rules, so librarian's
-  `context7_* allow` overrides the global `context7_* deny`.
+  wins; global-config rules are appended after project rules, and agent rules
+  last of all. A grant written only in an agent file therefore cannot help
+  other agents — which is why the global rule is an `allow`, not a `deny`, and
+  why a global `deny` cannot be undone from a project or agent file for anyone
+  but that agent.
+- **Tool visibility follows the same rules.** A `context7_*` deny does not just
+  block a call — it removes the tools (`context7_resolve-library-id`,
+  `context7_query-docs`; action names are the normalized `<server>_<tool>`) from
+  the session's tool catalog and from Code Mode's `search`, so an agent cannot
+  even discover them.
 - **`oauth: false` is required.** V2 enables OAuth on remote servers by default.
   context7's endpoint is anonymous (`initialize` returns HTTP 200 without
   credentials), so without `oauth: false` it sits unusable as "needs
@@ -77,7 +96,14 @@ formats *inside one agent* silently drops one of them.
   the key list and now expects `["codegraph","lean-ctx","playwright","servers"]`.
 - On first use context7 reports `pending` and turns `connected` on a later
   `opencode mcp list` — a cold remote handshake, not a failure.
-- The global deny is absolute: non-librarian agents cannot call context7 at all.
+- The global rule allows `context7_*` for every agent. Keeping a session's
+  tool catalog uncluttered by scoping it to librarian is tempting but wrong for
+  a read-only, key-less docs server: any ordinary session that asks "what does
+  library X do" silently gets nothing back.
+- After changing this rule, reload before expecting the tool catalog to update:
+  `POST /api/location/reload` (or restart the service). A live edit to
+  `~/.config/opencode/opencode.json` alone is also not durable — the entrypoint
+  rewrites that file on every boot, so the repo must emit the same value.
 - `opencode mcp list` is **project-scoped** — run from `/home/devuser` it prints
   "No MCP servers configured" even though the global config lists them; run it
   from a project directory (e.g. `/home/devuser/workspace`) to see real status.
@@ -94,7 +120,7 @@ formats *inside one agent* silently drops one of them.
 - Tests: `entrypoint.d/02-init-config.test.sh` and
   `src/admin/lib/v2-startup-config.test.ts` (2 pass) after the change.
 - Diagnostics: `GET /api/config` on the running V2 server normalizes the
-  generated file to `mcp.servers.keys = [context7]` + the `permissions` deny,
+  generated file to `mcp.servers.keys = [context7]` + the `permissions` allow,
   with no leftover legacy `mcp` keys.
 - Logs / observed behavior (against the running `ai-engkit-v2dev` container,
   applying exactly the entrypoint merge, then restoring):
@@ -104,6 +130,12 @@ formats *inside one agent* silently drops one of them.
   - `curl -X POST https://mcp.context7.com/mcp` `initialize` → `http_code=200`.
   - `GET /api/agent` → librarian resolves `context7_* => allow` and the new
     docs-lookup flow is present in its system prompt.
+  - With the rule as a `deny` (the pre-fix state), a normal session reported
+    "context7 is present in config but is not exposed as a tool"; every
+    non-librarian agent in `GET /api/agent` carried `context7_* deny` appended.
+    Flipping that one rule to `allow` and reloading made both context7 tools
+    (`context7_resolve-library-id`, `context7_query-docs`) appear in the
+    catalog and answer queries.
 - Normalization probes that shaped the design:
   - one agent with both `permission:` and `permissions:` → the V1 `permission`
     part is **dropped** (only `permissions` survives);

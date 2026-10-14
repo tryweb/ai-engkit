@@ -38,9 +38,10 @@ cell1() {
   [ "$(docker exec ai-engkit-v2dev find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in V2 workspace"
 
-  # librarian is the only agent granted context7 (registered by the entrypoint
-  # on the V2 line; see the cell2 config assertions). It uses the V2
-  # `permissions` array — never mixed with the legacy V1 `permission` map.
+  # librarian is the agent that looks up third-party docs; the entrypoint
+  # registers context7 and allows it globally (see the cell2 config
+  # assertions) — librarian uses the V2 `permissions` array and never mixes it
+  # with the legacy V1 `permission` map.
   docker exec ai-engkit-v2dev grep -q 'action: context7_' /home/devuser/workspace/.opencode/agents/librarian.md
   echo "PASS: seeded librarian grants context7_* (v2 permissions array)"
 
@@ -112,11 +113,11 @@ cell2() {
   echo "PASS: v2 mcp block has codegraph/lean-ctx/playwright (+ servers)"
 
   # 2b. context7 is self-registered on the V2 line (no OMO to inject it):
-  # remote transport, OAuth off, and denied everywhere except librarian.
+  # remote transport, OAuth off, and allowed for every agent.
   docker exec ai-engkit-v2dev jq -e '.mcp.servers.context7 == {"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}' /home/devuser/.config/opencode/opencode.json >/dev/null
   echo "PASS: v2 registers mcp.servers.context7 (remote, oauth off)"
-  docker exec ai-engkit-v2dev jq -e '.permissions | any(.action == "context7_*" and .effect == "deny")' /home/devuser/.config/opencode/opencode.json >/dev/null
-  echo "PASS: v2 denies context7_* globally (librarian re-allows)"
+  docker exec ai-engkit-v2dev jq -e '.permissions | any(.action == "context7_*" and .effect == "allow")' /home/devuser/.config/opencode/opencode.json >/dev/null
+  echo "PASS: v2 allows context7_* globally (no rule hides the tools)"
 
   # 3. Baked skills intact — karpathy-guidelines files ARE present in v2;
   # the v2 skill thread is scope/UI, not missing files.
