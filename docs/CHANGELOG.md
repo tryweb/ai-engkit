@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 
+## [1.21.0] - 2026-10-14
+
+### Added
+- Bump glab 1.122.0 → 1.123.0, oh-my-openagent 5.1.30 → 5.1.33
+
+### Fixed
+- Report installed OMO version
+- Keep backfilled keys at top level
+
+### Changed
+- Upgrade GitLab CLI from 1.122.0 to 1.123.0.
+- Upgrade oh-my-openagent from 5.1.30 to 5.1.33 and align its schema reference.
+
 ## [1.20.2] - 2026-10-13
 
 ### Fixed
@@ -2185,7 +2198,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.20.2...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2368,3 +2381,4 @@
 [1.20.0]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v1.20.0
 [1.20.1]: https://github.com/tryweb/ai-engkit/compare/v1.20.0...v1.20.1
 [1.20.2]: https://github.com/tryweb/ai-engkit/compare/v1.20.1...v1.20.2
+[1.21.0]: https://github.com/tryweb/ai-engkit/compare/v1.20.2...v1.21.0
