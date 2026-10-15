@@ -252,12 +252,20 @@ USER root
 # 完整 MCP 設定由 entrypoint.d/02-init-config.sh 在每次啟動時重新生成。
 RUN <<'EOF'
 mkdir -p /etc/opencode
+# The V1 line declares the oh-my-openagent plugin; the V2 line carries no OMO
+# (D1) and must not reference it, so its default config ships an empty plugin
+# list. OPENCODE_CLI_PACKAGE is the V1/V2 discriminator used throughout this file.
+if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then
+  PLUGIN_JSON='[]'
+else
+  PLUGIN_JSON=$(printf '%s' "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" | jq -R . | jq -s .)
+fi
 jq -n \
-  --arg agent_plugin "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" \
+  --argjson plugins "$PLUGIN_JSON" \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
   '{
     autoupdate: false,
-    plugin: [$agent_plugin],
+    plugin: $plugins,
     lsp: {
       marksman: {
         command: ["marksman", "server"],
@@ -286,17 +294,23 @@ EOF
 # at container startup (appends to user's ~/.config/opencode/AGENTS.md).
 COPY .opencode/AGENTS.md.default /etc/opencode/AGENTS.md.default
 
-# omo.jsonc default — consumed by entrypoint.d/02-init-config.sh
+# omo.jsonc default (V1 line only) — consumed by entrypoint.d/02-init-config.sh
 # at container startup (merges into user's ~/.omo/omo.jsonc).
 # MODIFIED DERIVATIVE: this is a curated copy of oh-my-openagent's default agent
 # configuration, distributed under the Sustainable Use License 1.0 — NOT under
 # ai-engkit's MIT License. See THIRD-PARTY-NOTICES.md.
-COPY .opencode/omo.jsonc.default /etc/opencode/omo.jsonc.default
+# The V2 line carries no OMO, so the file is bind-mounted and written only when
+# the V1 CLI is in use. A plain COPY would put it in a layer on *both* lines, and
+# a later `rm` would only white it out — the blob would still ship in the image.
+RUN --mount=type=bind,source=.opencode/omo.jsonc.default,target=/tmp/omo.jsonc.default,ro \
+    if [ "$OPENCODE_CLI_PACKAGE" != "@opencode/cli" ]; then \
+      install -m 0644 /tmp/omo.jsonc.default /etc/opencode/omo.jsonc.default; \
+    fi
 
-# Third-party license terms. The image ships a modified copy of
-# oh-my-openagent's default config (above) plus MIT-licensed baked components,
-# so the notices must travel with the image (Sustainable Use License 1.0,
-# "Notices"). Kept next to the derived config they cover.
+# Third-party license terms. The V1 line ships a modified copy of
+# oh-my-openagent's default config (above), and both lines bundle MIT-licensed
+# baked components, so the notices must travel with the image (Sustainable Use
+# License 1.0, "Notices"). Kept next to the derived config they cover.
 COPY LICENSE THIRD-PARTY-NOTICES.md /etc/opencode/
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）

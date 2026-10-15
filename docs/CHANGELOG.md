@@ -21,6 +21,11 @@
   drop the verbatim upstream directive text and product name it previously
   reproduced; remove the `mirrors fork ...` provenance comments from the plugin
   sources. `TODO_PREFIX` is unchanged so existing stored todos survive.
+- The V2 image carries no oh-my-openagent-derived content. `omo.jsonc.default` is
+  now written only for the V1 CLI, through a bind-mounted `RUN` so it never
+  enters a layer on the V2 line (a plain `COPY` would, even if a later `rm`
+  removed it), and the V1/V2 default `opencode.json` declares the plugin list per
+  line (V2: empty).
 
 ## [2.0.1] - 2026-10-12
 

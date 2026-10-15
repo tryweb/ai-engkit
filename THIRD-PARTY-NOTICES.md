@@ -16,7 +16,7 @@ inventory is the `Dockerfile` plus the package-manager metadata of the image.
 
 | Component | Source / version | License | How it is used here |
 |---|---|---|---|
-| oh-my-openagent (a.k.a. oh-my-opencode) | code-yeongyu — npm `oh-my-openagent` 4.19.4 | **Sustainable Use License 1.0** (not OSI open source) | V1 line only. Declared as an OpenCode plugin; OpenCode installs it at runtime from npm. **Not bundled in the image.** `.opencode/omo.jsonc.default` is derived from its default configuration. |
+| oh-my-openagent (a.k.a. oh-my-opencode) | code-yeongyu — npm `oh-my-openagent` 4.19.4 | **Sustainable Use License 1.0** (not OSI open source) | V1 line only. Declared as an OpenCode plugin; OpenCode installs it at runtime from npm. **Not bundled in the image.** The V1 image also carries `.opencode/omo.jsonc.default`, a derived copy of its default configuration; the V2 image carries neither. |
 | superpowers | github.com/obra/superpowers | MIT | Cloned at image build time into `/opt/opencode/baked-plugins/superpowers`. |
 | @code-yeongyu/comment-checker | 0.8.x | MIT | Installed globally in the image. |
 | karpathy-guidelines | ai-engkit baked skill, derived from Andrej Karpathy's public observations | MIT | Ships in `.opencode/baked-skills/karpathy-guidelines/`. |
@@ -33,15 +33,18 @@ receives these terms.
   binaries in its image. On the V1 line, the generated `opencode.json` declares
   `plugin: ["oh-my-openagent@4.19.4"]` and the OpenCode runtime installs the
   package itself from npm into the user's own container.
-- **Modified / derived configuration.** `.opencode/omo.jsonc.default` is a
-  curated, modified copy of oh-my-openagent's default agent configuration
-  (agent roster, per-agent permission matrix, and model-chain defaults). It is
-  copied into the image at `/etc/opencode/omo.jsonc.default` and merged at
-  container start into `~/.omo/omo.jsonc` by
+- **Modified / derived configuration (V1 image only).** `.opencode/omo.jsonc.default`
+  is a curated, modified copy of oh-my-openagent's default agent configuration
+  (agent roster, per-agent permission matrix, and model-chain defaults). On the
+  V1 line it is written into the image at `/etc/opencode/omo.jsonc.default` and
+  merged at container start into `~/.omo/omo.jsonc` by
   `entrypoint.d/02-init-config.sh`. **This derived file is provided under the
   Sustainable Use License 1.0, not under ai-engkit's MIT License.**
-- **V2 line is unaffected.** When `OMO_ENABLED=0`, nothing installs or loads
-  oh-my-openagent, and no OMO runtime ships on that line.
+- **The V2 line carries none of it.** When `OMO_ENABLED=0`, nothing installs or
+  loads oh-my-openagent; the V2 image omits the derived default config entirely
+  (the Dockerfile writes it only when the V1 CLI is in use) and its
+  `opencode.json` declares an empty plugin list. No oh-my-openagent-derived
+  content ships on the V2 line.
 
 ### Sustainable Use License
 
