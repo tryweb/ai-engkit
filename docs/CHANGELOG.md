@@ -23,6 +23,9 @@
 - The V2 image carries no oh-my-openagent-derived content: the OMO config
   machinery is removed entirely (see Removed), and the default `opencode.json`
   declares the plugin list per line (V2: empty).
+- `test/test-compose-isolation.sh` no longer asserts the removed V1 dev stack
+  (`docker-compose.dev.yml`); the V2 isolation checks and the volume-collision
+  check against the kept `docker-compose.yml` are unchanged.
 
 ### Removed
 - V1-line-only host artifacts the V2 line never uses: `install.sh` and
