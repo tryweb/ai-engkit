@@ -202,10 +202,8 @@ jobs:
 
       - name: Create .env for Compose
         run: cp .env.example .env
-
-      - name: Configure V2 diagnostics
-        run: |
-          printf '\nBREW_PACKAGES="go"\nBUN_PACKAGES="pyright @biomejs/biome typescript@5.8.3"\n' >> .env
+        # NOTE: V2 diagnostics packages (BREW/BUN_PACKAGES) now default in
+        # .env.example itself (single source); no per-CI append needed.
 
       - name: Start V2 integration stack
         run: docker compose -f docker-compose.v2.dev.yml up --no-build -d

@@ -26,6 +26,10 @@
 - `test/test-compose-isolation.sh` no longer asserts the removed V1 dev stack
   (`docker-compose.dev.yml`); the V2 isolation checks and the volume-collision
   check against the kept `docker-compose.yml` are unchanged.
+- V2 diagnostics packages (`BREW_PACKAGES="go"`, `BUN_PACKAGES="pyright
+  @biomejs/biome typescript@5.8.3"`) are now defaults in `.env.example`
+  (single source; CI no longer appends them), so a plain dev stack can run
+  `test/test-v2.sh` cell2/cell3.
 
 ### Removed
 - V1-line-only host artifacts the V2 line never uses: `install.sh` and
