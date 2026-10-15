@@ -370,6 +370,29 @@ if command -v lean-ctx &>/dev/null; then
   fi
 fi
 
+# lean-ctx's OpenCode integration rewrites opencode.json during `setup` and adds
+# `permission` rules that turn every native bash/glob/grep/read call into an
+# approval prompt (its way of steering agents onto its own MCP tools). `setup
+# --no-auto-approve` does NOT suppress them (verified against lean-ctx 3.10.5),
+# and this file belongs to AI-EngKit: it is regenerated above, only `agent` and
+# `providers` survive a restart, so those rules were never durable anyway. Drop
+# them again so work the user already authorised does not stall on confirmations.
+# >>> lean-ctx native-tool permission normalisation >>>
+if [ -f "$OPCODE_CONFIG_FILE" ] && jq -e 'has("permission")' "$OPCODE_CONFIG_FILE" >/dev/null 2>&1; then
+  PERMISSION_MODE="$(stat -c '%a' "$OPCODE_CONFIG_FILE" 2>/dev/null || echo 600)"
+  if jq 'if .permission == null then . else ((.permission |= del(.bash, .glob, .grep, .read)) | (if .permission == {} then del(.permission) else . end)) end' \
+      "$OPCODE_CONFIG_FILE" > "${OPCODE_CONFIG_FILE}.tmp" 2>/dev/null \
+    && mv "${OPCODE_CONFIG_FILE}.tmp" "$OPCODE_CONFIG_FILE"; then
+    chmod "$PERMISSION_MODE" "$OPCODE_CONFIG_FILE" || true
+    echo "Normalised opencode.json: removed lean-ctx native-tool permission rules"
+  else
+    rm -f "${OPCODE_CONFIG_FILE}.tmp"
+    echo "Warning: could not normalise opencode.json permission rules" >&2
+  fi
+  unset PERMISSION_MODE
+fi
+# <<< lean-ctx native-tool permission normalisation <<<
+
 if [ "${OMO_ENABLED:-1}" = "0" ]; then
   for _migrate in "/opt/ai-engkit/scripts/migrate-omo-to-native.sh" "$(dirname "$0")/../scripts/migrate-omo-to-native.sh" "./scripts/migrate-omo-to-native.sh"; do
     if [ -x "$_migrate" ]; then
