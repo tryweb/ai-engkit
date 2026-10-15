@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+
+## [2.0.2] - 2026-10-15
+
 ### Added
 - `THIRD-PARTY-NOTICES.md`: the Sustainable Use License 1.0 full text for
   `oh-my-openagent` and notices for the bundled MIT components (`superpowers`,
@@ -58,6 +61,14 @@
   derived config. Kept: the `OMO_ENABLED` gate (it still selects V2 behavior and
   is asserted by `src/admin/lib/v2-startup-config.test.ts`) and
   `scripts/migrate-omo-to-native.sh` (the one-shot V1→V2 user-data migration).
+
+### Changed
+- Upgrade OpenCode CLI from 2.0.27 to 2.0.29.
+- Upgrade OpenChamber from 2.3.0 to 2.3.3.
+- Upgrade GitLab CLI from 1.122.0 to 1.123.0 (compose dev pin realigned with the Dockerfile ARG so the built image actually ships 1.123.0).
+- Upgrade Playwright from 1.64.0 to 1.64.1.
+- Upgrade Bun from 1.4.2 to 1.4.3.
+- Upgrade openspec from 1.14.1 to 1.14.2.
 
 ## [2.0.1] - 2026-10-12
 
@@ -2262,8 +2273,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...HEAD
-[2.0.1]: https://github.com/tryweb/ai-engkit/releases/tag/v2.0.1
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2442,4 +2452,6 @@
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
-[1.19.3]: https://github.com/tryweb/ai-engkit/releases/tag/v1.19.3
+[1.19.3]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...v1.19.3
+[2.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v2.0.1
+[2.0.2]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...v2.0.2
