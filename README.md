@@ -236,4 +236,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting changes.
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE).
+ai-engkit's own code is MIT-licensed. See [LICENSE](./LICENSE). Third-party
+components that are bundled, vendored, or derived from in this project remain
+under their own licenses and are not relicensed by it — see
+[THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).

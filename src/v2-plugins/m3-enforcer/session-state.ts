@@ -1,5 +1,5 @@
-// In-memory session state — MVP subset of fork session-state.ts
-// Tracks per-session: lastInjectedAt + cooldown, plus TTL prune 10m/2m like B1.
+// In-memory session state for the enforcer.
+// Tracks per-session: lastInjectedAt + cooldown, plus TTL prune (10m idle / 2m sweep).
 
 export interface EnforcerSessionState {
   lastInjectedAt?: number;

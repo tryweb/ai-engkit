@@ -46,7 +46,7 @@ OpenCode prompt resolution uses a request-level model override before the agent 
 - `src/admin/lib/agent-model-reconciler.ts`
 - `src/admin/routes/agent-models.ts`
 - `src/admin/views/agent-models.tsx`
-- `trial/b1-routing/index.ts`
+- `src/v2-plugins/b1-routing/index.ts`
 - `trial/QUOTA-POLICY.md`
 
 ## Tags

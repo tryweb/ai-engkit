@@ -5,8 +5,9 @@
 The V2 line (`OMO_ENABLED=0`) carries no `oh-my-openagent`. Its two behavioral
 plugins are self-built: `b1-routing` (per-agent fallback chain + head
 enforcement) and `m3-enforcer` (todo continuation on idle). Sources live under
-`trial/b1-routing/` and `trial/m3-enforcer/`; verification records are
-`trial/B1-VERIFY.md` and `trial/M3-VERIFY.md`.
+`src/v2-plugins/b1-routing/` and `src/v2-plugins/m3-enforcer/`; verification
+records are `trial/B1-VERIFY.md` and `trial/M3-VERIFY.md` (kept in `trial/` as
+historical evidence).
 
 Until this change both plugins were deployed only into the trial workspace
 (`/home/devuser/workspace/.opencode/plugins/`) via a manual `docker cp`, so a
@@ -71,8 +72,15 @@ with `Could not resolve "@opencode/plugin"`).
 - B1 no-ops safely when `~/.config/opencode/routing.json` is absent (routing
   disabled, logs only); no default chain is baked. Chains are written by the
   Admin agent-models page.
-- Sources still live under `trial/`; promoting them to a non-trial location is a
-  follow-up before the final v2 release.
+- Sources were promoted out of `trial/` to `src/v2-plugins/` (2026-10-14): the
+  two directories are product code, not disposable experiment output, and the
+  Dockerfile copies them directly. The image-internal paths
+  (`/opt/opencode/v2-plugins/*.js`) are unchanged, so `08-deploy-v2-plugins.sh`,
+  the CI smoke and `test/test-v2.sh` needed no edits.
+- `m3-enforcer/constants.ts` `CONTINUATION_PROMPT` was rewritten in ai-engkit's
+  own words (the previous value reproduced an upstream plugin's directive text
+  verbatim, including its product name). The `TODO_PREFIX` storage namespace is
+  unchanged so todos already written by earlier builds survive the upgrade.
 
 ## Evidence
 
@@ -102,7 +110,7 @@ with `Could not resolve "@opencode/plugin"`).
 - `Dockerfile` (V2 line plugins bake section)
 - `entrypoint.d/08-deploy-v2-plugins.sh`
 - `docker-compose.v2.yml`
-- `trial/b1-routing/`, `trial/m3-enforcer/`
+- `src/v2-plugins/b1-routing/`, `src/v2-plugins/m3-enforcer/`
 - `trial/B1-VERIFY.md`, `trial/M3-VERIFY.md`
 
 ## Tags

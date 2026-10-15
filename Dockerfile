@@ -288,7 +288,16 @@ COPY .opencode/AGENTS.md.default /etc/opencode/AGENTS.md.default
 
 # omo.jsonc default — consumed by entrypoint.d/02-init-config.sh
 # at container startup (merges into user's ~/.omo/omo.jsonc).
+# MODIFIED DERIVATIVE: this is a curated copy of oh-my-openagent's default agent
+# configuration, distributed under the Sustainable Use License 1.0 — NOT under
+# ai-engkit's MIT License. See THIRD-PARTY-NOTICES.md.
 COPY .opencode/omo.jsonc.default /etc/opencode/omo.jsonc.default
+
+# Third-party license terms. The image ships a modified copy of
+# oh-my-openagent's default config (above) plus MIT-licensed baked components,
+# so the notices must travel with the image (Sustainable Use License 1.0,
+# "Notices"). Kept next to the derived config they cover.
+COPY LICENSE THIRD-PARTY-NOTICES.md /etc/opencode/
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
 RUN mkdir -p /home/${USERNAME}/.config/opencode && \
@@ -320,12 +329,13 @@ RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 # runtime ("Cannot find package '@opencode/plugin'"); each bundle must inline
 # it. Built here with the matching @opencode/plugin version; single .js files
 # ship, and entrypoint.d/08-deploy-v2-plugins.sh deploys them only on the V2
-# line (OMO_ENABLED=0). Sources: trial/b1-routing, trial/m3-enforcer (see
+# line (OMO_ENABLED=0). Sources: src/v2-plugins/b1-routing,
+# src/v2-plugins/m3-enforcer (see docs/knowledge/tooling/v2-plugin-bake.md plus
 # trial/B1-VERIFY.md, trial/M3-VERIFY.md). The build dir is discarded.
 # Runs in the root section (USER root above): /opt/opencode is app-owned here,
 # so the COPY'd build dir must be removed as root and the output re-chowned.
-COPY trial/b1-routing /opt/opencode/v2-plugins-build/src/b1-routing
-COPY trial/m3-enforcer /opt/opencode/v2-plugins-build/src/m3-enforcer
+COPY src/v2-plugins/b1-routing /opt/opencode/v2-plugins-build/src/b1-routing
+COPY src/v2-plugins/m3-enforcer /opt/opencode/v2-plugins-build/src/m3-enforcer
 RUN set -eu; \
     if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then \
       rm -rf /opt/opencode/v2-plugins-build/src/*/dist && \

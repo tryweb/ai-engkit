@@ -1,3 +1,8 @@
+// Error classification for the b1-routing fallback gate.
+// The matcher lists below are the literal error fragments and error-class names
+// that providers and the SDK emit at runtime — functional matching data, not
+// copied prose. Selection, ordering and thresholds are ai-engkit's own (see
+// docs/knowledge/tooling/v2-plugin-bake.md).
 type ErrorInfo = { name?: string; message?: string; statusCode?: number };
 
 function isRecord(v: unknown): v is Record<string, unknown> {

@@ -1,4 +1,4 @@
-// KV todo store on ctx.storage — mirrors fork v2/stores.ts:createTodoStore
+// KV-backed todo store on ctx.storage.
 // Handles blocked→pending, deleted→omit normalization at write (Q7), and whole-list poisoning defense.
 import { TODO_PREFIX } from "./constants";
 

@@ -18,6 +18,10 @@ test-output.txt
 docs/
 *.md
 *.mdx
+# Exception: the image ships a modified copy of oh-my-openagent's default config
+# (.opencode/omo.jsonc.default), so the applicable third-party license terms
+# must travel with it (SUL-1.0 "Notices").
+!THIRD-PARTY-NOTICES.md
 
 # Environment & config
 .env

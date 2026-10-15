@@ -17,6 +17,6 @@ backups-v2/
 # auto-generated version tracking snapshot
 /version-snapshot.json
 
-# trial build artifacts (rebuild: bun build, see trial/B1-VERIFY.md)
-trial/b1-routing/dist/
-trial/m3-enforcer/dist/
+# V2 plugin build artifacts (rebuild: bun build, see docs/knowledge/tooling/v2-plugin-bake.md)
+src/v2-plugins/b1-routing/dist/
+src/v2-plugins/m3-enforcer/dist/

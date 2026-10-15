@@ -1,5 +1,27 @@
 ## [Unreleased]
 
+### Added
+- `THIRD-PARTY-NOTICES.md`: the Sustainable Use License 1.0 full text for
+  `oh-my-openagent`, notices for the bundled MIT components (`superpowers`,
+  `@code-yeongyu/comment-checker`, `karpathy-guidelines`), and an explicit
+  modification notice for the derived `.opencode/omo.jsonc.default`. The image
+  now ships `LICENSE` and `THIRD-PARTY-NOTICES.md` at `/etc/opencode/` next to
+  the derived config, with a `.dockerignore` exception so the docs-exclusion
+  rule (`*.md`) does not drop them.
+
+### Changed
+- License scope: `LICENSE` gained a third-party addendum and `README.md` links
+  the notices, so the MIT claim covers AI-EngKit's own code only and no longer
+  appears to relicense SUL-governed content.
+- Promote the V2 behavioral plugins out of `trial/` into
+  `src/v2-plugins/{b1-routing,m3-enforcer}/` (product code, not experiment
+  output); the Dockerfile copies them from the new location. Image-internal
+  paths (`/opt/opencode/v2-plugins/*.js`) are unchanged.
+- Rewrite `m3-enforcer`'s `CONTINUATION_PROMPT` in AI-EngKit's own words and
+  drop the verbatim upstream directive text and product name it previously
+  reproduced; remove the `mirrors fork ...` provenance comments from the plugin
+  sources. `TODO_PREFIX` is unchanged so existing stored todos survive.
+
 ## [2.0.1] - 2026-10-12
 
 ### Added
