@@ -27,6 +27,18 @@
   removed it), and the V1/V2 default `opencode.json` declares the plugin list per
   line (V2: empty).
 
+### Removed
+- V1-line-only host artifacts the V2 line never uses: `install.sh` and
+  `upgrade.sh` (the V2 line installs/upgrades via `install-v2.sh` /
+  `upgrade-v2.sh`) and `docker-compose.dev.yml` (the V2 dev stack is
+  `docker-compose.v2.dev.yml`). The stale `install.sh` entry was dropped from
+  `.dockerignore`. Files shared by both lines are deliberately kept
+  (`docker-compose.yml` is shipped by the image for the Admin compose-overlay
+  suite, `.env.example` is what V2 CI copies to `.env`, and
+  `admin-data/upgrade-base.yml` is mounted by `docker-compose.v2.dev.yml`);
+  documentation that still describes the V1 flow (`README.md`, `CONTRIBUTING.md`)
+  is unchanged.
+
 ## [2.0.1] - 2026-10-12
 
 ### Added
