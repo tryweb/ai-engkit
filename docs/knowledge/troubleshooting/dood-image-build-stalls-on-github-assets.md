@@ -124,6 +124,23 @@ downloads entirely and stays the fastest way to validate one changed layer.
   build ai-dev` fails with bake's `additional privileges requested: pass
   "--allow=network.host"`; `docker compose build --allow=network.host` is an
   unknown flag.
+- Revalidation (2026-10-15, V2 dev image): a full local rebuild could not
+  complete. The default `docker` driver builder had no reusable cache (only
+  `FROM` was `CACHED`; every `RUN` re-executed) and died at step 19/46 — the
+  Playwright Chromium download (`bunx playwright@1.64.1 install --with-deps
+  chromium`) — with `Failed to download Chrome for Testing 156.0.8078.4 …
+  Download failure, code=1`; `curl -sI https://cdn.playwright.dev/` returned
+  HTTP 400 from this container. Retrying with
+  `docker buildx build --builder v2-b --network=host --allow network.host
+  --load` also rebuilt from step 1/46 (the old builder cache did not match the
+  current Dockerfile) and then hit `No space left on device` at step 8
+  (Homebrew), taking the host root to 100% (73G total, 179M free).
+  `docker builder prune -f` + `docker buildx prune --builder v2-b -f`
+  reclaimed ~14G. A one-file change (`Dockerfile:295` `AGENTS.md.default`) was
+  therefore verified with the layer-scoped build instead:
+  `FROM ai-engkit-ai-v2dev:latest` + the single `COPY`, run as `USER root`
+  then restored to `USER devuser` — completed in under 1s with no network, and
+  produced the same corrected file the full build would have.
 
 ## Related Files
 
