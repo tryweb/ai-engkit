@@ -476,8 +476,6 @@ jobs:
 
           # === 1.2 OpenChamber defaultModel seed/backfill (unit) ===
           bash ./test/test-openchamber-settings-seed.sh
-          bash ./test/test-omo-config-normalization.sh
-          bash ./test/test-native-agent-overrides.sh
 
           # === 1.3 Release vulnerability gate contracts ===
           bash ./test/test-grype-release-check.sh

@@ -2,12 +2,11 @@
 
 ### Added
 - `THIRD-PARTY-NOTICES.md`: the Sustainable Use License 1.0 full text for
-  `oh-my-openagent`, notices for the bundled MIT components (`superpowers`,
-  `@code-yeongyu/comment-checker`, `karpathy-guidelines`), and an explicit
-  modification notice for the derived `.opencode/omo.jsonc.default`. The image
-  now ships `LICENSE` and `THIRD-PARTY-NOTICES.md` at `/etc/opencode/` next to
-  the derived config, with a `.dockerignore` exception so the docs-exclusion
-  rule (`*.md`) does not drop them.
+  `oh-my-openagent` and notices for the bundled MIT components (`superpowers`,
+  `@code-yeongyu/comment-checker`, `karpathy-guidelines`). The image ships
+  `LICENSE` and `THIRD-PARTY-NOTICES.md` at `/etc/opencode/`, with a
+  `.dockerignore` exception so the docs-exclusion rule (`*.md`) does not drop
+  them.
 
 ### Changed
 - License scope: `LICENSE` gained a third-party addendum and `README.md` links
@@ -21,11 +20,9 @@
   drop the verbatim upstream directive text and product name it previously
   reproduced; remove the `mirrors fork ...` provenance comments from the plugin
   sources. `TODO_PREFIX` is unchanged so existing stored todos survive.
-- The V2 image carries no oh-my-openagent-derived content. `omo.jsonc.default` is
-  now written only for the V1 CLI, through a bind-mounted `RUN` so it never
-  enters a layer on the V2 line (a plain `COPY` would, even if a later `rm`
-  removed it), and the V1/V2 default `opencode.json` declares the plugin list per
-  line (V2: empty).
+- The V2 image carries no oh-my-openagent-derived content: the OMO config
+  machinery is removed entirely (see Removed), and the default `opencode.json`
+  declares the plugin list per line (V2: empty).
 
 ### Removed
 - V1-line-only host artifacts the V2 line never uses: `install.sh` and
@@ -38,6 +35,17 @@
   `admin-data/upgrade-base.yml` is mounted by `docker-compose.v2.dev.yml`);
   documentation that still describes the V1 flow (`README.md`, `CONTRIBUTING.md`)
   is unchanged.
+- The OMO group on the V2 branch: `.opencode/omo.jsonc.default`,
+  `entrypoint.d/lib-omo-model-defaults.bash`,
+  `entrypoint.d/lib-native-agent-overrides.bash`, and their unit tests
+  (`test/test-omo-config-normalization.sh`,
+  `test/test-native-agent-overrides.sh`), plus the OMO config lifecycle in
+  `entrypoint.d/02-init-config.sh` (legacy-config archiving,
+  `initialize_omo_permissions` / `normalize_omo_config`, and the
+  `merge_native_agent_overrides` bridge) and the `Dockerfile` install of the
+  derived config. Kept: the `OMO_ENABLED` gate (it still selects V2 behavior and
+  is asserted by `src/admin/lib/v2-startup-config.test.ts`) and
+  `scripts/migrate-omo-to-native.sh` (the one-shot V1→V2 user-data migration).
 
 ## [2.0.1] - 2026-10-12
 

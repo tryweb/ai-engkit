@@ -357,47 +357,9 @@ if [ -n "${OPENCODE_PROVIDER:-}" ]; then
   fi
 fi
 
-# --- OMO unified configuration (V1 only; gated on v2 line) ---
-if [ "${OMO_ENABLED:-1}" != "0" ]; then
-  DEFAULT_OMO_CONFIG="/etc/opencode/omo.jsonc.default"
-  OMO_CONFIG_DIR="$HOME/.omo"
-  OMO_CONFIG_FILE="$HOME/.omo/omo.jsonc"
-fi
-
 # Kept in a non-.sh file so the entrypoint runner does not execute it separately.
-if [ "${OMO_ENABLED:-1}" != "0" ]; then
-  source "$(dirname "$0")/lib-omo-model-defaults.bash"
-fi
 source "$(dirname "$0")/lib-openchamber-settings.bash"
-if [ "${OMO_ENABLED:-1}" != "0" ]; then
-  source "$(dirname "$0")/lib-native-agent-overrides.bash"
-fi
 
-archive_legacy_omo_configs() {
-  local legacy_name legacy_file backup_file
-  for legacy_name in oh-my-openagent.json oh-my-openagent.jsonc oh-my-opencode.json oh-my-opencode.jsonc; do
-    legacy_file="$OPCODE_CONFIG_DIR/$legacy_name"
-    [ -f "$legacy_file" ] || continue
-    backup_file="${legacy_file}.ai-engkit-legacy-backup"
-    if [ -e "$backup_file" ]; then
-      backup_file="${backup_file}.$(date -u +%Y%m%dT%H%M%SZ)"
-    fi
-    mv "$legacy_file" "$backup_file"
-    echo "Archived legacy OMO config: $legacy_file -> $backup_file"
-  done
-}
-
-if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  echo "OMO disabled (OMO_ENABLED=0): skipping ~/.omo lifecycle"
-else
-  archive_legacy_omo_configs
-  mkdir -p "$OMO_CONFIG_DIR"
-
-  initialize_omo_permissions "$OMO_CONFIG_FILE" "$DEFAULT_OMO_CONFIG"
-  if ! normalize_omo_config "$OMO_CONFIG_FILE"; then
-    echo "Warning: OMO config normalization was not applied; review the reported path" >&2
-  fi
-fi
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true
@@ -406,10 +368,6 @@ if command -v lean-ctx &>/dev/null; then
   if [ ! -f "$OPCODE_CONFIG_DIR/skills/lean-ctx/SKILL.md" ]; then
     lean-ctx init --agent opencode >/dev/null 2>&1 || true
   fi
-fi
-
-if [ "${OMO_ENABLED:-1}" != "0" ]; then
-  merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
 fi
 
 if [ "${OMO_ENABLED:-1}" = "0" ]; then

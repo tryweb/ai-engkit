@@ -294,23 +294,9 @@ EOF
 # at container startup (appends to user's ~/.config/opencode/AGENTS.md).
 COPY .opencode/AGENTS.md.default /etc/opencode/AGENTS.md.default
 
-# omo.jsonc default (V1 line only) — consumed by entrypoint.d/02-init-config.sh
-# at container startup (merges into user's ~/.omo/omo.jsonc).
-# MODIFIED DERIVATIVE: this is a curated copy of oh-my-openagent's default agent
-# configuration, distributed under the Sustainable Use License 1.0 — NOT under
-# ai-engkit's MIT License. See THIRD-PARTY-NOTICES.md.
-# The V2 line carries no OMO, so the file is bind-mounted and written only when
-# the V1 CLI is in use. A plain COPY would put it in a layer on *both* lines, and
-# a later `rm` would only white it out — the blob would still ship in the image.
-RUN --mount=type=bind,source=.opencode/omo.jsonc.default,target=/tmp/omo.jsonc.default,ro \
-    if [ "$OPENCODE_CLI_PACKAGE" != "@opencode/cli" ]; then \
-      install -m 0644 /tmp/omo.jsonc.default /etc/opencode/omo.jsonc.default; \
-    fi
-
-# Third-party license terms. The V1 line ships a modified copy of
-# oh-my-openagent's default config (above), and both lines bundle MIT-licensed
-# baked components, so the notices must travel with the image (Sustainable Use
-# License 1.0, "Notices"). Kept next to the derived config they cover.
+# Third-party license terms for the MIT-licensed components bundled in the image
+# (baked skills, superpowers, and other vendored assets). Kept at a fixed path so
+# the notices travel with the image.
 COPY LICENSE THIRD-PARTY-NOTICES.md /etc/opencode/
 
 # 複製設定檔（插件預下載改於 runtime entrypoint 執行，避免 build 超時）
