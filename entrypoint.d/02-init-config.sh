@@ -253,7 +253,10 @@ mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 V2_MANAGED_CONFIG="{}"
 if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f "$OPCODE_CONFIG_FILE" ]; then
-  V2_MANAGED_CONFIG=$(jq '{agent: (.agent // {}), providers: (.providers // {})}' "$OPCODE_CONFIG_FILE")
+  # Note: `{k: (.x // empty)}` would void the whole object when the key is
+  # absent (empty propagates out of `{}`), so the optional key is spliced
+  # with `+ if` instead — absent stays absent, present is preserved.
+  V2_MANAGED_CONFIG=$(jq '{agent: (.agent // {}), providers: (.providers // {})} + (if has("default_agent") then {default_agent} else {} end)' "$OPCODE_CONFIG_FILE")
 fi
 # V2-only additions. The V1/OMO line gets context7 injected at runtime by the
 # oh-my-openagent plugin; with OMO_ENABLED=0 nothing injects it, so register it
@@ -264,9 +267,14 @@ fi
 # .opencode/agents/librarian.md still names context7 first in its lookup flow;
 # its rules are appended last and win where they differ.
 # Kept as a literal so the V2_MANAGED_CONFIG merge slice stays self-contained.
+# default_agent: Sisyphus is the v2 default primary agent (mode: primary in
+# .opencode/agents/sisyphus.md). It lives in V2_EXTRA (not the base template)
+# so the V1/OMO line keeps upstream `build` fallback behavior unchanged.
+# Merge order below (extra, then managed) lets a user hand-edited
+# default_agent survive restarts: managed wins over this default.
 V2_EXTRA='{}'
 if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  V2_EXTRA='{"mcp":{"servers":{"context7":{"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}}},"permissions":[{"action":"context7_*","resource":"*","effect":"allow"}]}'
+  V2_EXTRA='{"default_agent":"sisyphus","mcp":{"servers":{"context7":{"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}}},"permissions":[{"action":"context7_*","resource":"*","effect":"allow"}]}'
 fi
 
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency.

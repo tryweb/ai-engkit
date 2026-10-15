@@ -329,6 +329,22 @@ assert_normal_sync_is_atomic_and_idempotent() {
   rm -rf "$root"
 }
 
+assert_v2_default_agent_wiring() {
+  # Static wiring: V2_EXTRA carries the sisyphus default, the managed slice
+  # preserves a user override across restarts (default_agent survives reboot).
+  grep -Fq '"default_agent":"sisyphus"' "$ENTRYPOINT_FILE"
+  grep -Fq 'if has("default_agent") then {default_agent} else {} end' "$ENTRYPOINT_FILE"
+  local extra='{"default_agent":"sisyphus"}'
+  # Fresh boot (managed={}) -> sisyphus; user override wins over the default.
+  test "$(jq -n --argjson extra "$extra" --argjson managed '{}' '{} * $extra * $managed | .default_agent' -r)" = "sisyphus"
+  test "$(jq -n --argjson extra "$extra" --argjson managed '{"default_agent":"plan"}' '{} * $extra * $managed | .default_agent' -r)" = "plan"
+  # Managed slice: absent key stays absent (so the default applies), present
+  # key is preserved verbatim.
+  test "$(jq -n '{"agent":{}} | {agent: (.agent // {}), providers: (.providers // {})} + (if has("default_agent") then {default_agent} else {} end) | has("default_agent")')" = "false"
+  test "$(jq -n '{"default_agent":"plan"} | {agent: (.agent // {}), providers: (.providers // {})} + (if has("default_agent") then {default_agent} else {} end) | .default_agent' -r)" = "plan"
+}
+
+assert_v2_default_agent_wiring
 assert_normal_sync_is_atomic_and_idempotent
 assert_migration_backup_and_marker_boundary
 if command -v lean-ctx >/dev/null 2>&1; then
