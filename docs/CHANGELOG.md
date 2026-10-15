@@ -30,6 +30,11 @@
   @biomejs/biome typescript@5.8.3"`) are now defaults in `.env.example`
   (single source; CI no longer appends them), so a plain dev stack can run
   `test/test-v2.sh` cell2/cell3.
+- Admin Versions page: `oh-my-openagent` no longer appears on the V2 line
+  (removed; its probe resolved npm latest, not anything installed),
+  `superpowers` moved from Plugin to a new Skills category (it is a
+  per-project skills bundle, not an OpenCode plugin), and the Playwright
+  probe reads the installed `playwright` binary instead of unpinned `bunx`.
 
 ### Removed
 - V1-line-only host artifacts the V2 line never uses: `install.sh` and

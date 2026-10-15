@@ -5,6 +5,7 @@ const categoryLabels: Record<string, string> = {
   cli: "CLI",
   mcp: "MCP",
   plugin: "Plugin",
+  skills: "Skills",
 };
 
 const imageMetaLabels: Record<string, string> = {
@@ -14,7 +15,7 @@ const imageMetaLabels: Record<string, string> = {
   version: "Version",
 };
 
-const categoryOrder = ["core", "cli", "mcp", "plugin"];
+const categoryOrder = ["core", "cli", "mcp", "plugin", "skills"];
 
 const CategoryCard: FC<{ title: string; tools: Record<string, string> }> = ({ title, tools }) => (
   <div class="card">

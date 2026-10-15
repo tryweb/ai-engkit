@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { Hono } from "hono";
 import { execInAiDev, dockerCommand, getAiDevContainerRef, getSelfContainerRef } from "../lib/docker";
 import { readEnvFile } from "../lib/env";
+import { isNativeV2Enabled } from "../lib/agent-model-types";
 import type { VersionsViewData } from "../views/versions";
 
 /**
@@ -205,8 +206,18 @@ versions.get("/api/versions/image", async (c) => {
   return c.json(meta);
 });
 
-versions.get("/api/versions", async (c) => {
-  const categoryCommands: Record<string, Record<string, string>> = {
+/**
+ * Version probes by category. Pure (no I/O) so the V1/V2 shape is unit-testable.
+ * - `skills`: superpowers is a per-project SKILLS bundle (symlinked from
+ *   /opt/opencode/baked-plugins/superpowers/skills), not an OpenCode plugin.
+ * - `plugin` (oh-my-openagent) exists on the V1 line only. It is omitted on
+ *   V2 (D1: removed) — probing it with bare `bunx` would resolve npm latest,
+ *   not anything installed, so no row is better than a wrong row.
+ * - Playwright is probed via the installed `playwright` binary, never bare
+ *   `bunx playwright` (which would also resolve npm latest on a cold cache).
+ */
+export function buildVersionCategories(isV2: boolean): Record<string, Record<string, string>> {
+  return {
     core: {
       "OpenCode": "opencode --version 2>/dev/null || echo 'unavailable'",
       "OpenChamber": "/home/devuser/.bun/bin/openchamber --version 2>/dev/null || echo 'unavailable'",
@@ -220,7 +231,7 @@ versions.get("/api/versions", async (c) => {
       "gh": "gh --version 2>/dev/null | head -1 | cut -d' ' -f3 || echo 'unavailable'",
       "glab": "glab --version 2>/dev/null | cut -d' ' -f2 || echo 'unavailable'",
       "Git": "git --version 2>/dev/null | cut -d' ' -f3 || echo 'unavailable'",
-      "Playwright": "bunx playwright --version 2>/dev/null | sed 's/^Version //' || echo 'unavailable'",
+      "Playwright": "playwright --version 2>/dev/null | sed 's/^Version //' || echo 'unavailable'",
       "marksman": "marksman --version 2>/dev/null || echo 'unavailable'",
       "codegraph": "codegraph --version 2>/dev/null || echo 'unavailable'",
       "openspec": "openspec --version 2>/dev/null || echo 'unavailable'",
@@ -228,11 +239,19 @@ versions.get("/api/versions", async (c) => {
     mcp: {
       "Playwright MCP": "pw-mcp --version 2>/dev/null | sed 's/^Version //' || echo 'unavailable'",
     },
-    plugin: {
+    skills: {
       "superpowers": "jq -r .version /opt/opencode/baked-plugins/superpowers/package.json 2>/dev/null || echo 'unavailable'",
-      "oh-my-openagent": "bunx oh-my-openagent --version 2>/dev/null || echo 'unavailable'",
     },
+    ...(isV2 ? {} : {
+      plugin: {
+        "oh-my-openagent": "bunx oh-my-openagent --version 2>/dev/null || echo 'unavailable'",
+      },
+    }),
   };
+}
+
+versions.get("/api/versions", async (c) => {
+  const categoryCommands = buildVersionCategories(isNativeV2Enabled());
 
   const result: Record<string, Record<string, string>> = {};
   for (const [category, commands] of Object.entries(categoryCommands)) {
