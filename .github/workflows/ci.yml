@@ -163,7 +163,9 @@ jobs:
           bash ./test/test-db-compat-gate.sh
 
           # === 1.2d OpenChamber core self-update refusal ===
-          bash ./test/test-openchamber-update-guard.sh
+          # bun is absent on GitHub-hosted runners — run the harness in the CI image.
+          docker run --rm --pull never -v "$PWD:/repo:ro" -w /repo --entrypoint /bin/bash \
+            ai-engkit:ci test/test-openchamber-update-guard.sh
 
           # === 1.2e OpenChamber CLI selection repair ===
           bash ./test/test-opencode-selection-repair.sh
