@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync } from "node:fs";
 
 const ENV_PATH = "/opt/ai-engkit/.env";
 
@@ -6,10 +6,20 @@ export interface EnvVars {
   [key: string]: string;
 }
 
-export function readEnvFile(): EnvVars {
+/**
+ * True only when `path` exists and is a regular file.
+ *
+ * DooD file-level bind mounts whose host source is missing are auto-created as
+ * directories: `existsSync` returns true while `readFileSync` throws EISDIR.
+ */
+export function envPathIsFile(path: string = ENV_PATH): boolean {
+  return statSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
+export function readEnvFileAt(path: string): EnvVars {
   const vars: EnvVars = {};
-  if (!existsSync(ENV_PATH)) return vars;
-  const content = readFileSync(ENV_PATH, "utf-8");
+  if (!envPathIsFile(path)) return vars;
+  const content = readFileSync(path, "utf-8");
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
@@ -25,10 +35,14 @@ export function readEnvFile(): EnvVars {
   return vars;
 }
 
+export function readEnvFile(): EnvVars {
+  return readEnvFileAt(ENV_PATH);
+}
+
 export function writeEnvFile(vars: EnvVars): void {
   const lines: string[] = [];
   // Preserve existing comments by reading original
-  if (existsSync(ENV_PATH)) {
+  if (envPathIsFile()) {
     const original = readFileSync(ENV_PATH, "utf-8");
     for (const line of original.split("\n")) {
       const trimmed = line.trim();
@@ -57,10 +71,10 @@ export function deleteEnvVar(key: string): void {
 }
 
 export function readEnvAsString(): string {
-  if (!existsSync(ENV_PATH)) return "";
+  if (!envPathIsFile()) return "";
   return readFileSync(ENV_PATH, "utf-8");
 }
 
 export function envFileExists(): boolean {
-  return existsSync(ENV_PATH);
+  return envPathIsFile();
 }
