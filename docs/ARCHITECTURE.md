@@ -583,6 +583,8 @@ sequenceDiagram
     D->>A: Start the ai-dev container
     A->>I: Run entrypoint.d scripts
 
+    Note over I: 00-core-recovery.sh<br/>Verify/recover image-managed core (skipped for ai-admin)
+
     Note over I: 00-fix-perms.sh<br/>Fix permissions
 
     Note over I: 01-install-packages.sh<br/>Install extra packages
@@ -609,7 +611,8 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A["entrypoint.sh"] --> B["00-fix-perms.sh"]
+    A["entrypoint.sh"] --> CR["00-core-recovery.sh"]
+    CR --> B["00-fix-perms.sh"]
     B --> C["01-install-packages.sh"]
     C --> D["02-init-config.sh"]
     D --> E["03-fix-docker-gid.sh"]
@@ -619,6 +622,7 @@ flowchart LR
     GA --> GB["06-setup-opencode-path.sh"]
     GB --> H["Run CMD"]
 
+    CR -->|"recover"| CORE["Managed core (offline baseline)"]
     B -->|"fix"| PERMS["Volume permissions"]
     C -->|"install"| PKGS["apt/brew/bun packages"]
     D -->|"create"| CONFIGS["Default config files"]
@@ -629,6 +633,7 @@ flowchart LR
     GB -->|"configure"| PATH_SETUP["opencode PATH"]
 
     style A fill:#fff3e0
+    style CR fill:#e1f5fe
     style G fill:#c8e6c9
 ```
 
@@ -658,6 +663,15 @@ flowchart LR
 | Frontend framework | React (Tauri for desktop) |
 
 > 📝 **Architecture note**: OpenChamber is not part of OpenCode. It is a separate project ([openchamber/openchamber](https://github.com/openchamber/openchamber)) that acts as a client and connects to the OpenCode server through `@opencode-ai/sdk/v2`, either by starting a local server automatically or by connecting to a remote one.
+
+### Managed core
+
+OpenChamber and OpenCode are the **image-managed core**. They install into an
+isolated image-owned prefix (`/opt/ai-engkit/core`), separate from the user
+`~/.bun` global prefix, and ship with a root-owned offline integrity baseline
+that startup verifies and restores before user packages, configuration, and the
+application. See [Managed Core](./MANAGED_CORE.md) for the prefix layout, the
+dependency closure, and the recovery contract.
 
 ### Developer Toolchain
 

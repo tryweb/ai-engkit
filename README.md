@@ -180,6 +180,7 @@ The Admin Dashboard **Providers** page (`/providers`) edits `OPENCODE_PROVIDER` 
 ## Documentation
 
 - [Architecture](./docs/ARCHITECTURE.md) — services, data flow, storage, and startup behavior
+- [Managed Core](./docs/MANAGED_CORE.md) — core isolation, integrity baseline, and offline recovery
 - [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md) — one local overlay for domain `ai-dev` integrations
 - [Tooling](./docs/TOOLING.md) — MCP servers, CLI tools, package managers, and extension points
 - [Security policy](./SECURITY.md) — threat model, trust assumptions, and reporting

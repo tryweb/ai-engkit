@@ -121,6 +121,13 @@ You can add extra packages at container startup with environment variables:
 
 These are processed by `entrypoint.d/01-install-packages.sh`.
 
+`BUN_PACKAGES` installs into the user global prefix (`~/.bun`). The
+`opencode-ai`, `@opencode/cli`, and `@openchamber/web` names are **reserved**:
+they belong to the image-managed core in its own prefix, so the installer
+refuses a request that names them (including a mixed request) before installing
+anything. Unrelated packages install normally and Bun is not wrapped. See
+[Managed Core](./MANAGED_CORE.md).
+
 The Admin **LSP Server Management** page (`/lsp`) is the operator-facing way to drive the OpenCode `lsp` block. It presents a typed catalog of supported language servers (`src/admin/lib/lsp-catalog.ts`), lets you enable servers and pin versions (from registry-discovered versions, newest first), and applies the desired set through `POST /api/lsp/apply`. Enablement/pinning is persisted as the `LSP_SERVERS` JSON override in `.env` (`{ "serverKey": { "enabled": bool, "version": string|null } }`; `null` version = latest/unpinned), install rides `BUN_PACKAGES`, and `entrypoint.d/02-init-config.sh` regenerates the `lsp` block from the enabled entries at startup, sourcing `BUN_PACKAGES`/`LSP_SERVERS` from `lsp-managed.env` in the opencode-config volume (written on every successful apply) unless already defined in the container environment. The reconciler (`src/admin/lib/lsp-reconciler.ts`) reports per-server drift — `missing_install`, `version_mismatch`, `not_enabled_in_lsp` — computed live from installed versions and the generated `lsp` block.
 
 ## Persistence and State
