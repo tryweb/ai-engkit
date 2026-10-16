@@ -140,6 +140,8 @@ jobs:
       - name: Run tests
         env:
           ADMIN_PORT: 8081
+          OPENCHAMBER_CONTAINER: ci-test
+          OPENCHAMBER_UI_PASSWORD: chamber
         run: |
           chmod +x test/run-tests.sh
 
@@ -153,6 +155,21 @@ jobs:
           bash ./test/test-openchamber-settings-seed.sh
           bash ./test/test-omo-config-normalization.sh
           bash ./test/test-native-agent-overrides.sh
+
+          # === 1.2b Managed core isolation + offline recovery (unit) ===
+          bash ./test/test-managed-core-recovery.sh
+
+          # === 1.2c Pinned-v1 database compatibility preflight ===
+          bash ./test/test-db-compat-gate.sh
+
+          # === 1.2d OpenChamber core self-update refusal ===
+          bash ./test/test-openchamber-update-guard.sh
+
+          # === 1.2e OpenChamber CLI selection repair ===
+          bash ./test/test-opencode-selection-repair.sh
+
+          # === 1.2f Authenticated OpenChamber update refusal in Chromium ===
+          bash ./test/test-openchamber-update-browser.sh
 
           # === 1.3 Release vulnerability gate contracts ===
           bash ./test/test-grype-release-check.sh
