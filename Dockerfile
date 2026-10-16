@@ -150,22 +150,64 @@ ENV BASH_ENV="/home/${USERNAME}/.config/lean-ctx/env.sh"
 ENV CLAUDE_ENV_FILE="/home/${USERNAME}/.config/lean-ctx/env.sh"
 ENV LEANCTX_VERSION=${LEANCTX_VERSION}
 
-# ── Global npm 套件（opencode / openchamber / openspec）
+# ── Global npm 套件（openspec / comment-checker）──────────────────────────
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
+# opencode-ai and @openchamber/web are the image-managed core; they install into
+# the isolated prefix below, not the user ~/.bun prefix. @openchamber/web@1.24.1
+# fixed the unpublishable @openchamber/sdk pin (openchamber#3633) and declares
+# the zod runtime dependency (openchamber#3635), so a direct registry install is
+# safe again.
 RUN rm -rf ~/.bun/install/cache && \
-    bun install -g opencode-ai@${OPENCODE_VERSION} && \
-    # @openchamber/web@1.24.1 fixed the unpublishable @openchamber/sdk pin
-    # (openchamber#3633, web@1.24.0 shipped with unpublished sdk@1.23.1) and declares
-    # the zod runtime dependency (openchamber#3635). Direct registry install is safe
-    # again; the web@1.24.0 tarball-patch workaround was removed with the 1.24.1 bump.
-    bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
     bun install -g @fission-ai/openspec@${OPENSPEC_VERSION} --trust && \
     bun install -g @code-yeongyu/comment-checker --trust && \
-    # Remove cross-platform opencode binaries shipped as optional dependencies.
-    # The container runs linux/amd64 with glibc; baseline/musl stubs are never used.
-    rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-* && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
     rm -rf ~/.bun/install/cache
+
+# ── AI-EngKit managed core (isolated prefix + offline recovery baseline) ─────
+# The pinned OpenChamber + OpenCode core installs into a dedicated image-owned
+# Bun prefix (BUN_INSTALL), fully isolated from the user ~/.bun global prefix, so
+# user `BUN_PACKAGES` installs cannot overwrite the core and vice versa. The
+# installed tree is captured as a deterministic offline archive plus an integrity
+# manifest and build metadata; startup recovery restores that exact tree with no
+# network access. Root ownership is re-applied below and the paths are
+# deliberately absent from entrypoint.d/00-fix-perms.sh so it survives startup
+# permission fixing.
+ENV AI_ENGKIT_CORE_ROOT=/opt/ai-engkit/core
+ENV AI_ENGKIT_CORE_BASELINE=/opt/ai-engkit/core-baseline
+
+COPY --chmod=0755 scripts/patch-openchamber-update-guard.py /opt/ai-engkit/scripts/patch-openchamber-update-guard.py
+COPY --chmod=0755 scripts/ai-engkit-core.py /opt/ai-engkit/scripts/ai-engkit-core.py
+COPY --chmod=0755 scripts/ai_engkit_core_lib.py /opt/ai-engkit/scripts/ai_engkit_core_lib.py
+COPY --chmod=0755 scripts/ai-engkit-core-wrapper.sh /opt/ai-engkit/scripts/ai-engkit-core-wrapper.sh
+COPY --chmod=0755 scripts/ai-engkit-db-compat.py /opt/ai-engkit/scripts/ai-engkit-db-compat.py
+COPY --chmod=0644 scripts/ai_engkit_db_compat_model.py /opt/ai-engkit/scripts/ai_engkit_db_compat_model.py
+COPY --chmod=0644 scripts/ai_engkit_db_compat_schema.py /opt/ai-engkit/scripts/ai_engkit_db_compat_schema.py
+COPY --chmod=0644 scripts/ai_engkit_db_compat_gate.py /opt/ai-engkit/scripts/ai_engkit_db_compat_gate.py
+COPY --chmod=0444 scripts/db-compat-baseline.json /opt/ai-engkit/core-baseline/opencode-v1-db.json
+
+RUN sudo mkdir -p /opt/ai-engkit/core/generations /opt/ai-engkit/core-baseline && \
+    sudo chown -R ${USERNAME}:${USERNAME} /opt/ai-engkit/core /opt/ai-engkit/core-baseline && \
+    sudo chmod 0755 /opt/ai-engkit/core-baseline
+
+# Full transitive/platform/symlinked closure into the isolated prefix. The
+# opencode-ai postinstall hard-links the platform binary into
+# opencode-ai/bin/opencode.exe, so the unused cross-platform optional source
+# packages (opencode-linux-x64-*) can be dropped without losing the executable.
+RUN rm -rf ~/.bun/install/cache && \
+    BUN_INSTALL=/opt/ai-engkit/core/generations/.build \
+      bun install -g opencode-ai@${OPENCODE_VERSION} @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
+    rm -rf /opt/ai-engkit/core/generations/.build/install/global/node_modules/opencode-linux-x64-* && \
+    rm -rf /opt/ai-engkit/core/generations/.build/install/cache && \
+    rm -rf ~/.bun/install/cache
+
+# Version- and anchor-checked update guards applied to the managed core package
+# (not the user prefix); a pin or upstream source-shape change fails the build
+# instead of silently shipping reduced guard coverage.
+RUN OPENCHAMBER_PACKAGE_DIR=/opt/ai-engkit/core/generations/.build/install/global/node_modules/@openchamber/web \
+    OPENCHAMBER_EXPECTED_VERSION=${OPENCHAMBER_VERSION} \
+    python3 /opt/ai-engkit/scripts/patch-openchamber-update-guard.py
+
+RUN test "$(/opt/ai-engkit/core/generations/.build/bin/opencode --version)" = "${OPENCODE_VERSION}"
 
 # OpenChamber ships PNG/SVG favicons but browsers also request /favicon.ico.
 # Wrap the existing PNG in an ICO container so the request is served locally
@@ -174,7 +216,7 @@ RUN python3 - <<'PY'
 from pathlib import Path
 import struct
 
-dist = Path.home() / ".bun/install/global/node_modules/@openchamber/web/dist"
+dist = Path("/opt/ai-engkit/core/generations/.build/install/global/node_modules/@openchamber/web/dist")
 png_path = dist / "favicon.png"
 ico_path = dist / "favicon.ico"
 
@@ -199,6 +241,51 @@ if png_path.is_file() and not ico_path.exists():
     )
     ico_path.write_bytes(header + entry + png)
 PY
+
+# Build the pristine offline baseline (deterministic archive + integrity
+# manifest + build metadata from the pinned ARGs) and point `active` at the
+# exact installed generation. Runtime recovery reads metadata.json; it never
+# parses the repository or fetches packages.
+RUN set -eux; \
+    GENID="$(python3 /opt/ai-engkit/scripts/ai-engkit-core.py build-baseline \
+      --root /opt/ai-engkit/core/generations/.build \
+      --out-dir /opt/ai-engkit/core-baseline \
+      --opencode-version "${OPENCODE_VERSION}" \
+      --openchamber-version "${OPENCHAMBER_VERSION}" \
+      --bun-version "${BUN_VERSION}" \
+      --ai-engkit-version "${AI_ENGKIT_VERSION}")"; \
+    mv /opt/ai-engkit/core/generations/.build "/opt/ai-engkit/core/generations/${GENID}"; \
+    ln -sfn "generations/${GENID}" /opt/ai-engkit/core/active
+
+# Re-capture the pinned v1 schema/migration identity from the actual isolated
+# binary in a disposable XDG/HOME tree. The committed manifest is only accepted
+# when it exactly matches this fresh database fixture.
+RUN set -eu; \
+    FIXTURE_ROOT="$(mktemp -d /tmp/ai-engkit-v119-db.XXXXXX)"; \
+    trap 'rm -rf "$FIXTURE_ROOT"' EXIT; \
+    mkdir -p "$FIXTURE_ROOT/config" "$FIXTURE_ROOT/cache" "$FIXTURE_ROOT/data"; \
+    HOME="$FIXTURE_ROOT" \
+      XDG_CONFIG_HOME="$FIXTURE_ROOT/config" \
+      XDG_CACHE_HOME="$FIXTURE_ROOT/cache" \
+      XDG_DATA_HOME="$FIXTURE_ROOT/data" \
+      /opt/ai-engkit/core/active/bin/opencode db "SELECT 1" --format json >/dev/null; \
+    python3 /opt/ai-engkit/scripts/ai-engkit-db-compat.py capture-baseline \
+      --db "$FIXTURE_ROOT/data/opencode/opencode.db" \
+      --out "$FIXTURE_ROOT/captured-baseline.json" \
+      --opencode-version "${OPENCODE_VERSION}" \
+      --openchamber-version "${OPENCHAMBER_VERSION}" >/dev/null; \
+    cmp "$FIXTURE_ROOT/captured-baseline.json" \
+      /opt/ai-engkit/core-baseline/opencode-v1-db.json
+
+# Stable PATH wrappers (they pass BUN_INSTALL=active for their process only)
+# plus ~/.bun compatibility symlinks for absolute-path consumers: the admin
+# version probes read ~/.bun/bin/openchamber, and OpenChamber's own resolver
+# falls back to ~/.bun/bin/opencode.
+RUN sudo install -d -m 0755 /opt/ai-engkit/core/bin && \
+    sudo install -m 0755 /opt/ai-engkit/scripts/ai-engkit-core-wrapper.sh /opt/ai-engkit/core/bin/opencode && \
+    sudo install -m 0755 /opt/ai-engkit/scripts/ai-engkit-core-wrapper.sh /opt/ai-engkit/core/bin/openchamber && \
+    ln -sf /opt/ai-engkit/core/bin/opencode /home/${USERNAME}/.bun/bin/opencode && \
+    ln -sf /opt/ai-engkit/core/bin/openchamber /home/${USERNAME}/.bun/bin/openchamber
 
 # ── Playwright browsers + MCP server (for browser automation & testing) ─────
 # Playwright browsers and @playwright/mcp are versioned independently upstream.
@@ -227,6 +314,16 @@ RUN sudo install -m 0755 /tmp/pw-mcp.sh /usr/local/bin/pw-mcp && \
     sudo rm /tmp/pw-mcp.sh
 
 USER root
+
+# The core and its recovery baseline are image-owned: root-owned, with a
+# read-only baseline. entrypoint.d/00-fix-perms.sh intentionally does not list
+# these paths, so root ownership survives startup permission fixing.
+RUN chown -R root:root /opt/ai-engkit/core /opt/ai-engkit/core-baseline && \
+    chmod 0755 /opt/ai-engkit/core /opt/ai-engkit/core/generations /opt/ai-engkit/core/bin && \
+    chmod 0755 /opt/ai-engkit/core-baseline && \
+    chmod 0444 /opt/ai-engkit/core-baseline/core.tar.gz \
+               /opt/ai-engkit/core-baseline/manifest.json \
+               /opt/ai-engkit/core-baseline/metadata.json
 
 # 設定範本存到非 VOLUME 路徑（供 runtime entrypoint 初始化使用）。
 # 完整 MCP 設定由 entrypoint.d/02-init-config.sh 在每次啟動時重新生成。
@@ -334,7 +431,7 @@ RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh
 USER ${USERNAME}
 
 ENV HOME=/home/${USERNAME}
-ENV PATH=/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/opt/ai-engkit/core/bin:/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 WORKDIR /home/${USERNAME}/workspace
 
