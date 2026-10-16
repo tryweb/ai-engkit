@@ -20,6 +20,17 @@ that its GitHub downloads are throttled hard enough to look like a hang:
    This is the host daemon's `libnetwork-setkey` prestart hook failing — a host
    package problem, not the Dockerfile. Plain `docker run` on the same host works.
 
+   **Confirmed root cause (2026-10-16).** The host is Alpine; its 2026-10-01
+   22:17 `apk upgrade` moved `docker*` 29.5.3-r1 → 29.8.2-r0 and in the same
+   transaction **purged `nftables` 1.1.6-r1** (with `gmp`, `jansson`). Docker
+   29.8.2's `libnetwork-setkey` helper links `libnftables.so.1`, so every
+   in-daemon-BuildKit `RUN` container fails at the prestart hook. `/var/log/apk.log`
+   shows both facts in one block (`( 4/14) Upgrading docker-engine (29.5.3-r1 ->
+   29.8.2-r0)` … `(12/14) Purging nftables (1.1.6-r1)`); `find / -name
+   'libnftables*'` was empty. The running `dockerd` process predates the upgrade
+   (started earlier: `docker.pid` mtime), so the daemon *reports* the old version
+   while the helper it execs comes from the new package.
+
 2. **GitHub release downloads are throttled to ~0.3–1 MB/s.** Measured on
    2026-10-14, the 68 MB
    `https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-amd64`
@@ -32,6 +43,12 @@ that its GitHub downloads are throttled hard enough to look like a hang:
 A fast symptom check: `docker ps -a` shows the same intermediate container "Up N
 minutes" where N keeps growing while no new step appears.
 
+3. **Release-asset downloads can 429 outright.** Seen 2026-10-16 at the `glab`
+   step: `curl: (22) The requested URL returned error: 429` from
+   `gitlab.com/gitlab-org/cli/-/releases/v1.123.0/downloads/...`. Successful
+   layers stay cached, so a short retry loop resumes at the failing step; do not
+   read a 429 as a Dockerfile fault.
+
 Do not judge progress from a piped build: `docker build ... | tail -n 12`
 buffers to EOF and prints nothing until the build ends, so a healthy 10-minute
 build is indistinguishable from a hang. Use `--progress=plain` and redirect to a
@@ -39,8 +56,30 @@ file, then watch that file.
 
 ## Solution
 
-- **Build with `--network=host`.** This clears the prestart-hook failure outright
-  and gives the `RUN` steps working egress:
+- **Durable fix — restore the purged host package (fastest, keeps the build
+  cache).** Run one throwaway privileged container that chroots into the host
+  root and reinstalls it:
+  ```bash
+  cat > /tmp/fix-host-nftables.sh <<'EOF'
+  #!/bin/sh
+  set -e
+  ls -l /host/usr/lib/libnftables* 2>/dev/null || echo 'libnftables: MISSING'
+  chroot /host /sbin/apk add --no-cache nftables
+  ls -l /host/usr/lib/libnftables* 2>/dev/null || echo 'libnftables: STILL MISSING'
+  EOF
+  docker run --rm --privileged -i -v /:/host alpine:3.24 sh -s < /tmp/fix-host-nftables.sh
+  ```
+  `apk add` also re-adds `nftables` to `/etc/apk/world`, so later upgrades keep
+  it. **No `dockerd` restart is needed** — the hook resolves the library at exec
+  time (restarting the host daemon would kill every running container, including
+  this session's). Verify with a BuildKit smoke build:
+  ```bash
+  printf 'FROM alpine:3.20\nRUN echo BUILD_OK\n' | docker buildx build -t t-probe -
+  ```
+  Note: a script must be piped into `sh -s`, not bind-mounted — under DooD
+  `-v /tmp/x.sh:/x.sh` resolves on the *host*, where that path does not exist.
+- **Build with `--network=host` (no host change).** This clears the prestart-hook
+  failure outright and gives the `RUN` steps working egress:
   ```bash
   docker build --network=host --progress=plain \
     --build-arg OPENCODE_CLI_VERSION=2.0.27 --build-arg AI_ENGKIT_VERSION=v2dev \
@@ -84,9 +123,12 @@ downloads entirely and stays the fastest way to validate one changed layer.
 - Layer-scoped builds prove the changed instructions, not the full Dockerfile
   ordering; confirm the ordering separately (e.g. `USER root` vs `USER devuser`
   context — see `v2-plugin-bake.md`).
-- The host condition may be transient (a partially upgraded daemon/nftables);
-  re-check `docker run --rm ubuntu:24.04 echo ok` and a BuildKit smoke before
-  assuming it is permanent.
+- ~~The host condition may be transient (a partially upgraded daemon/nftables)~~
+  Corrected 2026-10-16: it is **not** transient — it persists until the purge of
+  the Alpine `nftables` package is undone (`chroot /host /sbin/apk add nftables`).
+  Re-check `docker run --rm ubuntu:24.04 echo ok` and a BuildKit smoke; those
+  still pass while `RUN` steps in builds fail, which is the signature of this
+  host condition.
 - Local image tags can drift from running container image IDs. Treat the
   running V2 container and its OpenCode version as runtime truth, not the tag
   name.
@@ -101,6 +143,15 @@ downloads entirely and stays the fastest way to validate one changed layer.
   across repeated attempts).
 - Legacy: apt layer completes in seconds; `docker buildx` step container stayed
   "Up" 7+ minutes; killed at a 30-minute timeout without reaching the app layers.
+- 2026-10-16 (durable fix verified): host Alpine `/var/log/apk.log` block at
+  `Running /sbin/apk upgrade at 2026-10-01 22:17:24` upgraded `docker-engine`/
+  `docker`/`docker-cli` 29.5.3-r1 → 29.8.2-r0 and purged `nftables` 1.1.6-r1 at
+  `(12/14)`. `chroot /host /sbin/apk add --no-cache nftables` restored
+  `/usr/lib/libnftables.so.1 -> libnftables.so.1.1.0` and pulled `gmp`/`jansson`
+  back; `docker buildx build` then passed both smoke builds (`FROM alpine` +
+  `RUN echo`, and `FROM ubuntu:24.04` + `RUN apt-get update`). `docker buildx ls`
+  showed only the broken in-daemon `default` builder at that moment, which is why
+  `docker compose build` hit the hook instead of a container-driver builder.
 - `docker run --rm ubuntu:24.04 echo hello` and `--network=host` both succeed.
 - On 2026-10-12, the local `ai-engkit-ai-v2` tag pointed to an image where
   `opencode --version` was `1.18.32`, while the running `ai-engkit-v2` container
