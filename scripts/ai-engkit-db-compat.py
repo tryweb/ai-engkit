@@ -4,12 +4,12 @@
 # dependencies = []
 # ///
 # How to run:
-#   # 1. Pin the v1 baseline from the disposable v1.19.0 fixture (build time, one-off).
+#   # 1. Pin the v1 baseline from the disposable v1.19.2 fixture (build time, one-off).
 #   #    Inspects a private copy only; never starts the OpenCode CLI.
 #   python3 scripts/ai-engkit-db-compat.py capture-baseline \
 #     --db /tmp/ai-engkit-v119-fixture/data/opencode/opencode.db \
 #     --out scripts/db-compat-baseline.json \
-#     --opencode-version 1.19.0 --openchamber-version 1.24.2
+#     --opencode-version 1.19.2 --openchamber-version 1.24.2
 #   # 2. Gate a database read-only before the v1 binary touches it.
 #   #    Exit 0 = allowed (absent / fresh / recognized v1); exit 1 = refused.
 #   python3 scripts/ai-engkit-db-compat.py check \
@@ -24,7 +24,7 @@ inspects a private copy of a quiescent database plus its matching sidecars and
 discards it. The reusable primitives live in ``ai_engkit_db_compat_model.py``,
 ``ai_engkit_db_compat_schema.py`` and ``ai_engkit_db_compat_gate.py``.
 
-Baseline facts are pinned to the disposable OpenCode 1.19.0 fixture
+Baseline facts are pinned to the disposable OpenCode 1.19.2 fixture
 (OpenChamber 1.24.2): 20 tables including ``migration`` with 38 seeded ids, and
 no ``session_v2``. A v2.0.30 migration renames ``session`` to ``session_v2`` in
 place, and a migrated v1-to-v2 database can retain both, so ``session``
@@ -101,7 +101,7 @@ def capture_baseline(args: argparse.Namespace) -> int:
             "openchamber_version": args.openchamber_version,
             "fixture_id": args.fixture_id,
             "note": (
-                "Baseline captured from the disposable pinned v1.19.0 fixture with "
+                "Baseline captured from the disposable pinned v1.19.2 fixture with "
                 "SQLite stdlib only. Build-time source mapping carries a gitHead "
                 "provenance caveat, but this fixture is from the exact pinned binary."
             ),

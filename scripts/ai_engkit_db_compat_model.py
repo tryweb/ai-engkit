@@ -7,7 +7,7 @@
 #   Imported by scripts/ai-engkit-db-compat.py; not executed directly.
 """Pinned vocabulary for the OpenCode v1 database compatibility preflight.
 
-Holds the v1 identity constants pinned from the disposable 1.19.0 fixture, the
+Holds the v1 identity constants pinned from the disposable 1.19.2 fixture, the
 stable status set, operator guidance, and the typed results shared by the gate.
 """
 

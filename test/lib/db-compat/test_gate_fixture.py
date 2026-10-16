@@ -36,7 +36,7 @@ class FixtureTests(unittest.TestCase):
                     "--out",
                     str(output),
                     "--opencode-version",
-                    "1.19.0",
+                    "1.19.2",
                     "--openchamber-version",
                     "1.24.2",
                 ],

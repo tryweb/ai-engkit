@@ -104,7 +104,7 @@ def resolve_drizzle(
 ) -> LegacyResolution:
     """Map legacy ``__drizzle_migrations`` rows to exact v1 ids.
 
-    Mirrors v1.19.0 ``packages/core/src/database/migration.ts``: a ``name``
+    Mirrors v1.19.2 ``packages/core/src/database/migration.ts``: a ``name``
     column is used directly, otherwise ``created_at`` (milliseconds) is
     formatted to a UTC ``YYYYMMDDHHMMSS`` prefix and matched against the
     migration id prefix. An unmatched row is a hard refusal.

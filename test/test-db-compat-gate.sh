@@ -3,7 +3,7 @@
 # compatibility preflight (scripts/ai-engkit-db-compat.py) and its baseline.
 #
 # Contract covered (OpenSpec data-compatibility tasks 6.1-6.6):
-#   * pinned v1 baseline captured from the disposable v1.19.0 fixture      6.1
+#   * pinned v1 baseline captured from the disposable v1.19.2 fixture      6.1
 #   * absent / fresh / recognized-v1 databases allowed                     6.2
 #   * v2 / unknown schema refused with the data files untouched            6.3
 #   * private-copy inspection, WAL-aware, source hashes/mtimes unchanged   6.4
@@ -198,7 +198,7 @@ if [ -f "$FIXTURE_DB" ]; then
   assert_eq "fixture recognized as v1" "allow_v1" "$(check_status "$FIXTURE_DB")"
   CAPTURE="$WORK/captured.json"
   python3 "$HELPER" capture-baseline --db "$FIXTURE_DB" --out "$CAPTURE" \
-    --opencode-version 1.19.0 --openchamber-version 1.24.2 >/dev/null 2>&1
+    --opencode-version 1.19.2 --openchamber-version 1.24.2 >/dev/null 2>&1
   assert_rc0 "capture-baseline succeeds" "$?"
   python3 - "$CAPTURE" "$BASELINE" <<'PY' && pass "committed baseline matches fixture capture" || fail "committed baseline matches fixture capture"
 import json, sys
