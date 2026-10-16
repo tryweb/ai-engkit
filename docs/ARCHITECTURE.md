@@ -743,8 +743,13 @@ BUN_PACKAGES="typescript"
 | Mode | Setting | Advantages | Drawbacks |
 |------|------|------|------|
 | Named Volume | Leave `WORKSPACE_PATH` unset (default since v0.5.0) | Managed by Docker, auto-initializes Git/SSH settings | Requires `docker cp` for direct host access |
-| Bind Mount | `WORKSPACE_PATH=./workspace` | Editable directly with a local IDE | Permission issues are more common |
+| Bind Mount | `WORKSPACE_PATH=/home/user/ai-workspace` | Editable directly with a local IDE | Permission issues are more common |
 | Host Path | `WORKSPACE_PATH=/home/user/projects` | Reuses an existing project directory | Requires careful permission management |
+
+> **Docker-out-of-Docker (DooD) note:** always use an **absolute host path**.
+> A relative path such as `./workspace` resolves against the admin container's
+> Compose directory (`/opt/ai-engkit`) and can bind the wrong host directory
+> during upgrades. See the README's [DooD note](../README.md#workspace-and-persistent-data).
 
 ---
 
