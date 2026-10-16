@@ -1,6 +1,40 @@
 ## [Unreleased]
 
 
+## [1.21.1] - 2026-10-16
+
+### Added
+- Bump OpenCode 1.19.0 → 1.19.2, oh-my-openagent 5.1.33 → 5.1.34
+- Add pinned-source patch with fixture test
+- Integrate managed-core hooks into startup
+- Wire db-compat gate into startup
+- Add reserved bun packages library
+- Add core recovery hook with test
+- Add managed-core wrapper and library
+- Add gate check with pure unit coverage
+- Add schema model and baseline snapshot
+- Bump DOCKER_VERSION 29.9.0→29.9.1, PLAYWRIGHT_VERSION 1.64.0→1.64.1, OPENSPEC_VERSION 1.14.1→1.14.2
+
+### Fixed
+- Add selection repair hook with test
+
+### Documentation
+- Sync managed-core spec and archive change
+- Clarify self-update vs pin policy
+- Reference managed-core runtime in architecture guides
+- Document isolation and recovery
+
+### Changed
+- Run update-guard harness inside CI image
+- Gate managed-core and update-guard checks
+- Include managed-core runtime in image
+- Cover browser and e2e refusal flows
+- Add web-server fixture modules
+- Cover gate CLI fixture and shell runner
+- Upgrade Docker Engine from 29.9.0 to 29.9.1.
+- Upgrade OpenCode from 1.19.0 to 1.19.2.
+- Upgrade Playwright from 1.64.0 to 1.64.1.
+
 ## [1.21.0] - 2026-10-14
 
 ### Added
@@ -2198,7 +2232,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2382,3 +2416,4 @@
 [1.20.1]: https://github.com/tryweb/ai-engkit/compare/v1.20.0...v1.20.1
 [1.20.2]: https://github.com/tryweb/ai-engkit/compare/v1.20.1...v1.20.2
 [1.21.0]: https://github.com/tryweb/ai-engkit/compare/v1.20.2...v1.21.0
+[1.21.1]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...v1.21.1
