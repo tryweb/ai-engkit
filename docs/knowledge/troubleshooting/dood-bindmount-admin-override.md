@@ -237,8 +237,56 @@ $ docker inspect ai-engkit-admin-dev --format '{{json .Mounts}}' | jq '.[] | sel
 {"Source": "/home/devuser/workspace/ai-engkit/src/admin", "Destination": "/opt/admin"}
 ```
 
+## V2 production: host-run contract for file bind mounts (2026-10)
+
+The V2 **production** stack (`docker-compose.v2.yml`) keeps the file-level host
+bind mounts that the V2 **dev** stack removed (方案 D above is dev-only). They
+cannot move to a named volume in production because the Admin UI upgrade path
+requires host files:
+
+- `src/admin/lib/upgrade.ts` writes `/opt/ai-engkit/.env`, `/opt/ai-engkit/compose.yml`,
+  and backups under `/opt/ai-engkit/backups` (`ENV_FILE` / `COMPOSE_FILE` /
+  `BACKUP_DIR`, upgrade.ts:45-47) and re-reads the effective Compose it wrote.
+- The host-side `upgrade-v2.sh` reads/writes `./.env.v2`,
+  `./docker-compose.v2.yml`, and `./admin-data-v2/upgrade-base.yml` directly on
+  the host.
+
+A named volume would sever that host-visible surface: host `cat .env.v2`,
+`git diff docker-compose.v2.yml`, and `backups-v2` would diverge from the running
+admin's state. This is why the dev-stack 方案 D is not applied to production.
+
+The remaining failure mode is DooD path resolution: when `docker compose` runs
+from **inside a container**, the host daemon resolves each relative file source
+against a different host tree and auto-creates an empty directory, so ai-admin
+reads a directory at `/opt/ai-engkit/.env` and returns HTTP 500 (EISDIR).
+
+Fix (2026-10): `install-v2.sh` and `upgrade-v2.sh` now
+
+1. refuse to run inside a container (`require_host`), telling the operator to run
+   on the Docker host; and
+2. verify each file-level bind source is a regular file on the host before any
+   `docker compose up` (`verify_bind_sources`) — a source that is a directory
+   (auto-created by a prior bad run) or missing is a hard failure.
+
+Directory-level mounts (`admin-data-v2/`, `backups-v2/`, `extensions/`) are not
+checked; an empty auto-created directory there is harmless. `AI_ENGKIT_SKIP_HOST_CHECK=1`
+bypasses the container guard for in-container testing only (mirrors
+`SKIP_SYSTEM_CHECK`) and does not fix path resolution. The `env.ts` guard
+(`envPathIsFile` returns `{}` for a non-file path) and `upgrade.ts:ensureComposeFile`
+(removes a directory-shaped compose file) remain as second-line defense.
+
+Evidence:
+
+```bash
+# In-container run aborts before any side effect:
+$ ./upgrade-v2.sh
+  ❌ Running inside a container. Docker-out-of-Docker cannot resolve ...
+```
+
 ## Related Files
 
+- `docker-compose.v2.yml` — V2 production ai-admin file/dir bind mounts + host-run note
+- `install-v2.sh` / `upgrade-v2.sh` — `require_host` + `verify_bind_sources`
 - `docker-compose.dev.yml` — ai-admin volumes 定義（方案 D：`admin-data-dev` named volume + seed command）
 - `Dockerfile` line 258 — `COPY src/admin/ /opt/admin/`
 - `Dockerfile` line 281 — `mkdir -p /opt/ai-engkit && echo "$AI_ENGKIT_VERSION" > /opt/ai-engkit/VERSION`（image 內唯一的 /opt/ai-engkit 內容，volume copy-up 保留）

@@ -8,7 +8,12 @@
 # ci.yml's push-v2 job; the V2 dev stack builds the image locally instead.
 # The ai-admin service keeps the host bind mounts the Admin UI upgrade path
 # writes (compose, .env, admin-data, backups) — unlike the V2 dev stack, which
-# runs entirely from volumes.
+# runs entirely from volumes. Those file-level binds only resolve when Compose
+# runs on the Docker host: install-v2.sh / upgrade-v2.sh refuse to run from
+# inside a container (see docs/knowledge/troubleshooting/dood-bindmount-admin-override.md).
+# The ai-dev workspace follows the V1 convention: set WORKSPACE_PATH to an
+# absolute host path to bind a host directory, or leave it unset to keep the
+# `workspace-v2` named volume.
 # See docs/knowledge/tooling/opencode-v2-migration-watch.md
 name: v2
 
@@ -19,7 +24,7 @@ services:
     ports:
       - "${CHAMBER_V2_PORT:-8002}:3000"
     volumes:
-      - workspace-v2:/home/devuser/workspace
+      - ${WORKSPACE_PATH:-workspace-v2}:/home/devuser/workspace
       - opencode-data-v2:/home/devuser/.local/share/opencode
       - lean-ctx-data-v2:/home/devuser/.local/share/lean-ctx
       - lean-ctx-state-v2:/home/devuser/.local/state/lean-ctx

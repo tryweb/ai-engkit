@@ -57,6 +57,50 @@ download() {
 # line uses.
 dc() { docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
 
+# --- DooD contract -----------------------------------------------------------
+# The V2 production stack keeps file-level host bind mounts that the Admin UI
+# upgrade path requires (see the docker-compose.v2.yml header). Those binds only
+# resolve correctly when `docker compose` runs on the Docker host: a container
+# cannot resolve this install directory's host sources, so the host daemon would
+# auto-create empty directories and break ai-admin (EISDIR / HTTP 500). Refuse to
+# run from inside a container unless explicitly overridden for testing.
+inside_container() {
+    [ -f /.dockerenv ] && return 0
+    [ -f /run/.containerenv ] && return 0
+    grep -qaE '(^|[^a-z])(docker|containerd|kubepods|lxc)([^a-z]|$)' /proc/1/cgroup 2>/dev/null && return 0
+    return 1
+}
+
+require_host() {
+    header "0. Verifying Execution Environment"
+    if inside_container; then
+        if [ "${AI_ENGKIT_SKIP_HOST_CHECK:-0}" = "1" ]; then
+            warn "Inside a container with AI_ENGKIT_SKIP_HOST_CHECK=1 — file bind sources may resolve incorrectly under DooD; test use only"
+            return 0
+        fi
+        fail "Running inside a container. Docker-out-of-Docker cannot resolve this install directory's host file bind mounts; Docker would auto-create empty directories and break ai-admin. Run this on the Docker HOST from the install directory: cd <host-install-dir> && ./$(basename "$0")"
+    fi
+    ok "Running on the Docker host"
+}
+
+# File-level bind sources must be regular files on the Docker host. Docker
+# auto-creates a missing source as an empty directory, which makes ai-admin read
+# a directory at /opt/ai-engkit/.env and fail with EISDIR. Directory-level mounts
+# (admin-data-v2/, backups-v2/, extensions/) are intentionally not checked: an
+# empty auto-created directory there is harmless.
+verify_bind_sources() { # $1 = 1 to also require each file to already exist
+    local require_exist="${1:-0}" f
+    for f in "$ENV_FILE" "$COMPOSE_FILE" "$ADMIN_DATA_DIR/upgrade-base.yml"; do
+        if [ -d "$f" ]; then
+            fail "$f is a DIRECTORY, not a file (a previous run let Docker auto-create it from a missing bind source). Remove it and re-run: rm -rf '$f'"
+        fi
+        if [ "$require_exist" = "1" ]; then
+            [ -e "$f" ] || fail "$f is missing; Docker would auto-create a directory there and break ai-admin (EISDIR). Run install-v2.sh or restore the file first."
+            [ -f "$f" ] || fail "$f is not a regular file"
+        fi
+    done
+}
+
 check_system() {
     header "1. Checking System Hardware Specifications"
     [ "${SKIP_SYSTEM_CHECK:-0}" = "1" ] && { warn "SKIP_SYSTEM_CHECK=1, skipping"; return 0; }
@@ -116,6 +160,7 @@ guard_line() {
         warn "V1 volumes detected on this host; the V2 line uses disjoint -v2 volumes and never shares state with V1."
     fi
     ok "V2 installation detected ($COMPOSE_FILE)"
+    verify_bind_sources 1
 }
 
 backup_files() {
@@ -232,6 +277,7 @@ self_update() {
 
 main() {
     echo -e "${BOLD}AI-EngKit — V2 line upgrade${NC}"
+    require_host
     self_update "$@"
     check_system
     check_docker

@@ -43,6 +43,50 @@ set_env_value() { # $1 key, $2 value — replace or append in $ENV_FILE
     fi
 }
 
+# --- DooD contract -----------------------------------------------------------
+# The V2 production stack keeps file-level host bind mounts that the Admin UI
+# upgrade path requires (see the docker-compose.v2.yml header). Those binds only
+# resolve correctly when `docker compose` runs on the Docker host: a container
+# cannot resolve this install directory's host sources, so the host daemon would
+# auto-create empty directories and break ai-admin (EISDIR / HTTP 500). Refuse to
+# run from inside a container unless explicitly overridden for testing.
+inside_container() {
+    [ -f /.dockerenv ] && return 0
+    [ -f /run/.containerenv ] && return 0
+    grep -qaE '(^|[^a-z])(docker|containerd|kubepods|lxc)([^a-z]|$)' /proc/1/cgroup 2>/dev/null && return 0
+    return 1
+}
+
+require_host() {
+    header "0. Verifying Execution Environment"
+    if inside_container; then
+        if [ "${AI_ENGKIT_SKIP_HOST_CHECK:-0}" = "1" ]; then
+            warn "Inside a container with AI_ENGKIT_SKIP_HOST_CHECK=1 — file bind sources may resolve incorrectly under DooD; test use only"
+            return 0
+        fi
+        fail "Running inside a container. Docker-out-of-Docker cannot resolve this install directory's host file bind mounts; Docker would auto-create empty directories and break ai-admin. Run this on the Docker HOST from the install directory: cd <host-install-dir> && ./$(basename "$0")"
+    fi
+    ok "Running on the Docker host"
+}
+
+# File-level bind sources must be regular files on the Docker host. Docker
+# auto-creates a missing source as an empty directory, which makes ai-admin read
+# a directory at /opt/ai-engkit/.env and fail with EISDIR. Directory-level mounts
+# (admin-data-v2/, backups-v2/, extensions/) are intentionally not checked: an
+# empty auto-created directory there is harmless.
+verify_bind_sources() { # $1 = 1 to also require each file to already exist
+    local require_exist="${1:-0}" f
+    for f in "$ENV_FILE" "$COMPOSE_FILE" "$ADMIN_DATA_DIR/upgrade-base.yml"; do
+        if [ -d "$f" ]; then
+            fail "$f is a DIRECTORY, not a file (a previous run let Docker auto-create it from a missing bind source). Remove it and re-run: rm -rf '$f'"
+        fi
+        if [ "$require_exist" = "1" ]; then
+            [ -e "$f" ] || fail "$f is missing; Docker would auto-create a directory there and break ai-admin (EISDIR). Run install-v2.sh or restore the file first."
+            [ -f "$f" ] || fail "$f is not a regular file"
+        fi
+    done
+}
+
 check_system() {
     header "1. Checking System Specifications"
     [ "${SKIP_SYSTEM_CHECK:-0}" = "1" ] && { warn "SKIP_SYSTEM_CHECK=1, skipping"; return 0; }
@@ -79,6 +123,7 @@ check_docker() {
 
 fetch_assets() {
     header "3. Fetching Configuration"
+    verify_bind_sources 0
     if [ ! -f "$COMPOSE_FILE" ]; then
         download "$REPO_URL/$COMPOSE_FILE" "$COMPOSE_FILE" || fail "Failed to download $COMPOSE_FILE"
         ok "$COMPOSE_FILE downloaded"
@@ -128,6 +173,27 @@ prepare_volumes() {
     ok "./$ADMIN_DATA_DIR ready"
     mkdir -p ./extensions; chmod 755 ./extensions
     ok "./extensions ready"
+
+    # Optional host bind for the ai-dev workspace (mirrors V1's WORKSPACE_PATH).
+    # Unset keeps the `workspace-v2` named volume. Under Docker-out-of-Docker the
+    # value MUST be an absolute host path: a relative path resolves against the
+    # admin container's Compose directory and can bind the wrong host directory
+    # (see the README "DooD note").
+    local ws="${WORKSPACE_PATH:-}"
+    if [ -z "$ws" ]; then
+        ws=$(grep -E '^WORKSPACE_PATH=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)
+    fi
+    if [ -z "$ws" ]; then
+        ok "workspace: named volume workspace-v2 (set WORKSPACE_PATH to bind a host path)"
+    else
+        case "$ws" in
+            /*) ;;
+            *) fail "WORKSPACE_PATH must be an absolute host path (got: '$ws'). Relative paths are unsafe under DooD." ;;
+        esac
+        [ -d "$ws" ] || warn "WORKSPACE_PATH='$ws' does not exist yet; Docker will create it as an empty directory"
+        [ -n "${WORKSPACE_PATH:-}" ] && set_env_value "WORKSPACE_PATH" "$WORKSPACE_PATH"
+        ok "workspace bind: $ws"
+    fi
 }
 
 start_services() {
@@ -157,6 +223,7 @@ show_info() {
 
 main() {
     echo -e "${BOLD}AI-EngKit — V2 line installer${NC}"
+    require_host
     if [ -f "docker-compose.yml" ] && [ ! -f "$COMPOSE_FILE" ]; then
         fail "A V1 install (docker-compose.yml) is present here. Use install.sh for V1, or run this in a separate directory."
     fi
@@ -165,6 +232,7 @@ main() {
     fetch_assets
     prompt_passwords
     prepare_volumes
+    verify_bind_sources 1
     start_services
     show_info
 }
