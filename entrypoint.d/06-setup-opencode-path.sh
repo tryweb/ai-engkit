@@ -12,6 +12,10 @@ if ! grep -qF "$MARKER" "$PROFILE_FILE" 2>/dev/null; then
   cat >> "$PROFILE_FILE" << 'EOF'
 
 # OpenCode (opencode.ai) - Added by ai-engkit entrypoint
+# Managed core wrappers come first; the user prefix supplies bun/node.
+if [ -d "/opt/ai-engkit/core/bin" ]; then
+    export PATH="/opt/ai-engkit/core/bin:$PATH"
+fi
 if [ -d "$HOME/.bun/bin" ]; then
     export PATH="$HOME/.bun/bin:$PATH"
 fi

@@ -32,7 +32,13 @@ if [ -z "${BUN_PACKAGES:-}" ]; then
 fi
 
 if [[ -n ${BUN_PACKAGES:-} ]]; then
+  # shellcheck source=entrypoint.d/lib-reserved-bun-packages.bash
+  source "$(dirname "$0")/lib-reserved-bun-packages.bash"
+  read -r -a request <<< "$(strip_quotes "$BUN_PACKAGES")"
+  # Refuse a request that names the managed core before installing anything,
+  # so a mixed request cannot partially mutate the user prefix.
+  assert_no_reserved_bun_packages "${request[@]}"
   echo "Installing bun packages"
-  bun install -g $(strip_quotes "$BUN_PACKAGES")
+  bun install -g "${request[@]}"
   echo
 fi
