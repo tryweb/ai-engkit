@@ -27,7 +27,7 @@ docs/
 .env.*
 docker-compose*.yml
 docker-compose*.yaml
-!docker-compose.yml
+!docker-compose.v2.yml
 
 # IDE
 .idea/
