@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExecResult } from "./docker";
+import { resolveEnvPath } from "./env";
 import {
   restartAiDev,
   restartManagedOpenCode,
@@ -39,7 +40,7 @@ describe("restartAiDev", () => {
     // Then
     expect(result).toEqual({ ok: true });
     expect(fixture.commands).toEqual([{
-      command: "compose -p project-name --env-file /opt/ai-engkit/.env -f /opt/ai-engkit/compose.yml up -d --force-recreate ai-dev 2>&1",
+      command: `compose -p project-name --env-file ${resolveEnvPath()} -f /opt/ai-engkit/compose.yml up -d --force-recreate ai-dev 2>&1`,
       timeoutMs: 120_000,
     }]);
   });

@@ -1,6 +1,16 @@
 import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { isNativeV2Enabled } from "./agent-model-types";
 
-const ENV_PATH = "/opt/ai-engkit/.env";
+const V1_ENV_PATH = "/opt/ai-engkit/.env";
+const V2_ENV_PATH = "/opt/ai-engkit/.env.v2";
+
+/**
+ * Line-aware env file path: the V2 line reads `.env.v2`, V1 reads `.env`.
+ * Evaluated at call time so tests can toggle lines via `OMO_ENABLED`.
+ */
+export function resolveEnvPath(): string {
+  return isNativeV2Enabled() ? V2_ENV_PATH : V1_ENV_PATH;
+}
 
 export interface EnvVars {
   [key: string]: string;
@@ -12,7 +22,7 @@ export interface EnvVars {
  * DooD file-level bind mounts whose host source is missing are auto-created as
  * directories: `existsSync` returns true while `readFileSync` throws EISDIR.
  */
-export function envPathIsFile(path: string = ENV_PATH): boolean {
+export function envPathIsFile(path: string = resolveEnvPath()): boolean {
   return statSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
@@ -36,14 +46,14 @@ export function readEnvFileAt(path: string): EnvVars {
 }
 
 export function readEnvFile(): EnvVars {
-  return readEnvFileAt(ENV_PATH);
+  return readEnvFileAt(resolveEnvPath());
 }
 
 export function writeEnvFile(vars: EnvVars): void {
   const lines: string[] = [];
   // Preserve existing comments by reading original
   if (envPathIsFile()) {
-    const original = readFileSync(ENV_PATH, "utf-8");
+    const original = readFileSync(resolveEnvPath(), "utf-8");
     for (const line of original.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) {
@@ -54,7 +64,7 @@ export function writeEnvFile(vars: EnvVars): void {
   for (const [key, value] of Object.entries(vars)) {
     lines.push(`${key}=${value}`);
   }
-  writeFileSync(ENV_PATH, lines.join("\n") + "\n", "utf-8");
+  writeFileSync(resolveEnvPath(), lines.join("\n") + "\n", "utf-8");
 }
 
 export function upsertEnvVar(key: string, value: string): void {
@@ -72,7 +82,7 @@ export function deleteEnvVar(key: string): void {
 
 export function readEnvAsString(): string {
   if (!envPathIsFile()) return "";
-  return readFileSync(ENV_PATH, "utf-8");
+  return readFileSync(resolveEnvPath(), "utf-8");
 }
 
 export function envFileExists(): boolean {

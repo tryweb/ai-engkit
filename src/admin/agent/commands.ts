@@ -11,7 +11,7 @@ import {
 } from "../lib/docker";
 import { PASSWORD_KEYS } from "../lib/env-schema";
 import { resolveImageRef } from "../lib/image-ref";
-import { readEnvFile, upsertEnvVar as upsertRealEnvVar } from "../lib/env";
+import { readEnvFile, resolveEnvPath, upsertEnvVar as upsertRealEnvVar } from "../lib/env";
 import { KEY_MATERIAL_PATTERN, readSanitizedGlobalConfig, setGlobalConfig as realSetGlobalConfig } from "../lib/git-config";
 import { logoutGh as realLogoutGh, startDeviceFlow as realStartDeviceFlow, type DeviceFlowInfo } from "../lib/gh-auth";
 import { listGlabInstances as realListGlabInstances, loginGlabWithToken as realLoginGlabWithToken, logoutGlab as realLogoutGlab, type GlabInstance } from "../lib/glab-auth";
@@ -100,7 +100,6 @@ const DEFAULT_OPENCHAMBER_SETTINGS = "/home/devuser/.config/openchamber/settings
 const DEFAULT_OPENCHAMBER_DISABLED = "/home/devuser/.config/openchamber/disabled-projects.json";
 const SECRET_MASK = "••••••";
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
-const ENV_FILE = "/opt/ai-engkit/.env";
 // ai-admin has no upgrade flow (runUpgrade only recreates ai-dev), so its
 // restart is its only path to a newly published image. The ref follows the
 // AI_ENGKIT_VERSION pin when set, else the stable latest tag.
@@ -1773,7 +1772,7 @@ export function createRealCommandDeps(
             // base when active and non-empty) instead of the stale active file.
             const effective = resolveEffectiveAiAdmin();
             const baseFile = effective.files[0];
-            const envSource = await resolveSelfBindSource(ENV_FILE);
+            const envSource = await resolveSelfBindSource(resolveEnvPath());
             const baseSource = baseFile === undefined ? null : await resolveSelfBindSource(baseFile);
             if (!envSource || !baseSource || baseFile === undefined) {
               return { success: false, message: "Failed to resolve host bind sources for ai-admin restart" };
@@ -1807,7 +1806,7 @@ export function createRealCommandDeps(
           const result = await runDockerCommand(
             buildRecreateSubcommand({
               project,
-              envFile: ENV_FILE,
+              envFile: resolveEnvPath(),
               effective,
               action: "up -d --force-recreate ai-dev",
               trace: " 2>&1",

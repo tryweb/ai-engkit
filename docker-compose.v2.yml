@@ -57,7 +57,7 @@ services:
     ports:
       - "${ADMIN_V2_PORT:-8082}:8080"
     volumes:
-      - ./.env.v2:/opt/ai-engkit/.env:rw
+      - ./.env.v2:/opt/ai-engkit/.env.v2:rw
       - ./docker-compose.v2.yml:/opt/ai-engkit/compose.yml:rw
       - ./admin-data-v2:/opt/ai-engkit/admin-data:rw
       - ./admin-data-v2/upgrade-base.yml:/opt/ai-engkit/compose-upgrade-base.yml:rw

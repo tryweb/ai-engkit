@@ -10,7 +10,7 @@ import {
   type ExecResult,
 } from "./docker";
 import { readRetentionPolicy, type RetentionPolicy } from "./retention-policy";
-import { readEnvFile } from "./env";
+import { readEnvFile, resolveEnvPath } from "./env";
 import {
   buildRecreateSubcommand,
   resolveValidatedEffectiveCompose,
@@ -267,7 +267,7 @@ export async function defaultStartAiDev(overrides: StartAiDevOverrides = {}): Pr
     ((project: string) => resolveValidatedEffectiveCompose({ readEnv: readEnvFile, project }));
   try {
     const project = await getProjectFn();
-    const envFile = "/opt/ai-engkit/.env";
+    const envFile = resolveEnvPath();
     const effective = await resolveEffectiveFn(project);
     const result = await dockerFn(
       buildRecreateSubcommand({ project, envFile, effective, action: "up -d ai-dev" }),

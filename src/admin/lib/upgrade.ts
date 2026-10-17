@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { readEnvFile, writeEnvFile, type EnvVars } from "./env";
+import { readEnvFile, writeEnvFile, resolveEnvPath, type EnvVars } from "./env";
 import { KEYS_PATH } from "./provider-keys";
 import { resolveImageRef } from "./image-ref";
 import { isNativeV2Enabled } from "./agent-model-types";
@@ -44,7 +44,6 @@ import {
 
 const BACKUP_DIR = "/opt/ai-engkit/backups";
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
-const ENV_FILE = "/opt/ai-engkit/.env";
 const UPSTREAM_REPO = "https://raw.githubusercontent.com/tryweb/ai-engkit";
 // The V2 line's assets (docker-compose.v2.yml, .env.v2.example) live on this
 // branch; main carries only the V1 assets.
@@ -309,7 +308,7 @@ export async function runUpgrade(deps: UpgradeDeps = {}): Promise<boolean> {
   const composeFile = deps.composeFile ?? COMPOSE_FILE;
   const stagedBaseFile = deps.stagedBaseFile ?? UPGRADE_BASE_FILE;
   const stagedValidationFile = deps.stagedValidationFile ?? UPGRADE_STAGING_FILE;
-  const envFile = deps.envFile ?? ENV_FILE;
+  const envFile = deps.envFile ?? resolveEnvPath();
   const keysFile = deps.keysFile ?? KEYS_PATH;
   const versionFile = deps.versionFile ?? "/opt/ai-engkit/VERSION";
   const resolveImage = deps.resolveImage ?? resolveImageRef;

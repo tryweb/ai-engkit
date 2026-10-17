@@ -19,13 +19,13 @@
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { composeCommand, shellQuote, type ExecResult } from "./docker";
+import { resolveEnvPath } from "./env";
 
 export const EXTENSIONS_DIR = "/opt/ai-engkit/extensions";
 export const COMPOSE_PROJECT_DIR = "/opt/ai-engkit";
 export const ACTIVE_COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
 export const UPGRADE_BASE_FILE = "/opt/ai-engkit/compose-upgrade-base.yml";
 export const UPGRADE_STAGING_FILE = "/opt/ai-engkit/admin-data/upgrade-base.yml.staging";
-export const ENV_FILE = "/opt/ai-engkit/.env";
 export const OVERLAY_ENV_KEY = "AI_ENGKIT_COMPOSE_OVERLAY";
 
 export interface OverlayPaths {
@@ -39,7 +39,7 @@ export const DEFAULT_OVERLAY_PATHS: OverlayPaths = {
   extensionsDir: EXTENSIONS_DIR,
   activeFile: ACTIVE_COMPOSE_FILE,
   stagedBaseFile: UPGRADE_BASE_FILE,
-  envFile: ENV_FILE,
+  envFile: resolveEnvPath(),
 };
 
 /** A configured overlay that passed path confinement and readability checks. */
@@ -473,7 +473,7 @@ export interface ValidateEffectiveOptions {
  */
 export async function validateEffectiveCompose(options: ValidateEffectiveOptions): Promise<ValidationResult> {
   const compose = options.compose ?? composeCommand;
-  const envFile = options.envFile ?? ENV_FILE;
+  const envFile = options.envFile ?? resolveEnvPath();
   const prefix = `-p ${options.project} --project-directory ${COMPOSE_PROJECT_DIR} --env-file ${envFile}`;
   const overlayArg = shellQuote(options.overlay.canonicalPath);
 

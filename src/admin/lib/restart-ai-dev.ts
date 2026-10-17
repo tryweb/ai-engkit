@@ -6,7 +6,7 @@ import {
   getComposeProject,
   type ExecResult,
 } from "./docker";
-import { readEnvFile } from "./env";
+import { readEnvFile, resolveEnvPath } from "./env";
 import {
   buildRecreateSubcommand,
   resolveOverlay,
@@ -16,7 +16,6 @@ import {
 import { MANAGED_OPENCODE_DIR } from "./agent-model-types";
 
 const COMPOSE_FILE = "/opt/ai-engkit/compose.yml";
-const ENV_FILE = "/opt/ai-engkit/.env";
 
 export interface AiDevRestartDeps {
   readonly composeFileExists: (path: string) => boolean;
@@ -61,7 +60,7 @@ export async function restartAiDev(
       const result = await deps.dockerCommand(
         buildRecreateSubcommand({
           project,
-          envFile: ENV_FILE,
+          envFile: resolveEnvPath(),
           effective,
           action: "up -d --force-recreate ai-dev",
           trace: " 2>&1",

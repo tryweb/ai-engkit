@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRealCommandDeps } from "./commands";
+import { resolveEnvPath } from "../lib/env";
 import type { EffectiveCompose } from "../lib/compose-overlay";
 
 // Focused tests for the REAL restartContainer implementation inside
@@ -12,6 +13,7 @@ const dockerCalls: Array<{ cmd: string; timeout: number }> = [];
 const runCommandCalls: Array<{ args: string[]; timeout: number }> = [];
 let bindSources: Record<string, string | null> = {
   "/opt/ai-engkit/.env": "/root/.env",
+  "/opt/ai-engkit/.env.v2": "/root/.env.v2",
   "/opt/ai-engkit/compose.yml": "/root/docker-compose.yml",
 };
 
@@ -44,20 +46,23 @@ const restartDeps = {
 // Force the compose branch even in dev environments where
 // /opt/ai-engkit/compose.yml does not exist.
 const PULL_CMD = "pull ghcr.io/tryweb/ai-engkit:latest 2>&1";
-const AI_DEV_COMPOSE_CMD =
-  "compose -p test-proj --env-file /opt/ai-engkit/.env -f /opt/ai-engkit/compose.yml up -d --force-recreate ai-dev 2>&1";
-const AI_ADMIN_HELPER_ARGS = [
+const aiDevComposeCmd = () =>
+  `compose -p test-proj --env-file ${resolveEnvPath()} -f /opt/ai-engkit/compose.yml up -d --force-recreate ai-dev 2>&1`;
+const aiAdminHelperArgs = () => {
+  const envSource = bindSources[resolveEnvPath()] ?? "/root/.env";
+  return [
   "docker", "run", "--rm", "--user", "0",
   "--entrypoint", "/usr/local/bin/docker",
-  "-v", "/root/.env:/root/.env:ro",
+  "-v", `${envSource}:${envSource}:ro`,
   "-v", "/root/docker-compose.yml:/root/docker-compose.yml:ro",
   "-v", "/var/run/docker.sock:/var/run/docker.sock",
   "ghcr.io/tryweb/ai-engkit:latest",
   "compose", "-p", "test-proj",
-  "--env-file", "/root/.env",
+  "--env-file", envSource,
   "-f", "/root/docker-compose.yml",
   "up", "-d", "--force-recreate", "ai-admin",
-];
+  ];
+};
 
 describe("real restartContainer", () => {
   test("ai-admin pulls the latest image, then recreates from compose via a helper container", async () => {
@@ -70,7 +75,7 @@ describe("real restartContainer", () => {
     expect(dockerCalls.map((c) => c.cmd)).toEqual([PULL_CMD]);
     expect(dockerCalls[0].timeout).toBe(120_000);
     expect(runCommandCalls).toHaveLength(1);
-    expect(runCommandCalls[0].args).toEqual(AI_ADMIN_HELPER_ARGS);
+    expect(runCommandCalls[0].args).toEqual(aiAdminHelperArgs());
     expect(runCommandCalls[0].timeout).toBe(120_000);
   });
 
@@ -86,6 +91,7 @@ describe("real restartContainer", () => {
     expect(runCommandCalls).toHaveLength(0);
     bindSources = {
       "/opt/ai-engkit/.env": "/root/.env",
+      "/opt/ai-engkit/.env.v2": "/root/.env.v2",
       "/opt/ai-engkit/compose.yml": "/root/docker-compose.yml",
     };
   });
@@ -95,6 +101,7 @@ describe("real restartContainer", () => {
     runCommandCalls.length = 0;
     bindSources = {
       "/opt/ai-engkit/.env": "/root/.env",
+      "/opt/ai-engkit/.env.v2": "/root/.env.v2",
       "/opt/ai-engkit/compose-upgrade-base.yml": "/root/admin-data/upgrade-base.yml",
     };
     const deps = createRealCommandDeps(() => true, {
@@ -109,18 +116,19 @@ describe("real restartContainer", () => {
     expect(runCommandCalls[0].args).toEqual([
       "docker", "run", "--rm", "--user", "0",
       "--entrypoint", "/usr/local/bin/docker",
-      "-v", "/root/.env:/root/.env:ro",
+      "-v", `${bindSources[resolveEnvPath()] ?? "/root/.env"}:${bindSources[resolveEnvPath()] ?? "/root/.env"}:ro`,
       "-v", "/root/admin-data/upgrade-base.yml:/root/admin-data/upgrade-base.yml:ro",
       "-v", "/var/run/docker.sock:/var/run/docker.sock",
       "ghcr.io/tryweb/ai-engkit:latest",
       "compose", "-p", "test-proj",
       "--project-directory", "/root",
-      "--env-file", "/root/.env",
+      "--env-file", bindSources[resolveEnvPath()] ?? "/root/.env",
       "-f", "/root/admin-data/upgrade-base.yml",
       "up", "-d", "--force-recreate", "ai-admin",
     ]);
     bindSources = {
       "/opt/ai-engkit/.env": "/root/.env",
+      "/opt/ai-engkit/.env.v2": "/root/.env.v2",
       "/opt/ai-engkit/compose.yml": "/root/docker-compose.yml",
     };
   });
@@ -132,7 +140,7 @@ describe("real restartContainer", () => {
     const result = await deps.restartContainer("ai-dev");
 
     expect(result.success).toBe(true);
-    expect(dockerCalls.map((c) => c.cmd)).toEqual([AI_DEV_COMPOSE_CMD]);
+    expect(dockerCalls.map((c) => c.cmd)).toEqual([aiDevComposeCmd()]);
     expect(runCommandCalls).toHaveLength(0);
   });
 
