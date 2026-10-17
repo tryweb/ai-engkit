@@ -534,4 +534,202 @@ describe("GET /upgrade shell-first", () => {
     expect(html).toContain("Not Available in Dev Build");
     expect(html).toContain('id="component-versions-root"');
   });
+
+describe("major isolation", () => {
+  test("V1 GET filters to v1 only even when discovery contains v2", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "1";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1", "v2.0.0", "v1.2.0", "v1.1.0"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade/versions");
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body["versions"]).toEqual(["v1.2.0", "v1.1.0"]);
+      expect(body["official_version"]).toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 GET filters to v2 only and resolves official via v2", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1", "v2.0.0", "v1.2.0", "v1.1.0"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade/versions");
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body["versions"]).toEqual(["v2.0.1", "v2.0.0"]);
+      expect(body["official_version"]).toBe("v2.0.1");
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("POST rejects cross-major even if GHCR contains it", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "1";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1", "v1.1.0"], officialVersion: "v1.1.0", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "v2.0.1" }),
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as Record<string, unknown>)["error"]).toContain("Unknown");
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 POST rejects v1 target", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1", "v1.1.0"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "v1.1.0" }),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+});
+
+describe("v2-dev rolling channel", () => {
+  test("V2 v2-dev environment exposes the rolling image as an upgrade target", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const { deps, state } = depsWith({ readVersion: () => "v2-dev" });
+      state.env = { AI_ENGKIT_VERSION: "v2-dev" };
+      state.discoveryResult = { versions: ["v2.0.1", "v1.2.0"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade/versions");
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body["versions"]).toEqual(["v2-dev", "v2.0.1"]);
+      expect(body["official_version"]).toBe("v2.0.1");
+      expect(body["configured_version"]).toBe("v2-dev");
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V2 POST allows v2-dev and persists rolling ref", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1", "v2.0.0"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      state.env = { OTHER: "keep" };
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "v2-dev" }),
+      });
+      expect(res.status).toBe(200);
+      expect(state.writeCalls.length).toBe(1);
+      expect(state.writeCalls[0]["AI_ENGKIT_VERSION"]).toBe("v2-dev");
+      expect(state.runCalls).toBe(1);
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("V1 POST rejects v2-dev", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "1";
+    try {
+      const { deps } = depsWith();
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "v2-dev" }),
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as Record<string, unknown>)["error"]).toContain("v2-dev");
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+
+  test("official target cannot be v2-dev", async () => {
+    const prev = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      const { deps, state } = depsWith();
+      state.discoveryResult = { versions: ["v2.0.1"], officialVersion: "v2.0.1", warning: null } as GhcrDiscoveryResult;
+      const app = createUpgradeRoutes(deps);
+      const res = await app.request("http://localhost/api/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "v2-dev", target_type: "official" }),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      if (prev === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = prev;
+    }
+  });
+});
+
+describe("v2dev local dev guard", () => {
+  test("v2dev GET returns dev marker without discovery", async () => {
+    let called = false;
+    const { deps } = depsWith({
+      readVersion: () => "v2dev",
+      discoverVersions: async () => {
+        called = true;
+        return { versions: [], officialVersion: null, warning: null };
+      },
+    });
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/api/upgrade/versions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["versions"]).toEqual([]);
+    expect(called).toBe(false);
+  });
+
+  test("v2dev POST is rejected", async () => {
+    const { deps, state } = depsWith({ readVersion: () => "v2dev" });
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/api/upgrade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version: "v1.1.0" }),
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as Record<string, unknown>)["error"]).toContain("Dev build");
+    expect(state.writeCalls.length).toBe(0);
+  });
+
+  test("v2dev shell shows dev guard", async () => {
+    const { deps } = depsWith({ readVersion: () => "v2dev" });
+    const app = createUpgradeRoutes(deps);
+    const res = await app.request("http://localhost/upgrade");
+    const html = await res.text();
+    expect(html).toContain("Not Available in Dev Build");
+  });
+});
+
 });

@@ -2,7 +2,8 @@ import { readFileSync } from "fs";
 import { Hono } from "hono";
 import { runUpgrade, getState, getStatus, subscribe, getEventLog } from "../lib/upgrade";
 import { readEnvFile, writeEnvFile, deleteEnvVar } from "../lib/env";
-import { discoverGhcrVersions, isFormalReleaseTag, type GhcrDiscoveryResult } from "../lib/ghcr-versions";
+import { discoverGhcrVersions, isFormalReleaseTag, parseFormalVersion, type GhcrDiscoveryResult } from "../lib/ghcr-versions";
+import { isNativeV2Enabled } from "../lib/agent-model-types";
 import { UpgradePage } from "../views/upgrade";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,11 +41,38 @@ const REAL_DEPS: UpgradeRoutesDeps = {
   readEnvFile,
   writeEnvFile,
   deleteEnvVar,
-  discoverVersions: () => discoverGhcrVersions(),
+  discoverVersions: () => discoverGhcrVersions({ stableTag: isNativeV2Enabled() ? "v2" : "latest" }),
 };
 
 function isDevBuild(version: string): boolean {
-  return version === "dev";
+  return version === "dev" || version === "v2dev";
+}
+
+function isRollingTarget(target: string): boolean {
+  return target === "v2-dev";
+}
+
+function getCurrentMajor(): number {
+  return isNativeV2Enabled() ? 2 : 1;
+}
+
+function filterVersionsToCurrentMajor(versions: readonly string[]): string[] {
+  const major = getCurrentMajor();
+  return [...versions].filter((v) => {
+    if (isRollingTarget(v)) return false;
+    const parsed = parseFormalVersion(v);
+    return parsed !== null && parsed.major === major;
+  });
+}
+
+function isAllowedTarget(target: string, filteredVersions: readonly string[]): boolean {
+  if (isRollingTarget(target)) {
+    return getCurrentMajor() === 2;
+  }
+  const parsed = parseFormalVersion(target);
+  if (parsed === null) return false;
+  if (parsed.major !== getCurrentMajor()) return false;
+  return filteredVersions.includes(target);
 }
 
 function resolveConfiguredVersion(env: Record<string, string>): string | null {
@@ -81,9 +109,18 @@ export function createUpgradeRoutes(options: Partial<UpgradeRoutesDeps> = {}): H
     }
     try {
       const discovery = await deps.discoverVersions();
+      const filtered = filterVersionsToCurrentMajor(discovery.versions);
+      if (getCurrentMajor() === 2 && (version === "v2-dev" || configured === "v2-dev")) {
+        filtered.unshift("v2-dev");
+      }
+      const officialFiltered =
+        discovery.officialVersion !== null &&
+        parseFormalVersion(discovery.officialVersion)?.major === getCurrentMajor()
+          ? discovery.officialVersion
+          : null;
       return c.json({
-        versions: [...discovery.versions],
-        official_version: discovery.officialVersion,
+        versions: filtered,
+        official_version: officialFiltered,
         current_version: version,
         configured_version: configured,
         warning: discovery.warning,
@@ -131,8 +168,14 @@ export function createUpgradeRoutes(options: Partial<UpgradeRoutesDeps> = {}): H
       return c.json({ error: "version must be a non-empty string" }, 400);
     }
     const target = requested.trim();
-    if (!isFormalReleaseTag(target)) {
-      return c.json({ error: `Invalid version "${target}": must match v1.x.y` }, 400);
+    const isValidFormal = isFormalReleaseTag(target);
+    const isRolling = isRollingTarget(target);
+    if (!isValidFormal && !isRolling) {
+      const expected = getCurrentMajor() === 2 ? "v2.x.y or v2-dev" : "v1.x.y";
+      return c.json({ error: `Invalid version "${target}": must match ${expected}` }, 400);
+    }
+    if (isRolling && getCurrentMajor() !== 2) {
+      return c.json({ error: `Invalid version "${target}": v2-dev is only available on the v2 line` }, 400);
     }
 
     const requestedTargetType = body["target_type"];
@@ -149,21 +192,36 @@ export function createUpgradeRoutes(options: Partial<UpgradeRoutesDeps> = {}): H
       return c.json({ error: `Version discovery failed: ${message}` }, 502);
     }
 
-    if (discovery.versions.length === 0) {
-      return c.json({ error: "No formal releases available" }, 400);
-    }
+    const filteredVersions = filterVersionsToCurrentMajor(discovery.versions);
+    const officialFiltered =
+      discovery.officialVersion !== null &&
+      parseFormalVersion(discovery.officialVersion)?.major === getCurrentMajor()
+        ? discovery.officialVersion
+        : null;
 
     if (targetType === "official") {
-      if (!discovery.officialVersion) {
-        return c.json({ error: "Official version unavailable — no latest alias resolved" }, 400);
+      if (isRolling) {
+        return c.json({ error: `Official target cannot be v2-dev` }, 400);
       }
-      if (target !== discovery.officialVersion) {
-        return c.json({ error: `Official target must be the resolved official version (${discovery.officialVersion}), not "${target}"` }, 400);
+      if (!officialFiltered) {
+        return c.json({ error: "Official version unavailable — no stable alias resolved" }, 400);
+      }
+      if (target !== officialFiltered) {
+        return c.json({ error: `Official target must be the resolved official version (${officialFiltered}), not "${target}"` }, 400);
       }
     } else {
-      const allowed = new Set(discovery.versions);
-      if (!allowed.has(target)) {
-        return c.json({ error: `Unknown version "${target}"` }, 400);
+      if (isRolling) {
+        if (!isAllowedTarget(target, filteredVersions)) {
+          return c.json({ error: `Unknown version "${target}"` }, 400);
+        }
+      } else {
+        if (filteredVersions.length === 0) {
+          return c.json({ error: "No formal releases available" }, 400);
+        }
+        const allowed = new Set(filteredVersions);
+        if (!allowed.has(target)) {
+          return c.json({ error: `Unknown version "${target}"` }, 400);
+        }
       }
     }
 
@@ -229,7 +287,7 @@ export function createUpgradeRoutes(options: Partial<UpgradeRoutesDeps> = {}): H
 
   upgrade.get("/upgrade", (c) => {
     const ver = deps.readVersion();
-    return c.html(UpgradePage({ devBuild: ver === "dev", versionsByCategory: {}, imageMeta: {} }));
+    return c.html(UpgradePage({ devBuild: isDevBuild(ver), versionsByCategory: {}, imageMeta: {} }));
   });
 
   return upgrade;
