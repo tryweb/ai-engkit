@@ -23,11 +23,12 @@ LOW_COUNT="${LOW_COUNT:-}"
 
 VERSION_NO_V="${TAG#v}"
 
-PREV_TAG=$(git tag --sort=-version:refname | \
-  grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
-  grep -vE '(rc|beta|alpha|dev|test|pre)' | \
-  grep -v "^${TAG}$" | \
-  head -1 || true)
+# Previous stable tag on THIS release line (same major as TAG). ai-engkit keeps
+# parallel v1.* (main) and v2.* lines, so a global "highest tag" lookup picks the
+# other line's tag (a v1.21.1 release wrongly resolved v2.0.2). See
+# .github/scripts/release-line-tag.sh.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PREV_TAG="$(bash "${_SCRIPT_DIR}/release-line-tag.sh" "${TAG}" || true)"
 
 if [ -z "$PREV_TAG" ]; then
   SINCE_TAG="first release"
