@@ -110,6 +110,9 @@ jobs:
       - name: Admin typecheck
         run: docker run --rm ai-engkit:ci bun run --cwd /opt/admin typecheck
 
+      - name: OpenChamber update guard regression
+        run: docker run --rm --pull never -v "$PWD:/repo" -w /repo --entrypoint /bin/bash ai-engkit:ci test/test-openchamber-update-guard.sh
+
       - name: Upload image artifact
         uses: actions/upload-artifact@v7
         with:
@@ -168,6 +171,9 @@ jobs:
 
       - name: V2 Admin typecheck
         run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev run --cwd /opt/admin typecheck
+
+      - name: OpenChamber update guard regression (V2)
+        run: docker run --rm --pull never -v "$PWD:/repo" -w /repo --entrypoint /bin/bash ai-engkit-ai-v2dev test/test-openchamber-update-guard.sh
 
       - name: Save V2 image artifact
         run: docker save ai-engkit-ai-v2dev -o /tmp/image-v2.tar
