@@ -51,20 +51,19 @@ const UPSTREAM_REPO = "https://raw.githubusercontent.com/tryweb/ai-engkit";
 const V2_ASSET_REF = "v2";
 
 /**
- * Upstream ref for upgrade assets. A pinned install fetches assets matching its
- * running version; an unpinned one fetches the running line's default branch —
- * `main` for V1, `v2` for V2 (its assets do not exist on main).
+ * Upstream ref for upgrade assets. Pinned releases use their matching tag;
+ * rolling channels use the line's asset branch (`main` for V1, `v2` for V2).
  */
-function upstreamRef(): string {
-  const version = readEnvFile().AI_ENGKIT_VERSION?.trim();
+function upstreamRef(version = readEnvFile().AI_ENGKIT_VERSION?.trim()): string {
+  if (version === "v2-dev") return V2_ASSET_REF;
   if (version) return version;
   return isNativeV2Enabled() ? V2_ASSET_REF : "main";
 }
 
 // Exported for tests: the line-aware asset resolution is the guard that keeps a
 // V2 upgrade from fetching (and overwriting itself with) V1 assets.
-export function upstreamBase(): string {
-  return `${UPSTREAM_REPO}/${upstreamRef()}`;
+export function upstreamBase(version?: string): string {
+  return `${UPSTREAM_REPO}/${upstreamRef(version)}`;
 }
 
 // The two lines ship differently-named assets. Fetching the other line's compose
@@ -263,7 +262,7 @@ export interface UpgradeDeps extends MergeEnvDeps, PollHealthDeps {
 }
 
 async function defaultFetchEnvExample(): Promise<string | null> {
-  const result = await execInAiDev(`curl -sS ${upstreamBase()}/.env.example 2>/dev/null || true`, 30_000);
+  const result = await execInAiDev(`curl -sS ${upstreamBase()}/${upstreamEnvExamplePath()} 2>/dev/null || true`, 30_000);
   if (result.exitCode !== 0 || !result.stdout) return null;
   return result.stdout;
 }

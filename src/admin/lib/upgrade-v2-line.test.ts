@@ -45,5 +45,9 @@ describe("line-aware image and asset resolution", () => {
       expect(upstreamComposePath()).toBe("docker-compose.v2.yml");
       expect(upstreamEnvExamplePath()).toBe(".env.v2.example");
     });
+
+    test("uses the V2 asset branch for the rolling v2-dev image tag", () => {
+      expect(upstreamBase("v2-dev")).toBe("https://raw.githubusercontent.com/tryweb/ai-engkit/v2");
+    });
   });
 });
