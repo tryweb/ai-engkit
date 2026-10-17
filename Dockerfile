@@ -240,8 +240,10 @@ ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 ENV OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION}
 RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
-    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
-    rm -rf ~/.bun/install/cache
+    export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && \
+    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium 2>/dev/null || \
+    (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bunx -y playwright@${PLAYWRIGHT_VERSION} install-deps chromium 2>/dev/null || true) && \
+    rm -rf ~/.bun/install/cache || true
 
 RUN bun install -g playwright@${PLAYWRIGHT_VERSION} @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && \
     rm -rf ~/.bun/install/cache
