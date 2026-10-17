@@ -53,15 +53,49 @@ export interface UpdateCheckResult {
 let cachedCheck: { result: UpdateCheckResult; expiresAt: number } | null = null;
 let inFlightCheck: Promise<UpdateCheckResult> | null = null;
 
-export const LITERAL_LATEST_REF = "ghcr.io/tryweb/ai-engkit:latest";
-
-export function buildLatestManifestCommand(): string {
-  return `manifest inspect ${LITERAL_LATEST_REF} | jq -r '.config.digest'`;
+export function clearUpdateCheckCache(): void {
+  cachedCheck = null;
+  inFlightCheck = null;
 }
 
-async function getRemoteDigest(): Promise<string | null> {
+export const REGISTRY_IMAGE = "ghcr.io/tryweb/ai-engkit";
+export const LITERAL_LATEST_REF = `${REGISTRY_IMAGE}:latest`;
+export const LITERAL_V2_REF = `${REGISTRY_IMAGE}:v2`;
+export const LITERAL_V2_DEV_REF = `${REGISTRY_IMAGE}:v2-dev`;
+
+export function buildLatestManifestCommand(): string {
+  return buildManifestCommandForTag(resolveStableTagFromEnv());
+}
+
+export function buildManifestCommandForTag(tag: string): string {
+  return `manifest inspect ${REGISTRY_IMAGE}:${tag} | jq -r '.config.digest'`;
+}
+
+export function isDevVersion(version: string): boolean {
+  return version === "dev" || version === "v2dev";
+}
+
+export function isRollingV2Dev(current: string, configured: string | null): boolean {
+  return current === "v2-dev" || configured === "v2-dev";
+}
+
+export function resolveStableTagFromEnv(): string {
+  const configured = readEnvFile().AI_ENGKIT_VERSION?.trim() ?? null;
+  // Defer current resolution to async check; for buildLatest we use isNativeV2Enabled plus rolling check via env only
+  // If AI_ENGKIT_VERSION is v2-dev, that opts into rolling channel regardless of line.
+  if (configured === "v2-dev") return "v2-dev";
+  return isNativeV2Enabled() ? "v2" : "latest";
+}
+
+export function resolveUpdateStableTag(current: string, configured: string | null): string {
+  if (isRollingV2Dev(current, configured)) return "v2-dev";
+  return isNativeV2Enabled() ? "v2" : "latest";
+}
+
+async function getRemoteDigest(tag?: string): Promise<string | null> {
+  const stableTag = tag ?? resolveStableTagFromEnv();
   const result = await dockerCommand(
-    buildLatestManifestCommand(),
+    buildManifestCommandForTag(stableTag),
     15_000,
   );
   if (result.exitCode !== 0 || !result.stdout) return null;
@@ -87,11 +121,22 @@ export async function getUpdateCheck(): Promise<UpdateCheckResult> {
 
   inFlightCheck = (async () => {
     try {
-      // A pinned AI_ENGKIT_VERSION locks the environment to that release; do not compare against :latest.
-      const configured = readEnvFile().AI_ENGKIT_VERSION?.trim();
-      if (configured) {
+      const configuredRaw = readEnvFile().AI_ENGKIT_VERSION?.trim();
+      const configured = configuredRaw && configuredRaw.length > 0 ? configuredRaw : null;
+      const current = await getAiEngkitVersion();
+
+      // Dev builds (local VERSION = dev or v2dev) should not compare against GHCR releases
+      if (isDevVersion(current)) {
+        const result: UpdateCheckResult = { current, latest: "", update_available: false, status: "up-to-date", configured, message: "Dev build" };
+        cachedCheck = { result, expiresAt: now + 300_000 };
+        return result;
+      }
+
+      // v2-dev is a rolling channel, not a pinned release — remain eligible for update checks even when configured
+      const isRolling = isRollingV2Dev(current, configured);
+      if (configured && !isRolling) {
         const result: UpdateCheckResult = {
-          current: await getAiEngkitVersion(),
+          current,
           latest: "",
           update_available: false,
           status: "pinned",
@@ -102,27 +147,21 @@ export async function getUpdateCheck(): Promise<UpdateCheckResult> {
         return result;
       }
 
-      const current = await getAiEngkitVersion();
-      // Dev builds (AI_ENGKIT_VERSION=dev) should not compare against GHCR releases
-      if (current === "dev") {
-        const result: UpdateCheckResult = { current, latest: "", update_available: false, status: "up-to-date", configured: null, message: "Dev build" };
-        cachedCheck = { result, expiresAt: now + 300_000 };
-        return result;
-      }
+      const stableTag = resolveUpdateStableTag(current, configured);
       const [remoteDigest, localDigest] = await Promise.all([
-        getRemoteDigest(),
+        getRemoteDigest(stableTag),
         getLocalDigest(),
       ]);
       if (!remoteDigest || !localDigest) {
-        return { current, latest: "", update_available: false, status: "up-to-date", configured: null, message: "Up to date" };
+        return { current, latest: "", update_available: false, status: "up-to-date", configured, message: "Up to date" };
       }
       const available = localDigest !== remoteDigest;
       const result: UpdateCheckResult = {
         current,
-        latest: available ? "latest" : "",
+        latest: available ? stableTag : "",
         update_available: available,
         status: available ? "update-available" : "up-to-date",
-        configured: null,
+        configured,
         message: available ? `New image available` : "Up to date",
       };
       cachedCheck = { result, expiresAt: now + 300_000 };
