@@ -11,9 +11,15 @@ This skill automates the release process: local test validation, version bump ca
 
 When the user asks to release, follow these steps in order:
 
-### 1. Ensure Dev Container Is Running
+### 1. Ensure the V2 Dev Stack Is Running
 
-Clear any inherited admin password before Compose resolves `docker-compose.dev.yml`.
+This repository is on the **V2 line**, which ships only the V2 dev stack:
+`docker-compose.v2.dev.yml` with containers `ai-engkit-v2dev` (main) and
+`ai-engkit-admin-v2dev` (admin), published on ports `8003` (OpenChamber) and
+`8083` (admin health). The V1 stack (`docker-compose.dev.yml`, `ai-engkit-dev`)
+no longer exists on this branch — do not look for it.
+
+Clear any inherited admin password before Compose resolves the compose file.
 This prevents a production/staging shell export from overriding the dev test
 password; Compose will then read the repository `.env` when present, otherwise
 use its documented `testadmin123` fallback.
@@ -22,97 +28,127 @@ use its documented `testadmin123` fallback.
 unset ADMIN_PASSWORD
 ```
 
-The tests require the `ai-engkit-dev` container (from `docker-compose.dev.yml`) to be running. Check if it's up:
+Compose needs a `.env`; seed it from the V2 template when missing (CI does the
+same via `cp .env.v2.example .env`):
 
 ```bash
-docker inspect ai-engkit-dev --format='{{.State.Status}}' 2>/dev/null
+[ -f .env ] || cp .env.v2.example .env
 ```
 
-If the container is not running or does not exist, build and start it automatically:
+Check whether the stack is up:
 
 ```bash
-echo "[release] Dev container not running. Building and starting..."
-docker compose -p dev -f docker-compose.dev.yml up --build -d
+docker inspect ai-engkit-v2dev --format='{{.State.Status}}' 2>/dev/null
+docker inspect ai-engkit-admin-v2dev --format='{{.State.Status}}' 2>/dev/null
 ```
 
-Then wait for both containers to be healthy and ready:
+If it is not running, start it. On the DooD dev host a full image **build** is
+unreliable (see `docs/knowledge/troubleshooting/dood-image-build-stalls-on-github-assets.md`),
+so prefer reusing an existing `ai-engkit-ai-v2dev` image and reserve the build
+for CI:
 
 ```bash
-echo "[release] Waiting for containers to be ready..."
+echo "[release] V2 dev stack not running. Starting..."
+docker compose -f docker-compose.v2.dev.yml up --no-build -d
+# If no image exists yet, build once (slow / may stall on this host):
+# docker compose -f docker-compose.v2.dev.yml up --build -d
+```
+
+Then wait for both containers and for the services to answer. Sibling-container
+shells (this dev container) cannot reach the stack on `localhost`, so fall back
+to the compose bridge gateway — the same way `test-v2.sh` does:
+
+```bash
+CHAMBER_PORT="${CHAMBER_V2DEV_PORT:-8003}"
+ADMIN_PORT="${ADMIN_V2DEV_PORT:-8083}"
+BASE_CHAMBER="http://localhost:${CHAMBER_PORT}"
+BASE_ADMIN="http://localhost:${ADMIN_PORT}"
+
+echo "[release] Waiting for the V2 stack to be ready..."
 for i in $(seq 1 30); do
-  DEV_STATUS=$(docker inspect ai-engkit-dev --format='{{.State.Status}}' 2>/dev/null)
-  ADMIN_STATUS=$(docker inspect ai-engkit-admin-dev --format='{{.State.Status}}' 2>/dev/null)
+  DEV_STATUS=$(docker inspect ai-engkit-v2dev --format='{{.State.Status}}' 2>/dev/null)
+  ADMIN_STATUS=$(docker inspect ai-engkit-admin-v2dev --format='{{.State.Status}}' 2>/dev/null)
   if [ "$DEV_STATUS" = "running" ] && [ "$ADMIN_STATUS" = "running" ]; then
     echo "[release] Both containers are running."
     break
   fi
   if [ "$i" -eq 30 ]; then
     echo "[release] ERROR: Containers failed to start after 30s."
-    echo "[release] ai-engkit-dev status: ${DEV_STATUS:-not found}"
-    echo "[release] ai-engkit-admin-dev status: ${ADMIN_STATUS:-not found}"
-    docker compose -p dev -f docker-compose.dev.yml logs --tail=20
+    echo "[release] ai-engkit-v2dev status: ${DEV_STATUS:-not found}"
+    echo "[release] ai-engkit-admin-v2dev status: ${ADMIN_STATUS:-not found}"
+    docker compose -f docker-compose.v2.dev.yml logs --tail=20
     exit 1
   fi
   sleep 2
 done
 
-# Brief extra wait for services to initialize inside the containers
-sleep 5
-
-# Detect both container names from docker-compose (avoids alphabetical ordering issue with head -1)
-DEV_CONTAINER="ai-engkit-dev"
-ADMIN_CONTAINER="ai-engkit-admin-dev"
-
-# Verify both are actually running (from this compose file)
-RUNNING_CONTAINERS=$(docker compose -p dev -f docker-compose.dev.yml ps --format '{{.Name}}' 2>/dev/null || echo "")
-
-if ! echo "$RUNNING_CONTAINERS" | grep -q "$DEV_CONTAINER"; then
-  echo "[release] ERROR: Main dev container ($DEV_CONTAINER) is not running."
-  exit 1
+# Reachability: localhost first, then the bridge gateway (DooD sibling shell).
+NET_NAME=$(docker compose -f docker-compose.v2.dev.yml config --format json 2>/dev/null \
+  | jq -r '.networks.default.name // "v2dev_default"')
+GW=$(docker network inspect "$NET_NAME" --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)
+if ! curl -sf -m 5 -o /dev/null "$BASE_CHAMBER/"; then
+  if [ -n "$GW" ] && curl -sf -m 5 -o /dev/null "http://${GW}:${CHAMBER_PORT}/"; then
+    BASE_CHAMBER="http://${GW}:${CHAMBER_PORT}"
+    BASE_ADMIN="http://${GW}:${ADMIN_PORT}"
+  else
+    echo "[release] ERROR: OpenChamber not reachable on localhost:${CHAMBER_PORT} or ${GW:-?}:${CHAMBER_PORT}"
+    exit 1
+  fi
 fi
-if ! echo "$RUNNING_CONTAINERS" | grep -q "$ADMIN_CONTAINER"; then
-  echo "[release] ERROR: Admin container ($ADMIN_CONTAINER) is not running."
-  exit 1
-fi
-echo "[release] Using containers: $DEV_CONTAINER (main), $ADMIN_CONTAINER (admin)"
+curl -sf -m 5 -o /dev/null "$BASE_ADMIN/healthz" \
+  || { echo "[release] ERROR: Admin health not reachable at $BASE_ADMIN"; exit 1; }
+echo "[release] OpenChamber: $BASE_CHAMBER   Admin: $BASE_ADMIN"
 ```
 
-### 2. Run Local Tests
+### 2. Run Local Tests (the V2 CI gate)
 
-There are three test suites that cover both the main dev container and the admin container separately:
+The authoritative gate is `.github/workflows/ci.yml` (`build-v2` + `test-v2` +
+`scan-v2`), which runs on a tag push. Reproduce it locally as far as the host
+allows. The old V1 helpers (`run-tests.sh`, `test-admin.sh`, `test-admin-ui.sh`)
+target V1 containers/compose files and no longer apply on this branch.
 
 ```bash
-# === 1. Main dev container — basic functionality ===
-# Tests: OpenChamber, OpenCode, Web UI, Health API, dev tools, CodeGraph, LeanCTX
-echo "[release] Running main dev container tests against $DEV_CONTAINER..."
-./test/run-tests.sh ai-engkit-dev
-if [ $? -ne 0 ]; then
-  echo "[release] ERROR: Main dev container tests failed."
-  exit 1
-fi
+# === 0. Stack-free guards (CI build-v2) ===
+bash test/test-compose-isolation.sh
+bash test/test-check-versions.sh
 
-# === 2. Admin container — dashboard integration ===
-# Tests: container status, healthcheck, auth, OpenAPI spec
-echo "[release] Running admin container tests against $ADMIN_CONTAINER..."
-./test/test-admin.sh ai-engkit-admin-dev
-if [ $? -ne 0 ]; then
-  echo "[release] ERROR: Admin container tests failed."
-  exit 1
-fi
+# === 1. V2 image build (CI build-v2) ===
+# May be unreliable on the DooD dev host (see the dood-image-build-stalls note);
+# when it cannot run locally, CI builds the image on the runner instead.
+docker compose -f docker-compose.v2.dev.yml build ai-dev
 
-# === 3. Admin UI — smoke tests ===
-# Tests: login flow, dashboard, versions page, static assets
-echo "[release] Running admin UI smoke tests..."
-./test/test-admin-ui.sh
-if [ $? -ne 0 ]; then
-  echo "[release] ERROR: Admin UI smoke tests failed."
-  exit 1
-fi
+# === 2. V2 integration cells + admin HTTP smoke (CI test-v2) ===
+# Needs the stack from step 1. test-v2.sh falls back to the bridge gateway
+# itself; the smoke script takes explicit URLs (BASE_* come from step 1).
+bash test/test-v2.sh cell1
+bash test/test-v2.sh cell2
+bash test/test-v2.sh cell3
+CHAMBER_V2_URL="${BASE_CHAMBER:-http://localhost:8003}" \
+ADMIN_V2_URL="${BASE_ADMIN:-http://localhost:8083}" \
+ADMIN_PASSWORD=testadmin123 bash test/test-v2-admin-integration.sh
 
-echo "[release] All tests passed."
+# === 3. Admin suite — run exactly as CI does ===
+# build-v2 runs the plain form inside the image; test-v2 adds OMO_ENABLED=1 and
+# --parallel=4 for worker/per-file module isolation. A single-process run
+# WITHOUT --parallel leaks module state and shows spurious failures
+# (see docs/knowledge/patterns/admin-test-isolation.md).
+docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev \
+  --cwd /opt/admin test
+docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2dev \
+  bun --cwd /opt/admin test --parallel=4
+docker exec ai-engkit-admin-v2dev bun run --cwd /opt/admin typecheck
+
+# To exercise HEAD from the repo checkout instead of the baked image:
+#   (cd src/admin && OMO_ENABLED=1 bun test --parallel=4 && bun run typecheck)
+
+# === 4. OpenChamber update guard regression (CI build-v2) ===
+docker run --rm --pull never -v "$PWD:/repo" -w /repo \
+  --entrypoint /bin/bash ai-engkit-ai-v2dev test/test-openchamber-update-guard.sh
 ```
 
-If any test suite fails, stop and report the failures. Do not proceed with release.
+If any step fails, stop and report the failures. Do not proceed with release.
+Note which steps could not run locally (typically the image build) and confirm
+that CI covers them on the tag push.
 
 ### 3. Check for Uncommitted Changes
 
@@ -419,18 +455,22 @@ Present the calculated version and generated release notes. Ask for confirmation
 
 ### 7. Tag and Push
 
-Upon confirmation:
+The V2 line's publish branch is **`v2`** (CI triggers on `branches: ['v2']` and
+`tags: ['v2.*']`) — **not** `main`. Push the branch you are releasing from:
 
 ```bash
 git tag -a v{VERSION} -m "Release v{VERSION}"
-git push origin main
+git push origin v2
 git push origin v{VERSION}
 ```
 
-This triggers the GitHub Actions CI workflow which will:
-- Build and test
-- Push image to `ghcr.io`
-- Create GitHub Release with auto-generated body containing:
+This triggers the GitHub Actions V2 CI workflow (`build-v2`, `test-v2`, `scan-v2`,
+then `push-v2`/release) which will:
+- Build the V2 image and run the V2 gate
+- Push the versioned image to `ghcr.io` (version tags only — `:latest` moves only
+  via the separate `promote.yml` workflow; see
+  `docs/knowledge/architecture/release-channel-publish-promote.md`)
+- Create the GitHub Release with an auto-generated body containing:
   - Docker pull command
   - Quick start instructions
   - Full changelog since previous tag
@@ -451,3 +491,9 @@ After push, inform the user:
 - Use semver format: `v{MAJOR}.{MINOR}.{PATCH}`
 - If no previous tag exists, use `v0.0.0` as the calculation base and create
   the first release as `v0.0.1`, matching CI and dependency-update automation.
+- **V2 line only**: the dev stack is `docker-compose.v2.dev.yml`
+  (`ai-engkit-v2dev` / `ai-engkit-admin-v2dev`); the V1 helpers
+  (`run-tests.sh`, `test-admin.sh`, `test-admin-ui.sh`, `docker-compose.dev.yml`)
+  do not apply. Run the admin suite with `OMO_ENABLED=1 … --parallel=4` or it
+  reports spurious serial-state failures.
+- **Publish branch is `v2`**, not `main`.
