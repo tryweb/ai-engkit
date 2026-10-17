@@ -96,6 +96,13 @@ file, then watch that file.
   `docker compose up -d --no-build`.
 - `DOCKER_BUILDKIT=0` also clears the hook, but the classic builder is slower and
   stalls harder on the same assets; prefer the flag above.
+- **A failed Playwright browser fetch must fail the build, not be masked.** The
+  Dockerfile retries the Chromium fetch three times and then runs a gate that
+  fails unless `/ms-playwright/chromium-*/chrome-linux64/chrome` exists. Do not
+  re-add `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` or `|| true` around that step: the
+  variable is a no-op for the `playwright install` CLI, and the combination
+  shipped a browserless image on 2026-10-17 (see Evidence). `test/test-v2.sh`
+  cell1 asserts the same payload at runtime on the V2 line.
 - For a *fast* full build, run it in CI (the `build`/`build-v2` jobs on GitHub
   runners) or on a host daemon with better GitHub CDN throughput.
 - To verify **only a changed layer locally**, build from the previous image and
@@ -192,10 +199,23 @@ downloads entirely and stays the fastest way to validate one changed layer.
   `FROM ai-engkit-ai-v2dev:latest` + the single `COPY`, run as `USER root`
   then restored to `USER devuser` — completed in under 1s with no network, and
   produced the same corrected file the full build would have.
+- 2026-10-17 (Playwright CDN resilience): the 2026-10-15 CDN 400 was first answered
+  with a masking workaround (`e98265a`) — `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
+  (honored only on the package-install postinstall path, not by the
+  `playwright install` CLI, so it did nothing), `2>/dev/null`, a deps-only
+  `install-deps` fallback and a trailing `|| true`. Image `9bacb5bfa30c` (built
+  12:31 that day) shipped with an **empty** `/ms-playwright` while the build
+  reported success, and `pw-mcp` exits 127 there ("no bundled Chromium found").
+  Replaced by a retry (3 attempts, 15s apart) plus a fail-closed gate (`7163705`),
+  so a failed fetch fails the build instead of shipping a browserless image.
+  Verified: the gate logic rejects `9bacb5bfa30c` outright; the rebuild logs
+  `gate: chromium=Google Chrome for Testing 156.0.8078.4`; `test/test-v2.sh all`
+  → 34 PASS / 0 FAIL; `test/test-v2-admin-integration.sh` → 6/6 PASS.
 
 ## Related Files
 
 - `Dockerfile`
+- `test/test-v2.sh` (cell1 browser-payload assertions)
 - `docs/knowledge/troubleshooting/dood-relative-workspace-path.md`
 - `.github/workflows/ci.yml` (`build`, `build-v2` jobs)
 
