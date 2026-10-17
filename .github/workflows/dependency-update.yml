@@ -611,7 +611,7 @@ jobs:
         id: baseline-tag
         run: |
           set -euo pipefail
-          BASELINE_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          BASELINE_TAG=$(bash .github/scripts/release-line-tag.sh || true)
           echo "tag=$BASELINE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Pull baseline release image
@@ -761,7 +761,7 @@ jobs:
         id: check-unreleased
         run: |
           set -euo pipefail
-          LAST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          LAST_TAG=$(bash .github/scripts/release-line-tag.sh || true)
 
           if [[ -z "$LAST_TAG" ]]; then
             echo "::warning::No stable release tag found; auto-release blocked pending a manual release"
@@ -881,7 +881,7 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          LATEST_TAG=$(bash .github/scripts/release-line-tag.sh || true)
           if [[ -z "$LATEST_TAG" ]]; then
             LATEST_TAG="v0.0.0"
           fi

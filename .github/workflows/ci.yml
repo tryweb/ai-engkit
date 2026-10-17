@@ -175,6 +175,7 @@ jobs:
 
           # === 1.3 Release vulnerability gate contracts ===
           bash ./test/test-grype-release-check.sh
+          bash ./test/test-release-line-tag.sh
           bash ./test/test-release-body.sh
           bash ./test/test-release-gate-e2e.sh
 
@@ -370,7 +371,7 @@ jobs:
         id: gate
         run: |
           set -euo pipefail
-          LAST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE '(rc|beta|alpha|dev|test|pre)' | head -1 || true)
+          LAST_TAG=$(bash .github/scripts/release-line-tag.sh || true)
 
           if [[ -z "$LAST_TAG" ]]; then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
@@ -395,10 +396,10 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          LATEST_TAG=$(git tag --sort=-version:refname | \
-            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | \
-            grep -vE '(rc|beta|alpha|dev|test|pre)' | \
-            head -1 || echo "v0.0.0")
+          LATEST_TAG=$(bash .github/scripts/release-line-tag.sh || true)
+          if [[ -z "$LATEST_TAG" ]]; then
+            LATEST_TAG="v0.0.0"
+          fi
           CHANGELOG_VERSION=""
           if [[ -f docs/CHANGELOG.md ]]; then
             CHANGELOG_VERSION=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+(?=\] - )' docs/CHANGELOG.md || true)
