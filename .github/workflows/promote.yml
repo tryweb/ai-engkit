@@ -1,18 +1,17 @@
 # Promote a published release to the stable channel.
 #
 # Publishing and recommending are deliberately separate steps: cutting vX.Y.Z
-# only pushes immutable version tags; this workflow moves the shared `latest`
-# tag to a version AFTER it has been validated (staging/dogfood soak).
-# Users tracking :latest therefore always receive a soaked release, and their
-# digest-based update check stays quiet until promotion happens.
+# only pushes immutable version tags; this workflow moves the matching stable
+# channel (`:latest` for V1, `:v2` for V2) after validation (staging/dogfood soak).
+# Users tracking a stable channel therefore receive only promoted releases.
 #
-name: Promote stable
+name: Promote stable image channel
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag to promote to latest (e.g. v0.4.2)'
+        description: 'Release tag to promote (v1.x.y -> :latest, v2.x.y -> :v2; e.g. v2.0.3)'
         required: true
         type: string
 
@@ -26,7 +25,7 @@ concurrency:
 
 jobs:
   promote:
-    name: Promote to latest
+    name: Promote to stable channel
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -84,7 +83,8 @@ jobs:
           # Best-effort audit trail: never fail promotion over note editing.
           BODY=$(gh release view "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' || echo "")
           STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          NEW_BODY=$(printf '%s\n\n---\nPromoted to stable channel: %s' "$BODY" "$STAMP")
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+          NEW_BODY=$(printf '%s\n\n---\nPromoted %s to :%s on %s' "$BODY" "${{ inputs.version }}" "$CHANNEL" "$STAMP")
           gh release edit "${{ inputs.version }}" --repo "$GITHUB_REPOSITORY" --notes "$NEW_BODY" || \
             echo "::warning::Could not append promotion note (non-fatal)"
 

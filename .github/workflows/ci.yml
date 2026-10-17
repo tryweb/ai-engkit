@@ -347,11 +347,14 @@ jobs:
       - name: Load V2 image
         run: docker load -i /tmp/image-v2.tar
 
-      # Release tags stamp the image VERSION so the Admin Dashboard reports it.
+      # Branch pushes stamp v2-dev; release tags stamp the formal version so the Admin Dashboard reports it.
       - name: Inject version into image
-        if: startsWith(github.ref, 'refs/tags/v2.')
         run: |
-          VERSION="${{ github.ref_name }}"
+          if [[ "$GITHUB_REF" == refs/tags/v2.* ]]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="v2-dev"
+          fi
           printf '%s' "${VERSION}" > /tmp/ai-engkit-version
           docker create --name tmp-v2 ai-engkit-ai-v2dev
           docker cp /tmp/ai-engkit-version tmp-v2:/opt/ai-engkit/VERSION
