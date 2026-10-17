@@ -93,7 +93,7 @@ describe.skipIf(!DOCKER_AVAILABLE)("production compose DooD mount contract", () 
     // Explicit -p keeps the project name stable when the suite runs from the
     // image at / (basename is empty) while matching the checkout's inferred name.
     const result = Bun.spawnSync(
-      ["docker", "compose", "-p", "ai-engkit", "-f", join(repoRoot, "docker-compose.yml"), "config", "--format", "json"],
+      ["docker", "compose", "-p", "ai-engkit", "-f", join(repoRoot, "docker-compose.v2.yml"), "config", "--format", "json"],
       { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
     );
     expect(result.exitCode).toBe(0);
@@ -111,7 +111,7 @@ describe.skipIf(!DOCKER_AVAILABLE)("production compose DooD mount contract", () 
     const stagedBase = byTarget.get("/opt/ai-engkit/compose-upgrade-base.yml");
     expect(stagedBase?.type).toBe("bind");
     expect(stagedBase?.read_only ?? false).toBe(false);
-    expect(stagedBase?.source?.endsWith("/admin-data/upgrade-base.yml")).toBe(true);
+    expect(stagedBase?.source?.endsWith("/admin-data-v2/upgrade-base.yml")).toBe(true);
   });
 });
 

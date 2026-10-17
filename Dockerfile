@@ -392,8 +392,9 @@ RUN if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then rm -rf /root/.bun/ins
 # at /test/fixtures/compose-overlay/ and the production compose at /
 # (repo root for that test). Ship both so the suite runs from the image in
 # every CI step (docker run / docker exec) without a host checkout or daemon.
+# This branch is V2-only: the production compose is docker-compose.v2.yml.
 COPY test/fixtures/compose-overlay/ /test/fixtures/compose-overlay/
-COPY docker-compose.yml /docker-compose.yml
+COPY docker-compose.v2.yml /docker-compose.v2.yml
 
 # 目錄預建（確保 volume mount 前所有人都正確）
 RUN mkdir -p \

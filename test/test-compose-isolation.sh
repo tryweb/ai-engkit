@@ -16,10 +16,10 @@ docker compose version >/dev/null 2>&1 || fail "docker compose plugin is unavail
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 
-# NOTE (v2 branch): the V1 dev stack (docker-compose.dev.yml) was removed from
-# this branch, so there is no V1 dev project/overlay assertion here. The V1
-# production file (docker-compose.yml) is still collision-checked below because
-# the image ships it for the Admin compose-overlay suite.
+# NOTE (v2 branch): this branch is V2-only. The V1 dev stack
+# (docker-compose.dev.yml) and V1 production file (docker-compose.yml) do not
+# exist here, so there is no V1 assertion. Isolation is enforced between the
+# V2 prod and V2 dev stacks below.
 
 # Legacy hyphenated compose entry points are unscoped by construction.
 if rg -n 'docker-compose (build|down|up|restart)' test/*.sh; then
@@ -55,11 +55,13 @@ if rg -n 'ai-engkit_default' test/test-admin.sh test/test-admin-ui.sh; then
 fi
 
 # --- V2 line isolation (prod: docker-compose.v2.yml, dev: docker-compose.v2.dev.yml) ---
-# DECISIONS D2: the v2 line must share no mutable state with the v1 lines or
-# with its own dev stack. Each V2 compose uses a distinct '<suffix>' named
-# volume set, resolves to its own project, keeps OMO runtime residue out, and
-# does not collide with prod/dev (or the sibling V2) volumes/ports.
-[ -f .env ] || fail "compose isolation guard needs .env (run: cp .env.example .env)"
+# DECISIONS D2: the v2 line must share no mutable state between its own prod
+# and dev stacks. Each V2 compose uses a distinct '<suffix>' named volume
+# set, resolves to its own project, keeps OMO runtime residue out, and does
+# not collide with the sibling V2 stack's volumes/ports.
+# The dev stack requires .env (ai-admin env_file, short syntax); the example
+# file is the only source carried by the branch.
+[ -f .env ] || fail "compose isolation guard needs .env (run: cp .env.v2.example .env)"
 
 check_v2_compose() { # $1 = file, $2 = expected project, $3 = volume suffix, $4 = forbidden-port regex
   local file="$1" project="$2" suffix="$3" ports_re="$4" json vols
@@ -88,26 +90,26 @@ check_v2_compose() { # $1 = file, $2 = expected project, $3 = volume suffix, $4 
   done <<< "$(printf '%s' "$json" | jq -r '[.services[] | .ports[]?.published] | unique[]')"
 }
 
-# Every V2 named volume (both stacks) must not collide with a v1 prod/dev volume.
-all_v2_vols="$(
-  for f in docker-compose.v2.yml docker-compose.v2.dev.yml; do
-    docker compose -f "$f" config --format json \
-      | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]'
-  done | sort -u
+# The V2 prod and V2 dev stacks must not share a named volume (disjoint `-v2`
+# / `-v2dev` sets).
+prod_vols="$(
+  docker compose -f docker-compose.v2.yml config --format json \
+    | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]'
 )"
-for other in docker-compose.yml; do
-  other_volumes="$(docker compose -f "$other" config --format json | jq -r '[.volumes // {} | keys[]] | unique[]')"
-  while IFS= read -r vol; do
-    [ -n "$vol" ] || continue
-    if printf '%s\n' "$other_volumes" | grep -qxF "$vol"; then
-      fail "V2 volume '$vol' collides with a $other volume"
-    fi
-  done <<< "$all_v2_vols"
-done
+dev_vols="$(
+  docker compose -f docker-compose.v2.dev.yml config --format json \
+    | jq -r '[.services[].volumes[]? | select(.type == "volume") | .source] | unique[]'
+)"
+while IFS= read -r vol; do
+  [ -n "$vol" ] || continue
+  if printf '%s\n' "$dev_vols" | grep -qxF "$vol"; then
+    fail "V2 prod volume '$vol' collides with a V2 dev volume"
+  fi
+done <<< "$prod_vols"
 
-# V2 prod (8002/8082) must avoid prod/dev (8000/8080/8001/8081) and V2 dev (8003/8083).
-check_v2_compose docker-compose.v2.yml     v2     v2     '^(8000|8080|8001|8081|8003|8083)$'
-# V2 dev (8003/8083) must avoid prod/dev and V2 prod (8002/8082).
-check_v2_compose docker-compose.v2.dev.yml v2dev  v2dev  '^(8000|8080|8001|8081|8002|8082)$'
+# V2 prod (8002/8082) must avoid V2 dev (8003/8083).
+check_v2_compose docker-compose.v2.yml     v2     v2     '^(8003|8083)$'
+# V2 dev (8003/8083) must avoid V2 prod (8002/8082).
+check_v2_compose docker-compose.v2.dev.yml v2dev  v2dev  '^(8002|8082)$'
 
 printf 'compose isolation: PASS\n'

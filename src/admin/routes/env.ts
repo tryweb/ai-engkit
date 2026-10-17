@@ -39,7 +39,7 @@ env.get("/api/env/schema", (c) => {
 
 env.post("/api/env/from-template", async (c) => {
   const result = await execInAiDev(
-    "curl -sS https://raw.githubusercontent.com/trywe-io/ai-engkit/main/.env.example 2>/dev/null || true",
+    "curl -sS https://raw.githubusercontent.com/tryweb/ai-engkit/v2/.env.v2.example 2>/dev/null || true",
     15_000,
   );
   if (result.exitCode !== 0 || !result.stdout) {

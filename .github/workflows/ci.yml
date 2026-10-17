@@ -140,7 +140,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Create .env for Compose
-        run: cp .env.example .env
+        run: cp .env.v2.example .env
 
       - name: Install Compose guard dependencies
         run: sudo apt-get update && sudo apt-get install -y ripgrep
@@ -207,9 +207,9 @@ jobs:
         run: docker load -i /tmp/image-v2.tar
 
       - name: Create .env for Compose
-        run: cp .env.example .env
+        run: cp .env.v2.example .env
         # NOTE: V2 diagnostics packages (BREW/BUN_PACKAGES) now default in
-        # .env.example itself (single source); no per-CI append needed.
+        # .env.v2.example itself (single source); no per-CI append needed.
 
       - name: Start V2 integration stack
         run: docker compose -f docker-compose.v2.dev.yml up --no-build -d
