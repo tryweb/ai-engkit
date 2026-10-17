@@ -62,7 +62,7 @@ const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ c
   if (check.status === "check-failed") {
     return <span class="badge" style="background:rgba(139,143,163,0.15);color:var(--text-muted);font-size:0.65rem;">? unavailable</span>;
   }
-  if (adminVersion === "dev") {
+  if (adminVersion === "dev" || adminVersion === "v2dev") {
     return null;
   }
   return <span class="badge badge-success" style="font-size:0.65rem;">✓ Latest</span>;

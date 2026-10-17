@@ -250,6 +250,50 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     expect(html.includes("✓ Latest")).toBe(false);
   });
 
+  test("Given admin_version v2dev and up-to-date, When DashboardPage rendered, Then no ✓ Latest in Site Summary or Component Versions", () => {
+    // Given: v2dev local build intentionally skips release-channel comparison; must not claim Latest
+    const html = String(
+      DashboardPage(
+        baseData({
+          admin_version: "v2dev",
+          update_check: {
+            current: "v2dev",
+            latest: "v2dev",
+            update_available: false,
+            status: "up-to-date",
+            configured: null,
+            message: "",
+          },
+        }),
+      ),
+    );
+    // Then: Latest badge must not appear; layout remains intact without styling changes
+    expect(html.includes("✓ Latest")).toBe(false);
+    expect(html.includes('aria-label="Site summary"')).toBe(true);
+    expect(html.includes("Component Versions")).toBe(true);
+  });
+
+  test("Given admin_version v2dev and update-available, When rendered, Then Upgrade still visible and Latest hidden", () => {
+    // Given: v2dev with actionable update-available preserves Upgrade (behavior parity with dev)
+    const html = String(
+      DashboardPage(
+        baseData({
+          admin_version: "v2dev",
+          update_check: {
+            current: "v2dev",
+            latest: "v2dev",
+            update_available: true,
+            status: "update-available",
+            configured: null,
+            message: "",
+          },
+        }),
+      ),
+    );
+    expect(html.includes("▲ Upgrade")).toBe(true);
+    expect(html.includes("✓ Latest")).toBe(false);
+  });
+
   test("Given a runtime security profile, When rendered, Then its tooltip is described accessibly", () => {
     const html = String(
       DashboardPage(
