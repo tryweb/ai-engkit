@@ -174,6 +174,14 @@ RUN rm -rf ~/.bun/install/cache && \
     rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-* && \
     ln -sf /home/${USERNAME}/.bun/bin/bun /home/${USERNAME}/.bun/bin/node && \
     rm -rf ~/.bun/install/cache
+
+COPY --chmod=0755 scripts/patch-openchamber-update-guard.py /opt/ai-engkit/scripts/patch-openchamber-update-guard.py
+# Version- and anchor-checked update guards applied to the managed OpenChamber package;
+# a pin or upstream source-shape change fails the build instead of silently shipping
+# reduced guard coverage.
+RUN OPENCHAMBER_PACKAGE_DIR=/home/${USERNAME}/.bun/install/global/node_modules/@openchamber/web \
+    OPENCHAMBER_EXPECTED_VERSION=${OPENCHAMBER_VERSION} \
+    python3 /opt/ai-engkit/scripts/patch-openchamber-update-guard.py
 # Fail the build loudly if the installed CLIs do not match the requested pins
 # (a V1/V2 bin shadowing or a wrong-track install must never ship silently).
 RUN set -eu; \
