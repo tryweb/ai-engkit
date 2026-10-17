@@ -1,6 +1,6 @@
 /**
  * Formal-release facade over ghcr-oci transport.
- * Handles v1.x.y filtering, numeric sorting, latest-to-formal digest resolution, and short-lived cache.
+ * Handles v1/v2 release filtering, numeric sorting, stable-channel digest resolution, and short-lived cache.
  */
 
 export {
@@ -19,7 +19,7 @@ export type { FetchImpl } from "./ghcr-oci";
 
 import { getBearerToken, getManifestDigest, GhcrError, listAllTags, type FetchImpl } from "./ghcr-oci";
 
-const FORMAL_RE = /^v1\.[0-9]+\.[0-9]+$/;
+const FORMAL_RE = /^v(?:1|2)\.[0-9]+\.[0-9]+$/;
 const CACHE_TTL_MS = 300_000;
 
 export interface GhcrDiscoveryResult {
@@ -31,17 +31,21 @@ export interface GhcrDiscoveryResult {
 export interface GhcrClientOptions {
   readonly fetchImpl?: FetchImpl;
   readonly now?: () => number;
+  /** Stable channel alias whose digest determines the official version (default: latest). */
+  readonly stableTag?: string;
 }
 
 export interface GhcrClientDeps {
   readonly fetchImpl: FetchImpl;
   readonly now: () => number;
+  readonly stableTag: string;
 }
 
 function resolveDeps(options: GhcrClientOptions = {}): GhcrClientDeps {
   return {
     fetchImpl: options.fetchImpl ?? fetch,
     now: options.now ?? (() => Date.now()),
+    stableTag: options.stableTag ?? "latest",
   };
 }
 
@@ -88,21 +92,22 @@ export async function resolveOfficialVersion(
   fetchImpl: FetchImpl,
   token: string,
   formalSorted: readonly string[],
+  stableTag = "latest",
 ): Promise<{ officialVersion: string | null; warning: string | null }> {
   if (formalSorted.length === 0) {
     return { officialVersion: null, warning: null };
   }
 
-  let latestDigest: string | null;
+  let stableDigest: string | null;
   try {
-    latestDigest = await getManifestDigest(fetchImpl, token, "latest");
+    stableDigest = await getManifestDigest(fetchImpl, token, stableTag);
   } catch (err) {
     if (err instanceof GhcrError) throw err;
     throw new GhcrError(err instanceof Error ? err.message : String(err), "manifest_fetch_failed");
   }
 
-  if (!latestDigest) {
-    return { officialVersion: null, warning: "latest manifest not found" };
+  if (!stableDigest) {
+    return { officialVersion: null, warning: `${stableTag} manifest not found` };
   }
 
   for (const tag of formalSorted) {
@@ -114,27 +119,28 @@ export async function resolveOfficialVersion(
       throw new GhcrError(err instanceof Error ? err.message : String(err), "manifest_fetch_failed");
     }
     if (candidateDigest === null) continue;
-    if (candidateDigest === latestDigest) {
+    if (candidateDigest === stableDigest) {
       return { officialVersion: tag, warning: null };
     }
   }
 
-  return { officialVersion: null, warning: "latest does not match any formal release" };
+  return { officialVersion: null, warning: `${stableTag} does not match any formal release` };
 }
 
-let cached: { result: GhcrDiscoveryResult; expiresAt: number } | null = null;
+const ghcrCache = new Map<string, { result: GhcrDiscoveryResult; expiresAt: number }>();
 
 export function clearGhcrCache(): void {
-  cached = null;
+  ghcrCache.clear();
 }
 
-export function getGhcrCache(): { result: GhcrDiscoveryResult; expiresAt: number } | null {
-  return cached;
+export function getGhcrCache(stableTag = "latest"): { result: GhcrDiscoveryResult; expiresAt: number } | null {
+  return ghcrCache.get(stableTag) ?? null;
 }
 
 export async function discoverGhcrVersions(options: GhcrClientOptions = {}): Promise<GhcrDiscoveryResult> {
   const deps = resolveDeps(options);
   const now = deps.now();
+  const cached = ghcrCache.get(deps.stableTag);
   if (cached && now < cached.expiresAt) {
     return cached.result;
   }
@@ -147,7 +153,7 @@ export async function discoverGhcrVersions(options: GhcrClientOptions = {}): Pro
   let warning: string | null = null;
 
   if (formalSorted.length > 0) {
-    const resolved = await resolveOfficialVersion(deps.fetchImpl, token, formalSorted);
+    const resolved = await resolveOfficialVersion(deps.fetchImpl, token, formalSorted, deps.stableTag);
     officialVersion = resolved.officialVersion;
     warning = resolved.warning;
   }
@@ -158,6 +164,6 @@ export async function discoverGhcrVersions(options: GhcrClientOptions = {}): Pro
     warning,
   };
 
-  cached = { result, expiresAt: now + CACHE_TTL_MS };
+  ghcrCache.set(deps.stableTag, { result, expiresAt: now + CACHE_TTL_MS });
   return result;
 }

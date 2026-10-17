@@ -40,17 +40,21 @@ beforeEach(() => {
 });
 
 describe("isFormalReleaseTag", () => {
-  test("accepts v1.x.y", () => {
+  test("accepts v1.x.y and v2.x.y", () => {
     expect(isFormalReleaseTag("v1.0.0")).toBe(true);
     expect(isFormalReleaseTag("v1.10.20")).toBe(true);
+    expect(isFormalReleaseTag("v2.0.0")).toBe(true);
+    expect(isFormalReleaseTag("v2.10.20")).toBe(true);
   });
   test("rejects non-release", () => {
     expect(isFormalReleaseTag("latest")).toBe(false);
     expect(isFormalReleaseTag("dev")).toBe(false);
+    expect(isFormalReleaseTag("v2dev")).toBe(false);
+    expect(isFormalReleaseTag("v2-dev")).toBe(false);
     expect(isFormalReleaseTag("main")).toBe(false);
     expect(isFormalReleaseTag("sha-abc123")).toBe(false);
     expect(isFormalReleaseTag("v1.0.0-rc1")).toBe(false);
-    expect(isFormalReleaseTag("v2.0.0")).toBe(false);
+    expect(isFormalReleaseTag("v3.0.0")).toBe(false);
     expect(isFormalReleaseTag("v1.0")).toBe(false);
     expect(isFormalReleaseTag("v1.0.0.0")).toBe(false);
   });
@@ -60,15 +64,17 @@ describe("parseFormalVersion", () => {
   test("parses numeric components", () => {
     expect(parseFormalVersion("v1.2.3")).toEqual({ major: 1, minor: 2, patch: 3 });
     expect(parseFormalVersion("v1.10.20")).toEqual({ major: 1, minor: 10, patch: 20 });
-    expect(parseFormalVersion("v2.0.0")).toBeNull();
+    expect(parseFormalVersion("v2.0.0")).toEqual({ major: 2, minor: 0, patch: 0 });
+    expect(parseFormalVersion("v2.3.4")).toEqual({ major: 2, minor: 3, patch: 4 });
     expect(parseFormalVersion("latest")).toBeNull();
+    expect(parseFormalVersion("v2-dev")).toBeNull();
   });
 });
 
 describe("normalizeFormalTags", () => {
   test("filters, dedupes, sorts descending", () => {
     const tags = ["latest", "v1.0.1", "v1.0.10", "v1.0.2", "v1.0.1", "dev", "v1.0.0-rc1", "v1.1.0", "v2.0.0", "sha-abc", "v1.2.0"];
-    expect(normalizeFormalTags(tags)).toEqual(["v1.2.0", "v1.1.0", "v1.0.10", "v1.0.2", "v1.0.1"]);
+    expect(normalizeFormalTags(tags)).toEqual(["v2.0.0", "v1.2.0", "v1.1.0", "v1.0.10", "v1.0.2", "v1.0.1"]);
   });
   test("numeric ordering not lexical", () => {
     const tags = ["v1.0.9", "v1.0.10", "v1.0.2", "v1.9.0", "v1.10.0"];
@@ -77,6 +83,10 @@ describe("normalizeFormalTags", () => {
   test("compareFormalDescending", () => {
     expect(compareFormalDescending("v1.0.10", "v1.0.2")).toBeLessThan(0); // 10 > 2 so a before b => negative
     expect(compareFormalDescending("v1.0.2", "v1.0.10")).toBeGreaterThan(0);
+  });
+  test("v2 major sorts before v1", () => {
+    expect(compareFormalDescending("v2.0.0", "v1.9.9")).toBeLessThan(0);
+    expect(normalizeFormalTags(["v1.9.9", "v2.0.0", "v1.10.0"])).toEqual(["v2.0.0", "v1.10.0", "v1.9.9"]);
   });
 });
 
@@ -364,5 +374,44 @@ describe("discoverGhcrVersions integration + cache", () => {
     expect(result.warning).not.toBeNull();
     const cached = getGhcrCache();
     expect(cached?.result.warning).toBe(result.warning);
+  });
+
+  test("v2 channel resolves official via v2 digest, not latest", async () => {
+    const tags = ["latest", "v2", "v1.0.0", "v2.0.1", "v2.0.0", "v1.1.0"];
+    const digestsLatest = { latest: "sha256:v1", v2: "sha256:v2", "v2.0.1": "sha256:v2", "v2.0.0": "sha256:other", "v1.1.0": "sha256:v1" };
+    const rLatest = await discoverGhcrVersions({ fetchImpl: ghcrFetch(tags, digestsLatest), stableTag: "latest" });
+    expect(rLatest.officialVersion).toBe("v1.1.0");
+    clearGhcrCache();
+    const rV2 = await discoverGhcrVersions({ fetchImpl: ghcrFetch(tags, digestsLatest), stableTag: "v2" });
+    expect(rV2.officialVersion).toBe("v2.0.1");
+  });
+
+  test("cache is per-channel (no collision)", async () => {
+    const tagsV1 = ["v1.0.0"];
+    const digestsV1 = { latest: "sha256:a", "v1.0.0": "sha256:a" };
+    const tagsV2 = ["v2.0.0"];
+    const digestsV2 = { v2: "sha256:b", "v2.0.0": "sha256:b" };
+    let now = 0;
+    const nowFn = () => now;
+    const r1 = await discoverGhcrVersions({ fetchImpl: ghcrFetch(tagsV1, digestsV1), now: nowFn, stableTag: "latest" });
+    expect(r1.versions).toEqual(["v1.0.0"]);
+    const r2 = await discoverGhcrVersions({ fetchImpl: ghcrFetch(tagsV2, digestsV2), now: nowFn, stableTag: "v2" });
+    expect(r2.versions).toEqual(["v2.0.0"]);
+    // second call for latest should hit cache, not refetch v2
+    let fetchCalls = 0;
+    const countingFetch = ghcrFetch(tagsV1, digestsV1, () => fetchCalls++);
+    const r1Again = await discoverGhcrVersions({ fetchImpl: countingFetch, now: nowFn, stableTag: "latest" });
+    expect(r1Again).toEqual(r1);
+    expect(fetchCalls).toBe(0);
+    expect(getGhcrCache("latest")?.result.versions).toEqual(["v1.0.0"]);
+    expect(getGhcrCache("v2")?.result.versions).toEqual(["v2.0.0"]);
+  });
+
+  test("defaults to latest channel when no stableTag provided", async () => {
+    const tags = ["v1.0.0", "v2.0.0"];
+    const digests = { latest: "sha256:a", "v1.0.0": "sha256:a" };
+    const result = await discoverGhcrVersions({ fetchImpl: ghcrFetch(tags, digests) });
+    expect(result.officialVersion).toBe("v1.0.0");
+    expect(result.versions).toEqual(["v2.0.0", "v1.0.0"]);
   });
 });
