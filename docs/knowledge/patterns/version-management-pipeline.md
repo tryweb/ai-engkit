@@ -113,6 +113,40 @@ Note on resumption: a blocked run still uploads `version-snapshot.json`, so
 auto-release resumes not on "no significant commits remain" but on a later
 scheduled run that detects new upstream updates.
 
+#### Parallel release lines — same-line previous tag
+
+ai-engkit ships **parallel release lines**: v1.* is cut from `main`, while v2.*
+lives on its own branch (further lines may exist). A git tag list is *global*,
+so any lookup that takes the repo's highest tag can select a tag from a
+**different line**. That was not hypothetical: release v1.21.1 rendered
+"Changes (since v2.0.2)" because the previous-tag lookup returned the globally
+highest tag, not this line's predecessor — even though v1.21.1 was tagged
+*after* v2.0.2 and ships from `main`.
+
+Rule: every release-tag lookup must be scoped to the line being released —
+tags **reachable from the current `HEAD`** and, for a predecessor, the **same
+MAJOR**. Both conditions are required: `--merged HEAD` alone still mis-scopes
+once lines are merged back, and same-MAJOR alone would count tags that never
+landed on this branch.
+
+Implemented once in `.github/scripts/release-line-tag.sh`:
+
+| Call | Returns |
+|------|---------|
+| `release-line-tag.sh` | highest stable `vX.Y.Z` reachable from `HEAD` (this line's latest) |
+| `release-line-tag.sh <ref>` | highest same-MAJOR stable tag reachable from `HEAD` strictly below `<ref>` (its predecessor) |
+
+It prints nothing (exit 0) when no match exists, which callers treat as "first
+release". Callers: `.github/scripts/release-body.sh` (the release-notes
+"since <tag>" baseline), `ci.yml` auto-tag gate + next-version computation,
+`dependency-update.yml` baseline + unreleased-commit gate + next-version, and
+the `release` skill's version/notes/CHANGELOG steps. The same flawed one-liner
+was previously duplicated in six places.
+
+Do **not** reintroduce `git describe --tags --abbrev=0` or a bare
+`git tag --sort=-version:refname | head -1` for release decisions — use the
+helper.
+
 #### OMO schema reference sync rule
 
 `.opencode/omo.jsonc.default` pins its `$schema` URL to a versioned OMO tag
@@ -210,10 +244,18 @@ Two gaps closed:
 - OPENCODE_PROVIDER verified end-to-end: image build, container start,
   `opencode models` lists Ollama models, `opencode run -m ollama/gemma4:e2b`
   returns responses.
+- Parallel-line tag resolution verified: `test/test-release-line-tag.sh` builds a
+  fixture repo (v1.0.0/v1.20.2/v1.21.0/v1.21.1 on `main`; v2.0.1/v2.0.2 on an
+  unmerged branch) and asserts `release-line-tag.sh v1.21.1` → `v1.21.0` (not
+  `v2.0.2`), the first-release case is empty, and the v2 branch follows its own
+  line. Against the real repo, `prev(v1.21.1)` → `v1.21.0` and `prev(v2.0.2)` →
+  empty on `main`; `test/test-release-body.sh` still passes.
 
 ## Related Files
 
 - `.opencode/scripts/check-versions.sh` — Core version inspection script
+- `.github/scripts/release-line-tag.sh` — Release-line-scoped tag resolution (single source of truth for previous/latest release tags)
+- `test/test-release-line-tag.sh` — Regression test for same-line previous-tag resolution
 - `.opencode/skills/check-updates/SKILL.md` — New update workflow skill
 - `.github/workflows/dependency-update.yml` — Scheduled pinned-version updates
 - `test/run-tests.sh` — Verifies generated OMO plugin pin matches runtime env
@@ -228,4 +270,5 @@ Two gaps closed:
 ## Tags
 
 `version-management` `dockerfile` `opencode` `oh-my-openagent` `release`
-`changelog` `provider-injection` `pipeline` `dependency-update`
+`changelog` `provider-injection` `pipeline` `dependency-update` `release-line`
+`semver` `previous-tag`
