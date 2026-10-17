@@ -274,6 +274,10 @@ PATCHES = PATCHES_V1
 VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     "1.24.2": PATCHES_V1,
     "2.3.3": PATCHES_V2,
+    # 2.4.0 keeps the v2 line's source shape: the PATCHES_V2 anchors apply
+    # unchanged (verified against the @openchamber/web@2.4.0 tarball). Anchor
+    # drift on any future version still fails the build closed.
+    "2.4.0": PATCHES_V2,
 }
 
 
