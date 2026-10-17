@@ -139,8 +139,9 @@ Do not release with uncommitted changes. All changes must be committed before ta
 ### 4. Determine Current and Next Version
 
 ```bash
-# Get latest tag
-git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"
+# Get latest stable tag on THIS release line (same major; ai-engkit keeps
+# parallel v1.* (main) and v2.* lines, so never use the global highest tag).
+bash .github/scripts/release-line-tag.sh 2>/dev/null || echo "v0.0.0"
 ```
 
 Parse the current version (e.g., `v0.1.0`). Then analyze `git log` since the last tag to determine the bump type:
@@ -160,7 +161,7 @@ VERSION="v1.2.0"  # ← replace with the actual calculated version
 ### 5. Generate Release Notes
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+LAST_TAG=$(bash .github/scripts/release-line-tag.sh 2>/dev/null || echo "")
 if [ -n "$LAST_TAG" ]; then
   git log ${LAST_TAG}..HEAD --oneline --no-merges
 else
@@ -190,7 +191,7 @@ Strip the conventional commit prefix (e.g., `feat: `, `fix: `) for cleaner notes
 Compare current Dockerfile ARGs against the last release tag, so CHANGELOG entries can be auto-generated:
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+LAST_TAG=$(bash .github/scripts/release-line-tag.sh 2>/dev/null || true)
 CHANGED_DEPS=""
 if [ -n "$LAST_TAG" ]; then
   for entry in \
@@ -241,7 +242,7 @@ First, generate a categorized commit list from git log as fallback when `[Unrele
 # Helper: strip commit hash + type prefix, capitalize, add bullet
 fmt_commit() { sed 's/^[0-9a-f]* //' | sed 's/^[a-z]*[^:]*: *//' | sed 's/^./\U&/' | sed 's/^/- /'; }
 
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+LAST_TAG=$(bash .github/scripts/release-line-tag.sh 2>/dev/null || true)
 COMMITS_SINCE_TAG=$(git log ${LAST_TAG}..HEAD --oneline --no-merges 2>/dev/null || true)
 CATEGORIZED_COMMITS=""
 if [ -n "$COMMITS_SINCE_TAG" ]; then
