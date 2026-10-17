@@ -94,6 +94,24 @@ cell1() {
     echo "FAIL: OpenChamber unreachable on ${CHAMBER_V2DEV_PORT}" >&2
     return 1
   fi
+
+  # Browser payload: pw-mcp resolves the bundled Chromium at runtime and exits
+  # 127 without it, so a browserless image must fail the gate. The image build
+  # has its own fail-closed gate; this is the independent runtime check (mirrors
+  # run-tests.sh's chromium assertions on the V1 line).
+  local chromium
+  chromium="$(docker exec ai-engkit-v2dev sh -c 'find /ms-playwright -type f -name chrome -path "*/chrome-linux64/*" 2>/dev/null | head -1')"
+  [ -n "$chromium" ]
+  echo "PASS: chromium binary present in /ms-playwright"
+
+  docker exec ai-engkit-v2dev sh -c '
+    chrome=$(find /ms-playwright -type f -name chrome -path "*/chrome-linux64/*" 2>/dev/null | head -1)
+    [ -n "$chrome" ] && timeout 15 "$chrome" --headless --no-sandbox --disable-gpu --dump-dom about:blank 2>/dev/null | grep -q html
+  '
+  echo "PASS: chromium launches headless in V2 container"
+
+  docker exec ai-engkit-v2dev pw-mcp --version >/dev/null 2>&1
+  echo "PASS: pw-mcp resolves the bundled Chromium (exit 0)"
 }
 
 cell2() {

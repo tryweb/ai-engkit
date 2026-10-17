@@ -239,11 +239,30 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 ENV OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION}
-RUN sudo mkdir -p /ms-playwright && sudo chmod 777 /ms-playwright && \
-    export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 && \
-    bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium 2>/dev/null || \
-    (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bunx -y playwright@${PLAYWRIGHT_VERSION} install-deps chromium 2>/dev/null || true) && \
-    rm -rf ~/.bun/install/cache || true
+# cdn.playwright.dev intermittently answers HTTP 400, so the fetch is retried —
+# but never masked: on failure the build must fail rather than ship an image whose
+# browser payload is missing. PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is deliberately NOT
+# used here: it is only honored on the package-install postinstall path, not by the
+# `playwright install` CLI, so it would read as a safeguard while doing nothing.
+RUN set -eu; \
+    sudo mkdir -p /ms-playwright; \
+    sudo chmod 777 /ms-playwright; \
+    ok=0; \
+    for attempt in 1 2 3; do \
+      if bunx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium; then ok=1; break; fi; \
+      echo "playwright chromium install failed (attempt ${attempt}/3); retrying in 15s" >&2; \
+      sleep 15; \
+    done; \
+    rm -rf ~/.bun/install/cache; \
+    [ "$ok" = 1 ]
+
+# Fail the build loudly if the bundled browser is missing: pw-mcp resolves it at
+# runtime and exits 127 without it, so a CDN hiccup must never silently ship a
+# browserless image (mirrors the CLI version gate below).
+RUN set -eu; \
+    chrome="$(find /ms-playwright -type f -name chrome -path '*/chrome-linux64/*' -print -quit)"; \
+    test -n "$chrome"; \
+    echo "gate: chromium=$("$chrome" --version 2>/dev/null)"
 
 RUN bun install -g playwright@${PLAYWRIGHT_VERSION} @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && \
     rm -rf ~/.bun/install/cache
