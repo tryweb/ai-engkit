@@ -1,6 +1,23 @@
 ## [Unreleased]
 
 
+## [1.21.2] - 2026-10-17
+
+### Added
+- Bump OpenCode 1.19.2 → 1.19.3, OpenSpec 1.14.2 → 1.14.3
+- Add release-line-scoped tag resolver
+
+### Fixed
+- Resolve version tags on the current release line
+- Resolve release tags within the current major line
+- Compare against same-line previous tag
+
+### Documentation
+- Document parallel release-line tag resolution
+
+### Changed
+- Upgrade OpenCode from 1.19.2 to 1.19.3.
+
 ## [1.21.1] - 2026-10-16
 
 ### Added
@@ -2232,7 +2249,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2417,3 +2434,4 @@
 [1.20.2]: https://github.com/tryweb/ai-engkit/compare/v1.20.1...v1.20.2
 [1.21.0]: https://github.com/tryweb/ai-engkit/compare/v1.20.2...v1.21.0
 [1.21.1]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...v1.21.1
+[1.21.2]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...v1.21.2
