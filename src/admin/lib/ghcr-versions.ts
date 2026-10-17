@@ -110,17 +110,26 @@ export async function resolveOfficialVersion(
     return { officialVersion: null, warning: `${stableTag} manifest not found` };
   }
 
-  for (const tag of formalSorted) {
-    let candidateDigest: string | null;
-    try {
-      candidateDigest = await getManifestDigest(fetchImpl, token, tag);
-    } catch (err) {
-      if (err instanceof GhcrError) throw err;
-      throw new GhcrError(err instanceof Error ? err.message : String(err), "manifest_fetch_failed");
-    }
-    if (candidateDigest === null) continue;
-    if (candidateDigest === stableDigest) {
-      return { officialVersion: tag, warning: null };
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < formalSorted.length; i += BATCH_SIZE) {
+    const batch = formalSorted.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (tag) => {
+        try {
+          const digest = await getManifestDigest(fetchImpl, token, tag);
+          return { tag, digest, error: null };
+        } catch (err) {
+          if (err instanceof GhcrError) return { tag, digest: null, error: err };
+          return { tag, digest: null, error: new GhcrError(err instanceof Error ? err.message : String(err), "manifest_fetch_failed") };
+        }
+      }),
+    );
+    for (const r of results) {
+      if (r.error) throw r.error;
+      if (r.digest === null) continue;
+      if (r.digest === stableDigest) {
+        return { officialVersion: r.tag, warning: null };
+      }
     }
   }
 

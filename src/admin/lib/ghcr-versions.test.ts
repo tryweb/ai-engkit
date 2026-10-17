@@ -415,3 +415,158 @@ describe("discoverGhcrVersions integration + cache", () => {
     expect(result.versions).toEqual(["v2.0.0", "v1.0.0"]);
   });
 });
+
+describe("resolveOfficialVersion bounded concurrency (regression)", () => {
+  /**
+   * Helper: FetchImpl that tracks concurrent manifest calls without wall-clock assertions.
+   * Each manifest tag can have a configurable delay and digest/failure.
+   */
+  function makeTrackedFetch(opts: {
+    stableTag: string;
+    stableDigest: string | null;
+    digests: Record<string, string | null>;
+    delaysMs?: Record<string, number>;
+    failingTags?: Set<string>;
+    defaultDelayMs?: number;
+  }): { fetch: FetchImpl; getMaxActive: () => number; getCallOrder: () => string[] } {
+    let active = 0;
+    let maxActive = 0;
+    const callOrder: string[] = [];
+    const delaysMs = opts.delaysMs ?? {};
+    const failingTags = opts.failingTags ?? new Set<string>();
+    const defaultDelayMs = opts.defaultDelayMs ?? 12;
+
+    const fetch: FetchImpl = async (url: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+      const u = typeof url === "string" ? url : url.toString();
+      // Only track manifest fetches (/manifests/)
+      if (!u.includes("/manifests/")) {
+        throw new Error(`unexpected non-manifest fetch: ${u}`);
+      }
+      const tag = decodeURIComponent(u.split("/manifests/")[1]?.split("?")[0] ?? "");
+      callOrder.push(tag);
+      active++;
+      if (active > maxActive) maxActive = active;
+      const delay = delaysMs[tag] ?? defaultDelayMs;
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+      active--;
+      if (failingTags.has(tag)) {
+        return new Response("", { status: 500 });
+      }
+      let digest: string | null;
+      if (tag === opts.stableTag) {
+        digest = opts.stableDigest;
+      } else {
+        digest = opts.digests[tag] ?? null;
+      }
+      if (digest === null) return new Response("", { status: 404 });
+      return new Response("", { status: 200, headers: { "Docker-Content-Digest": digest } });
+    };
+
+    return { fetch, getMaxActive: () => maxActive, getCallOrder: () => [...callOrder] };
+  }
+
+  test("resolves with bounded concurrent fetches: overlap >1, capped <=10, highest priority wins", async () => {
+    const stableTag = "latest";
+    const stableDigest = "sha256:stable";
+    // 12 formal tags descending: v2.0.11 highest, v2.0.0 lowest
+    const formalSorted = Array.from({ length: 12 }, (_, i) => `v2.0.${11 - i}`);
+    // Two matches: highest v2.0.11 and lower v2.0.3; should pick v2.0.11 even though lower resolves faster
+    const digests: Record<string, string | null> = {};
+    for (const t of formalSorted) digests[t] = "sha256:other";
+    digests["v2.0.11"] = stableDigest;
+    digests["v2.0.3"] = stableDigest;
+    const delaysMs: Record<string, number> = {};
+    delaysMs["v2.0.11"] = 28; // highest is slow
+    delaysMs["v2.0.3"] = 4; // lower is fast
+    // rest 12ms default ensures overlap
+
+    const { fetch, getMaxActive } = makeTrackedFetch({
+      stableTag,
+      stableDigest,
+      digests,
+      delaysMs,
+      defaultDelayMs: 14,
+    });
+
+    const res = await resolveOfficialVersion(fetch, "tok", formalSorted, stableTag);
+    expect(res.officialVersion).toBe("v2.0.11");
+    expect(res.warning).toBeNull();
+    // proves concurrency: sequential would have maxActive === 1
+    expect(getMaxActive()).toBeGreaterThan(1);
+    expect(getMaxActive()).toBeLessThanOrEqual(10);
+  });
+
+  test("concurrency is capped at 10 when many tags need probing", async () => {
+    const stableTag = "latest";
+    const stableDigest = "sha256:stable";
+    // 25 tags, none match until last (lowest priority) to force scanning all
+    const formalSorted = Array.from({ length: 25 }, (_, i) => `v2.0.${24 - i}`);
+    const digests: Record<string, string | null> = {};
+    for (const t of formalSorted) digests[t] = "sha256:other";
+    // No match at all -> will scan all batches
+    const { fetch, getMaxActive } = makeTrackedFetch({
+      stableTag,
+      stableDigest,
+      digests,
+      defaultDelayMs: 10,
+    });
+    const res = await resolveOfficialVersion(fetch, "tok", formalSorted, stableTag);
+    expect(res.officialVersion).toBeNull();
+    expect(res.warning).not.toBeNull();
+    expect(getMaxActive()).toBeGreaterThan(1);
+    expect(getMaxActive()).toBeLessThanOrEqual(10);
+  });
+
+  test("highest matching tag preserved regardless of faster lower-priority resolution", async () => {
+    const stableTag = "latest";
+    const stableDigest = "sha256:match";
+    const formalSorted = ["v2.0.5", "v2.0.4", "v2.0.3", "v2.0.2"];
+    const digests: Record<string, string | null> = {
+      "v2.0.5": stableDigest,
+      "v2.0.4": "sha256:other",
+      "v2.0.3": stableDigest, // lower also matches but should not be picked
+      "v2.0.2": "sha256:other",
+    };
+    const delaysMs: Record<string, number> = {
+      "v2.0.5": 24,
+      "v2.0.4": 5,
+      "v2.0.3": 5,
+      "v2.0.2": 5,
+    };
+    const { fetch } = makeTrackedFetch({ stableTag, stableDigest, digests, delaysMs });
+    const res = await resolveOfficialVersion(fetch, "tok", formalSorted, stableTag);
+    expect(res.officialVersion).toBe("v2.0.5");
+  });
+
+  test("failure from lower-priority tag in same batch does not override higher-priority match", async () => {
+    const stableTag = "latest";
+    const stableDigest = "sha256:stable";
+    // Batch of 3: v2.0.5 matches, v2.0.4 fails, v2.0.3 also would match but lower
+    const formalSorted = ["v2.0.5", "v2.0.4", "v2.0.3"];
+    const digests: Record<string, string | null> = {
+      "v2.0.5": stableDigest,
+      "v2.0.4": "sha256:other",
+      "v2.0.3": stableDigest,
+    };
+    const failingTags = new Set<string>(["v2.0.4"]);
+    const { fetch } = makeTrackedFetch({ stableTag, stableDigest, digests, failingTags, defaultDelayMs: 10 });
+    const res = await resolveOfficialVersion(fetch, "tok", formalSorted, stableTag);
+    expect(res.officialVersion).toBe("v2.0.5");
+    expect(res.warning).toBeNull();
+  });
+
+  test("failure before first matching tag rejects (sequential semantics preserved)", async () => {
+    const stableTag = "latest";
+    const stableDigest = "sha256:stable";
+    // v2.0.5 is 404 (null), v2.0.4 fails (500), v2.0.3 matches but failure is higher priority
+    const formalSorted = ["v2.0.5", "v2.0.4", "v2.0.3"];
+    const digests: Record<string, string | null> = {
+      "v2.0.5": null,
+      "v2.0.4": "sha256:other",
+      "v2.0.3": stableDigest,
+    };
+    const failingTags = new Set<string>(["v2.0.4"]);
+    const { fetch } = makeTrackedFetch({ stableTag, stableDigest, digests, failingTags, defaultDelayMs: 10 });
+    await expect(resolveOfficialVersion(fetch, "tok", formalSorted, stableTag)).rejects.toThrow();
+  });
+});
