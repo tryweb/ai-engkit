@@ -1,6 +1,40 @@
 ## [Unreleased]
 
 
+## [2.0.3] - 2026-10-17
+
+### Added
+- Bump Docker 29.9.1, OpenCode CLI 2.0.32, OpenChamber 2.4.0, openspec 1.14.3
+
+### Fixed
+- Unify admin env path on .env.v2
+- Default diagnostics packages in .env.v2.example
+- Allow the V2 compose file in the Docker build context
+- Map v2-dev upgrades to V2 assets
+- Fail closed when the Playwright browser payload is missing
+- Batch GHCR release digest checks
+- Refuse image-managed OpenChamber updates
+- Avoid false Latest status for v2dev
+- Scope upgrades to the current release line
+- Check updates against V2 channels
+- Support V2 formal release discovery
+- Make the V2 prod bind mounts safe under DooD
+- Treat a directory-shaped env path as missing, not a crash
+- Stop lean-ctx setup from leaving permission:ask in opencode.json
+
+### Changed
+- Drop V1 jobs and gate scans on the V2 baseline
+- Remove V1 compose and env files from the branch
+- Make playwright browser install more resilient in build env
+- Test OpenChamber update guards on both lines
+- Apply OpenChamber update guard in image
+- Add OpenChamber update route fixtures
+- Add OpenChamber guard fixture metadata
+- Stamp dev image and clarify stable promotion
+
+### Changed
+- Upgrade Docker Engine from 29.9.0 to 29.9.1.
+
 ## [2.0.2] - 2026-10-15
 
 ### Added
@@ -2273,7 +2307,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.3...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2455,3 +2489,4 @@
 [1.19.3]: https://github.com/tryweb/ai-engkit/compare/v1.19.2...v1.19.3
 [2.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v2.0.1
 [2.0.2]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...v2.0.2
+[2.0.3]: https://github.com/tryweb/ai-engkit/compare/v2.0.2...v2.0.3
