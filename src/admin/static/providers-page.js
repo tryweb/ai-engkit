@@ -644,3 +644,55 @@ function pollOAuthV2() {
       }
     });
 }
+
+function setGoUsage(el, text, tone, title) {
+  var t;
+  el.classList.remove('go-usage--muted', 'go-usage--ok', 'go-usage--warn', 'go-usage--exhausted');
+  el.classList.add('go-usage--' + tone);
+  t = el.querySelector('.go-usage__text');
+  if (t) t.textContent = text; else el.textContent = text;
+  if (title) el.title = title;
+}
+
+function refreshGoUsage() {
+  var card, badges;
+  try {
+    if (typeof document === 'undefined' || !document.querySelector) return;
+    if (typeof fetch !== 'function') return;
+  } catch (e) { return; }
+  card = document.querySelector('.provider-card[data-provider="opencode-go"]');
+  if (!card) return;
+  badges = card.querySelectorAll('[data-go-usage]');
+  if (!badges.length) return;
+  fetch('/api/providers/opencode-go/usage')
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j.ok || !Array.isArray(j.items)) throw new Error('bad response');
+      var byId = {};
+      j.items.forEach(function (it) { byId[it.keyId] = it; });
+      badges.forEach(function (el) {
+        var it = byId[el.getAttribute('data-go-usage')];
+        if (!it || !it.monthly) {
+          if (it && it.code === 'no_subscription') setGoUsage(el, 'Monthly no subscription', 'muted', '');
+          else if (it && it.code === 'invalid_key') setGoUsage(el, 'Monthly invalid key', 'exhausted', '');
+          else setGoUsage(el, 'Monthly —', 'muted', '');
+          return;
+        }
+        var tip = [];
+        if (it.rolling) tip.push('Rolling ' + it.rolling.percent + '% · resets ' + it.rolling.resetsIn);
+        if (it.weekly) tip.push('Weekly ' + it.weekly.percent + '% · resets ' + it.weekly.resetsIn);
+        tip.push(it.monthly.label);
+        setGoUsage(el, it.monthly.label, it.monthly.tone, tip.join('  |  '));
+      });
+    })
+    .catch(function () {
+      badges.forEach(function (el) { setGoUsage(el, 'Monthly —', 'muted', ''); });
+    });
+}
+
+try {
+  if (typeof document !== 'undefined' && document.querySelector && typeof fetch === 'function') {
+    if (document.readyState === 'loading' && document.addEventListener) document.addEventListener('DOMContentLoaded', refreshGoUsage);
+    else refreshGoUsage();
+  }
+} catch (e) {}

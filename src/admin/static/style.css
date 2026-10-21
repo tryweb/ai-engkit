@@ -789,6 +789,18 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
 .key-row__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
 .key-row__actions .btn-outline { min-height: 44px; }
 
+/* Opencode Go monthly quota — inline after the account label; wraps only on narrow rows */
+.go-usage {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums;
+  color: var(--text-muted); white-space: nowrap;
+}
+.go-usage__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.go-usage--ok { color: #34d399; }
+.go-usage--warn { color: #fbbf24; }
+.go-usage--exhausted { color: #f87171; }
+.go-usage--muted { color: var(--text-muted); opacity: 0.85; }
+
 .key-add-row {
   display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
 }

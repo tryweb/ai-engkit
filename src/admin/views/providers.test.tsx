@@ -71,6 +71,34 @@ describe("ProvidersPage", () => {
     expect(html).toContain("Selected in registry");
   });
 
+  it("renders a concise monthly quota badge per opencode-go key", () => {
+    const html = render([opencodeGo]);
+    expect(html).toContain('data-go-usage="k-1"');
+    expect(html).toContain("go-usage");
+    expect(html).toContain("Monthly …");
+    // Badge sits inline right after the account label, before the Selected pill.
+    expect(html.indexOf('data-go-usage="k-1"')).toBeLessThan(html.indexOf("Selected in registry"));
+  });
+
+  it("renders the quota badge in v2Mode too (credential-id keyed)", () => {
+    const v2Go = {
+      ...opencodeGo,
+      registry: {
+        keyCount: 1,
+        activeKeyId: "cred_abc",
+        keys: [{ id: "cred_abc", masked: "team A (cabc)", note: "team A", active: true }],
+      },
+    };
+    const html = String(ProvidersPage({
+      meta: { invalid: false, error: null, providers: [v2Go] as never },
+      entries: {},
+      isOpenCodeV2: false,
+      v2Mode: true,
+    } as never));
+    expect(html).toContain('data-go-usage="cred_abc"');
+    expect(html).toContain("Monthly …");
+  });
+
   it("renders v2 as unsupported and hides provider-management controls", () => {
     const html = render([opencodeGo, openai], {}, true);
     expect(html).toContain("v2-provider-unsupported");

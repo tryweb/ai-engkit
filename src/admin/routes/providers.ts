@@ -27,6 +27,8 @@ import {
   clearProviderCache,
 } from "../lib/opencode-auth";
 import { restartAiDev } from "../lib/restart-ai-dev";
+import { fetchGoUsage, toUsageItemWindows } from "../lib/opencode-go-usage";
+import { fetchGoUsageV2 } from "../lib/opencode-go-usage-v2";
 import { invalidateProbeCacheForProvider } from "../lib/model-probe";
 import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
 import { REAL_DEPS } from "../lib/agent-models";
@@ -678,6 +680,60 @@ providers.post("/api/providers/:name/keys/import", async (c) => {
 
   const key = addProviderKey(name, existing);
   return c.json({ ok: true, key: { id: key.id, masked: maskKey(key.value) } });
+});
+
+providers.get("/api/providers/opencode-go/usage", async (c) => {
+  const v2 = await isOpenCodeV2Cached();
+  const now = Date.now();
+  if (v2) {
+    // v2 credentials live in ai-dev's opencode.db; the lookup runs inside
+    // ai-dev so raw keys never cross into admin or the browser — the API
+    // returns percentages and reset times only.
+    try {
+      const list = await listIntegrations();
+      const integ = list.data.find((i) => i.id === "opencode-go");
+      const keyCreds: Array<{ id: string; label: string }> = [];
+      for (const cc of integ?.connections ?? []) {
+        if (cc.type === "credential" && cc.method === "key") keyCreds.push(cc);
+      }
+      const items = await Promise.all(
+        keyCreds.map(async (k) => {
+          const base = {
+            keyId: k.id,
+            masked: k.label ? `${k.label} (${k.id.slice(-4)})` : `cred-${k.id.slice(-4)}`,
+          };
+          try {
+            const r = await fetchGoUsageV2(k.id);
+            if ("usage" in r) return { ...base, ok: true, cached: r.cached, ...toUsageItemWindows(r.usage, now) };
+            return { ...base, ok: false, code: r.code, monthly: null as null };
+          } catch (err) {
+            return { ...base, ok: false, code: "upstream", monthly: null as null, error: err instanceof Error ? err.message : String(err) };
+          }
+        }),
+      );
+      return c.json({ ok: true, items, fetchedAt: new Date(now).toISOString() });
+    } catch (err) {
+      return c.json(
+        { ok: true, items: [], reason: "v2_list_failed", error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+  }
+  const file = readProviderKeys();
+  const entry = file.providers["opencode-go"];
+  if (!entry || entry.keys.length === 0) return c.json({ ok: true, items: [] });
+  const items = await Promise.all(
+    entry.keys.map(async (k) => {
+      const base = { keyId: k.id, masked: maskKey(k.value) };
+      try {
+        const r = await fetchGoUsage(k.value);
+        if ("usage" in r) return { ...base, ok: true, cached: r.cached, ...toUsageItemWindows(r.usage, now) };
+        return { ...base, ok: false, code: r.code, monthly: null as null };
+      } catch (err) {
+        return { ...base, ok: false, code: "upstream", monthly: null as null, error: err instanceof Error ? err.message : String(err) };
+      }
+    }),
+  );
+  return c.json({ ok: true, items, fetchedAt: new Date(now).toISOString() });
 });
 
 providers.get("/providers", async (c) => {
