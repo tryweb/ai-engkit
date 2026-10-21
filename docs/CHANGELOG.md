@@ -1,6 +1,25 @@
 ## [Unreleased]
 
 
+## [2.0.4] - 2026-10-21
+
+### Added
+- Support OpenChamber 2.5.0 in update-guard, bump compose pin
+- Bump 6 pins (docker 29.9.2, compose 5.6.1, buildx 0.38.1, opencode-cli 2.1.2, glab 1.124.0, gh 2.102.1)
+- Show per-account opencode-go monthly quota on Providers page
+
+### Fixed
+- Add biome linux-x64 platform pkg to default BUN_PACKAGES
+
+### Changed
+- Upgrade Docker Engine from 29.9.1 to 29.9.2.
+- Upgrade Docker Compose from 5.6.0 to 5.6.1.
+- Upgrade Docker Buildx from 0.38.0 to 0.38.1.
+- Upgrade GitHub CLI from 2.102.0 to 2.102.1.
+- Upgrade GitLab CLI from 1.123.0 to 1.124.0.
+- Upgrade OpenCode CLI from 2.0.32 to 2.1.2 (V2 line).
+- Upgrade OpenChamber from 2.4.0 to 2.5.0 (V2 line).
+
 ## [2.0.3] - 2026-10-17
 
 ### Added
@@ -2307,7 +2326,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.4...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2490,3 +2509,4 @@
 [2.0.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.3...v2.0.1
 [2.0.2]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...v2.0.2
 [2.0.3]: https://github.com/tryweb/ai-engkit/compare/v2.0.2...v2.0.3
+[2.0.4]: https://github.com/tryweb/ai-engkit/compare/v2.0.3...v2.0.4
