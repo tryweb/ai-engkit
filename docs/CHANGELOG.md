@@ -1,6 +1,20 @@
 ## [Unreleased]
 
 
+## [1.21.3] - 2026-10-21
+
+### Added
+- Bump Docker 29.9.1 → 29.9.2, Compose 5.6.0 → 5.6.1, Buildx 0.38.0 → 0.38.1, glab 1.123.0 → 1.124.0, gh 2.102.0 → 2.102.1, OMO 5.1.34 → 5.1.40
+- Add opencode-go monthly usage badge
+
+### Changed
+- Upgrade Docker Engine from 29.9.1 to 29.9.2.
+- Upgrade Docker Compose from 5.6.0 to 5.6.1.
+- Upgrade Docker Buildx from 0.38.0 to 0.38.1.
+- Upgrade GitHub CLI from 2.102.0 to 2.102.1.
+- Upgrade GitLab CLI from 1.123.0 to 1.124.0.
+- Upgrade oh-my-openagent from 5.1.34 to 5.1.40.
+
 ## [1.21.2] - 2026-10-17
 
 ### Added
@@ -2249,7 +2263,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2435,3 +2449,4 @@
 [1.21.0]: https://github.com/tryweb/ai-engkit/compare/v1.20.2...v1.21.0
 [1.21.1]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...v1.21.1
 [1.21.2]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...v1.21.2
+[1.21.3]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...v1.21.3
