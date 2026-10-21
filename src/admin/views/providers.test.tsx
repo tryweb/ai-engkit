@@ -64,6 +64,10 @@ describe("ProvidersPage", () => {
     expect(html).toContain('class="key-add-row"');
     expect(html).toContain("Opencode Go keys in registry (1)");
     expect(html).toContain("Selected in registry");
+    expect(html).toContain('data-go-usage="k-1"');
+    expect(html).toContain('class="go-usage go-usage--muted"');
+    expect(html.indexOf("masked-value")).toBeLessThan(html.indexOf("data-go-usage"));
+    expect(html.indexOf("data-go-usage")).toBeLessThan(html.indexOf("Selected in registry"));
   });
 
   it("injects boot data and loads the external page script", () => {
@@ -92,6 +96,11 @@ describe("ProvidersPage", () => {
   it("does not render an OAuth panel for non-OAuth providers", () => {
     const html = render([opencodeGo]);
     expect(html).not.toContain("oauth-panel");
+  });
+
+  it("only renders usage badges for opencode-go keys", () => {
+    const html = render([openai, googleProvider]);
+    expect(html).not.toContain("data-go-usage");
   });
 
   it("never exposes raw key values", () => {

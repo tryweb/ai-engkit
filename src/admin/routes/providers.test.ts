@@ -304,4 +304,48 @@ describe("provider API-key note endpoints", () => {
       await f.cleanup();
     }
   });
+
+  test("GET usage returns masked items and isolates a failed key", async () => {
+    const f = await fixture(JSON.stringify({
+      providers: {
+        "opencode-go": {
+          keys: [
+            { id: "good", value: "sk-good-secret", createdAt: "2026-01-01T00:00:00.000Z" },
+            { id: "bad", value: "sk-bad-secret", createdAt: "2026-01-01T00:00:00.000Z" },
+          ],
+          activeKeyId: "good",
+        },
+      },
+    }));
+    const previousPath = Bun.env.PROVIDER_KEYS_PATH;
+    const previousFetch = globalThis.fetch;
+    Bun.env.PROVIDER_KEYS_PATH = f.registryPath;
+    globalThis.fetch = (async (_input, init) => {
+      const authorization = new Headers(init?.headers).get("Authorization");
+      if (authorization === "Bearer sk-bad-secret") return new Response("", { status: 401 });
+      return new Response(JSON.stringify({
+        usage: {
+          rolling: { status: "ok", percent: 10 },
+          weekly: { status: "ok", percent: 20 },
+          monthly: { status: "ok", percent: 30 },
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const response = await providers.request("http://localhost/api/providers/opencode-go/usage");
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.ok).toBe(true);
+      expect(body.items).toHaveLength(2);
+      expect(body.items.find((item: { keyId: string }) => item.keyId === "good").masked).toBe("sk-g…cret");
+      expect(body.items.find((item: { keyId: string }) => item.keyId === "bad").error).toBe("invalid_key");
+      expect(JSON.stringify(body)).not.toContain("sk-good-secret");
+      expect(JSON.stringify(body)).not.toContain("sk-bad-secret");
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousPath === undefined) delete Bun.env.PROVIDER_KEYS_PATH;
+      else Bun.env.PROVIDER_KEYS_PATH = previousPath;
+      await f.cleanup();
+    }
+  });
 });

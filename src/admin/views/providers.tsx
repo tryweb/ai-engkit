@@ -237,6 +237,9 @@ export function ProvidersPage({
                       <span class="masked">{k.masked}</span>
                       <span class="revealed"></span>
                     </span>
+                    {p.name === "opencode-go" && (
+                      <span class="go-usage go-usage--muted" data-go-usage={k.id} title="Loading usage…">Monthly —</span>
+                    )}
                     {k.active && <span class="badge badge-success">Selected in registry</span>}
                     <input
                       type="text"

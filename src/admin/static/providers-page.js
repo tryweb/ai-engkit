@@ -515,3 +515,37 @@ function disconnectOAuth(name) {
       alert('Disconnect failed: ' + (err && err.message ? err.message : 'network error'));
     });
 }
+
+function setGoUsage(keyId, item) {
+  var badge = document.querySelector('[data-go-usage="' + keyId + '"]');
+  if (!badge || !item || !item.monthly) return;
+  var tone = item.monthly.tone === 'ok' || item.monthly.tone === 'warn' || item.monthly.tone === 'bad'
+    ? item.monthly.tone : 'muted';
+  badge.textContent = item.monthly.label || 'Monthly —';
+  badge.className = 'go-usage go-usage--' + tone;
+  var rolling = item.rolling || {};
+  var weekly = item.weekly || {};
+  badge.title = 'Rolling ' + (rolling.percent == null ? '—' : rolling.percent + '%') +
+    ' (resets ' + (rolling.resetsIn || rolling.resetsAt || '—') + ') · Weekly ' +
+    (weekly.percent == null ? '—' : weekly.percent + '%') +
+    ' (resets ' + (weekly.resetsIn || weekly.resetsAt || '—') + ')';
+}
+
+function refreshGoUsage() {
+  if (typeof document==='undefined'||!document.querySelector||typeof fetch!=='function') return;
+  if (!document.querySelector('[data-go-usage]')) return;
+  fetch('/api/providers/opencode-go/usage')
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j || !j.ok || !Array.isArray(j.items)) throw new Error('usage unavailable');
+      j.items.forEach(function (item) { setGoUsage(item.keyId, item); });
+    })
+    .catch(function () {
+      document.querySelectorAll('[data-go-usage]').forEach(function (badge) {
+        badge.className = 'go-usage go-usage--muted';
+        badge.title = 'Usage unavailable';
+      });
+    });
+}
+
+try{ if(typeof document!=='undefined'&&typeof fetch==='function'){ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',refreshGoUsage);} else {refreshGoUsage();} } }catch(e){}

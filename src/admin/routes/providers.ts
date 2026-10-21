@@ -31,6 +31,7 @@ import { invalidateProbeCacheForProvider } from "../lib/model-probe";
 import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
 import { REAL_DEPS } from "../lib/agent-models";
 import { execInAiDev } from "../lib/docker";
+import { fetchGoUsage, toUsageItemWindows } from "../lib/opencode-go-usage";
 import { ProvidersPage } from "../views/providers";
 import providersOAuth from "./providers-oauth";
 
@@ -78,6 +79,18 @@ function providerEntryFromBody(body: unknown): ProvidersMap[string] | null {
 
 providers.get("/api/providers", async (c) => {
   return c.json(await collectProvidersMeta());
+});
+
+providers.get("/api/providers/opencode-go/usage", async (c) => {
+  const keys = readProviderKeys().providers["opencode-go"]?.keys ?? [];
+  const items = await Promise.all(keys.map(async (key) => {
+    try {
+      return toUsageItemWindows(key.id, maskKey(key.value), await fetchGoUsage(key.value));
+    } catch {
+      return toUsageItemWindows(key.id, maskKey(key.value), { ok: false, code: "http_error", cached: false });
+    }
+  }));
+  return c.json({ ok: true, items });
 });
 
 providers.put("/api/providers/:name", async (c) => {
