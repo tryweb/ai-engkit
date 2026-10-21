@@ -278,6 +278,11 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # unchanged (verified against the @openchamber/web@2.4.0 tarball). Anchor
     # drift on any future version still fails the build closed.
     "2.4.0": PATCHES_V2,
+    # 2.5.0 keeps the v2 line's source shape: the three guarded files are
+    # byte-identical to 2.4.0 and the update-related API surface is unchanged
+    # (verified against the @openchamber/web@2.5.0 tarball with the module's
+    # own check_version/classify). Anchor drift still fails the build closed.
+    "2.5.0": PATCHES_V2,
 }
 
 
