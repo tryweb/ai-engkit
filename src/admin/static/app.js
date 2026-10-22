@@ -67,11 +67,14 @@
   });
 
   // Nav toggle — idempotent on repeated script loads (regression guard)
+  var navToggle = null;
+  var navBackdrop = null;
+  var appLayout = null;
   if (!window.__navUiInit) {
     window.__navUiInit = true;
-    var navToggle = document.getElementById("nav-toggle");
-    var navBackdrop = document.getElementById("nav-backdrop");
-    var appLayout = document.querySelector(".app-layout");
+    navToggle = document.getElementById("nav-toggle");
+    navBackdrop = document.getElementById("nav-backdrop");
+    appLayout = document.querySelector(".app-layout");
     if (navToggle && navBackdrop && appLayout) {
       navToggle.addEventListener("click", function () {
         appLayout.classList.toggle("nav-open");
