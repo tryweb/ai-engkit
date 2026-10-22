@@ -53,7 +53,7 @@ const GlabInstanceRow: FC<{ inst: GlabInstance }> = ({ inst }) => (
     <td><code>{inst.hostname}</code></td>
     <td>{inst.username || <span class="text-muted">—</span>}</td>
     <td><span class={`badge ${inst.authenticated ? "badge-success" : "badge-warning"}`}>{inst.authenticated ? "authenticated" : "not authenticated"}</span></td>
-    <td><button class="btn-outline" style="padding:3px 6px;font-size:0.7rem;" onclick={`removeGlabInstance('${inst.hostname}')`}>Remove</button></td>
+    <td><button type="button" class="btn-outline" style="padding:3px 6px;font-size:0.7rem;" onclick={`removeGlabInstance('${inst.hostname}')`}>Remove</button></td>
   </tr>
 );
 
@@ -68,14 +68,14 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
       <div class="card">
         <h3>Identity</h3>
         <div class="form-group">
-          <label>User Name</label>
+          <label for="user-name">User Name</label>
           <input type="text" id="user-name" value={config["user.name"] || ""} />
         </div>
         <div class="form-group">
-          <label>User Email</label>
+          <label for="user-email">User Email</label>
           <input type="email" id="user-email" value={config["user.email"] || ""} />
         </div>
-        <button onclick="saveGitConfig()">Save</button>
+        <button type="button" onclick="saveGitConfig()">Save</button>
       </div>
       <div class="card">
         <h3>Current Config</h3>
@@ -90,15 +90,15 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
         <p class="text-sm text-muted">Validity: {ghState.validity}; {ghState.expiry_unknown ? "expiry unknown" : `expiry ${ghState.expiry}`}. {ghState.checked_at ? `Checked ${ghState.checked_at}.` : "No health check recorded."}</p>
         {ghState.expiry_unknown ? <p class="text-sm text-muted">Use the GitHub device flow below to reauthorize when access is invalid or revoked.</p> : null}
         {ghAuthenticated
-          ? <button onclick="ghLogout()" class="btn-danger">Disconnect GitHub</button>
-          : <button onclick="startGhAuth()" class="btn">Connect GitHub</button>
+          ? <button type="button" onclick="ghLogout()" class="btn-danger">Disconnect GitHub</button>
+          : <button type="button" onclick="startGhAuth()" class="btn">Connect GitHub</button>
         }
       </div>
       <div id="auth-flow" style="display:none;" class="card">
         <h3>Device Code</h3>
         <p class="text-sm text-muted">Open the verification URL and enter the code below.</p>
         <div id="device-code-display" class="device-code" />
-        <p class="text-sm text-muted mb-4">Visit: <a id="verification-url" href="#" target="_blank" /></p>
+        <p class="text-sm text-muted mb-4">Visit: <a id="verification-url" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">https://github.com/login/device</a></p>
         <div class="countdown" id="countdown" />
         <div id="poll-status" class="text-sm text-muted mt-4" />
       </div>
@@ -115,7 +115,7 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
         {glabInstances.length > 0
           ? <table>
               <tr><th>Hostname</th><th>User</th><th>Status</th><th></th></tr>
-              {glabInstances.map(inst => <GlabInstanceRow inst={inst} />)}
+              {glabInstances.map(inst => <GlabInstanceRow key={inst.hostname} inst={inst} />)}
             </table>
           : <p class="text-muted">No GitLab instances configured.</p>
         }
@@ -131,10 +131,10 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
           <label for="token">Personal Access Token</label>
           <div style="display:flex;gap:4px;">
             <input type="password" id="token" placeholder="glpat-..." style="flex:1;" />
-            <button class="btn-outline" style="padding:4px 10px;font-size:0.75rem;" onclick="toggleGlabTokenVis()">Show</button>
+            <button type="button" class="btn-outline" style="padding:4px 10px;font-size:0.75rem;" onclick="toggleGlabTokenVis()">Show</button>
           </div>
         </div>
-        <button onclick="startGlabAuth()" class="btn">Connect</button>
+        <button type="button" onclick="startGlabAuth()" class="btn">Connect</button>
       </div>
 
       <script>{html`
