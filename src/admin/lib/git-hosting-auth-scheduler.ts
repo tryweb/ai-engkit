@@ -167,6 +167,7 @@ export class GitHostingAuthScheduler {
       try {
         hosts = await this.listHosts();
       } catch (error: unknown) {
+        void error;
         console.error("Git hosting auth scheduler host discovery failed: unreachable");
       }
       for (const host of hosts) {
@@ -201,12 +202,14 @@ export class GitHostingAuthScheduler {
       try {
         github = githubState(await this.checkGitHub(), checkedAt);
       } catch (error: unknown) {
+        void error;
         console.error("Git hosting auth scheduler GitHub check failed: unreachable");
       }
       const state: GitHostingAuthState = { gitlab: hostStates, github };
       try {
         await this.withStateLock(() => this.saveState(state));
       } catch (error: unknown) {
+        void error;
         console.error("Git hosting auth scheduler state persistence failed: persistence_failed");
       }
       return { ...state, skipped: false };

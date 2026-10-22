@@ -42,7 +42,7 @@ const GitLabHealthRow: FC<{ hostname: string; state?: GitLabAuthHostState }> = (
         {state?.days_remaining !== null && state?.days_remaining !== undefined ? ` · ${state.days_remaining} days remaining` : ""}
       </div>
       {state?.error_code ? <p class="text-sm text-muted">{rotationGuidance[state.error_code] || "Reauthorize this host and retry."}</p> : null}
-      <button class="btn-outline" style="margin-top:8px;" onclick={`rotateGlab(${JSON.stringify(hostname)}, '${resultId}')`}>Rotate credential</button>
+      <button type="button" class="btn-outline" style="margin-top:8px;" onclick={`rotateGlab(${JSON.stringify(hostname)}, '${resultId}')`}>Rotate credential</button>
       <span id={resultId} class="text-sm text-muted" style="margin-left:8px;" aria-live="polite" />
     </div>
   );
@@ -107,7 +107,7 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
       <div class="card">
         <h3>Credential health</h3>
         {glabInstances.length > 0
-          ? glabInstances.map((inst) => <GitLabHealthRow hostname={inst.hostname} state={authState.gitlab.find((host) => host.hostname === inst.hostname)} />)
+          ? glabInstances.map((inst) => <GitLabHealthRow key={inst.hostname} hostname={inst.hostname} state={authState.gitlab.find((host) => host.hostname === inst.hostname)} />)
           : <p class="text-muted">No GitLab health checks recorded.</p>}
       </div>
       <div class="card">
