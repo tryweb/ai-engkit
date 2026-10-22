@@ -396,6 +396,8 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
 .runtime-profile__field { display: inline-flex; align-items: center; gap: 6px; }
 .runtime-profile__label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .runtime-profile__value { font-size: var(--text-sm); min-height: 28px; display: inline-flex; align-items: center; }
+.runtime-profile__value-trigger { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: help; }
+.runtime-profile__value-trigger:hover { background: none; }
 .runtime-profile__field--security { position: relative; }
 .runtime-profile__security-detail { display: none; position: absolute; top: 100%; left: 0; max-width: min(320px, 90vw); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; gap: 6px; flex-direction: column; z-index: 5; white-space: normal; overflow-wrap: anywhere; }
 .runtime-profile__field--security:hover .runtime-profile__security-detail,

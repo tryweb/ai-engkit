@@ -57,7 +57,7 @@ const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ c
     return <span class="badge" style="background:rgba(99,102,241,0.15);color:var(--accent);font-size:0.65rem;">● Pinned {check.configured || check.current}</span>;
   }
   if (check.status === "update-available") {
-    return <span class="badge badge-warning" style="cursor:pointer;" onclick="startUpgrade()">▲ Upgrade</span>;
+    return <button type="button" class="badge badge-warning" style="cursor:pointer;font-family:inherit;" onclick="startUpgrade()">▲ Upgrade</button>;
   }
   if (check.status === "check-failed") {
     return <span class="badge" style="background:rgba(139,143,163,0.15);color:var(--text-muted);font-size:0.65rem;">? unavailable</span>;
@@ -71,9 +71,12 @@ const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ c
 type PillTone = "success" | "danger" | "warning" | "neutral";
 
 /** Reusable status pill — tone maps to .status-pill--{tone}; ariaLabel for glyph-only labels. */
-const StatusPill: FC<{ tone: PillTone; label: string; ariaLabel?: string }> = ({ tone, label, ariaLabel }) => (
-  <span class={`status-pill status-pill--${tone}`} aria-label={ariaLabel}>{label}</span>
-);
+const StatusPill: FC<{ tone: PillTone; label: string; ariaLabel?: string }> = ({ tone, label, ariaLabel }) =>
+  ariaLabel ? (
+    <span class={`status-pill status-pill--${tone}`} role="img" aria-label={ariaLabel}>{label}</span>
+  ) : (
+    <span class={`status-pill status-pill--${tone}`}>{label}</span>
+  );
 
 /** Reusable overview metric card — dl/dt/dd semantics; optional accent tone for the headline metric. */
 const MetricCard: FC<{
@@ -117,11 +120,11 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         </a>
         <a href="/auth/git-hosting" class="site-summary__item site-summary__item--link" aria-label={`GitHub ${data.gh_auth}`}>
           <span class="site-summary__label">GitHub</span>
-          <StatusPill tone={data.gh_auth === "authenticated" ? "success" : "warning"} label={data.gh_auth === "authenticated" ? "✓" : "✗"} ariaLabel={`GitHub ${data.gh_auth}`} />
+          <StatusPill tone={data.gh_auth === "authenticated" ? "success" : "warning"} label={data.gh_auth === "authenticated" ? "✓" : "✗"} />
         </a>
         <a href="/auth/git-hosting" class="site-summary__item site-summary__item--link" aria-label={`GitLab ${data.glab_auth}`}>
           <span class="site-summary__label">GitLab</span>
-          <StatusPill tone={data.glab_auth === "authenticated" ? "success" : "warning"} label={data.glab_auth === "authenticated" ? "✓" : "✗"} ariaLabel={`GitLab ${data.glab_auth}`} />
+          <StatusPill tone={data.glab_auth === "authenticated" ? "success" : "warning"} label={data.glab_auth === "authenticated" ? "✓" : "✗"} />
         </a>
         <a href="/auth/git-hosting" class="site-summary__item site-summary__item--link" aria-label={data.git_user ? `Git ${data.git_user}` : "Git not configured"}>
           <span class="site-summary__label">Git</span>
@@ -129,19 +132,19 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         </a>
         <a href="/ssh-keys" class="site-summary__item site-summary__item--link" aria-label={`SSH keys ${data.ssh_key_count}`}>
           <span class="site-summary__label">SSH Keys</span>
-          <StatusPill tone={data.ssh_key_count > 0 ? "success" : "warning"} label={String(data.ssh_key_count)} ariaLabel={`SSH keys ${data.ssh_key_count}`} />
+          <StatusPill tone={data.ssh_key_count > 0 ? "success" : "warning"} label={String(data.ssh_key_count)} />
         </a>
         <a href={center.href} class="site-summary__item site-summary__item--link" aria-label={center.ariaLabel}>
           <span class="site-summary__label">Center</span>
-          <StatusPill tone={center.tone} label={center.label} ariaLabel={center.ariaLabel} />
+          <StatusPill tone={center.tone} label={center.label} />
         </a>
         <a href={lspSummary.href} class="site-summary__item site-summary__item--link" aria-label={`LSP ${lspSummary.label}`}>
           <span class="site-summary__label">LSP</span>
-          <StatusPill tone={lspSummary.tone} label={lspSummary.label} ariaLabel={`LSP ${lspSummary.label}`} />
+          <StatusPill tone={lspSummary.tone} label={lspSummary.label} />
         </a>
         {data.admin_version_mismatch && (
           <span class="site-summary__item">
-            <StatusPill tone="warning" label={`⚠ ${data.admin_version}`} ariaLabel="Admin container version mismatch" />
+            <StatusPill tone="warning" label={`⚠ ${data.admin_version}`} ariaLabel={`Admin container version mismatch: ${data.admin_version}`} />
           </span>
         )}
         <span class="site-summary__item">
@@ -196,32 +199,34 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             </div>
             {isUnavailable ? (
               <div class="runtime-profile__fields runtime-profile__fields--unavailable">
-                <span class={`status-pill status-pill--${apply.tone}`} aria-label={apply.ariaLabel}>{apply.value}</span>
+                <span class={`status-pill status-pill--${apply.tone}`} role="img" aria-label={apply.ariaLabel}>{apply.value}</span>
               </div>
             ) : (
               <dl class="runtime-profile__fields">
                 <div class="runtime-profile__field">
                   <dt class="runtime-profile__label">{apply.label}</dt>
-                  <dd class={`runtime-profile__value status-pill status-pill--${apply.tone}`} aria-label={apply.ariaLabel}>{apply.value}</dd>
+                  <dd class={`runtime-profile__value status-pill status-pill--${apply.tone}`}>{apply.value}</dd>
                 </div>
                 <div class="runtime-profile__field">
                   <dt class="runtime-profile__label">{comp.label}</dt>
-                  <dd class={`runtime-profile__value status-pill status-pill--${comp.tone}`} aria-label={comp.ariaLabel}>{comp.value}</dd>
+                  <dd class={`runtime-profile__value status-pill status-pill--${comp.tone}`}>{comp.value}</dd>
                 </div>
                 <div class="runtime-profile__field">
                   <dt class="runtime-profile__label">{tools.label}</dt>
-                  <dd class={`runtime-profile__value status-pill status-pill--${tools.tone}`} aria-label={tools.ariaLabel}>{tools.value}</dd>
+                  <dd class={`runtime-profile__value status-pill status-pill--${tools.tone}`}>{tools.value}</dd>
                 </div>
                 <div class="runtime-profile__field runtime-profile__field--security">
                   <dt class="runtime-profile__label">{sec.label}</dt>
-                  <dd class={`runtime-profile__value status-pill status-pill--${sec.tone}`} aria-label={sec.ariaLabel} aria-describedby="runtime-profile-security-detail" tabIndex={0}>{sec.value}</dd>
+                  <dd class={`runtime-profile__value status-pill status-pill--${sec.tone}`}>
+                    <button type="button" class="runtime-profile__value-trigger" aria-describedby="runtime-profile-security-detail">{sec.value}</button>
+                  </dd>
                   <div id="runtime-profile-security-detail" class="runtime-profile__security-detail" role="tooltip">
-                    {sec.detail.map((d) => <span>{d.label}: {d.value}</span>)}<span>Permission inheritance: {perm}</span>
+                    {sec.detail.map((d) => <span key={d.label}>{d.label}: {d.value}</span>)}<span>Permission inheritance: {perm}</span>
                   </div>
                 </div>
                 <div class="runtime-profile__field">
                   <dt class="runtime-profile__label">{arch.label}</dt>
-                  <dd class={`runtime-profile__value status-pill status-pill--${arch.tone}`} aria-label={arch.ariaLabel}>{arch.value}</dd>
+                  <dd class={`runtime-profile__value status-pill status-pill--${arch.tone}`}>{arch.value}</dd>
                 </div>
               </dl>
             )}
@@ -240,7 +245,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
               <div class="flex items-center gap-2">
                 <span id="dash-restart-status" class="text-sm text-muted"></span>
-                <button id="btn-dash-restart" onclick="dashRestartAiDev()" class="btn-outline" style="color:var(--danger);border-color:var(--danger);">↻ Restart ai-dev</button>
+                <button type="button" id="btn-dash-restart" onclick="dashRestartAiDev()" class="btn-outline" style="color:var(--danger);border-color:var(--danger);">↻ Restart ai-dev</button>
               </div>
             </div>
           )}
@@ -249,7 +254,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               <div class="flex items-center gap-2">
                 <span class="text-sm">ai-admin</span>
                 <span class="badge badge-warning" style="font-size:0.65rem;">⚠ {data.admin_version}</span>
-              <button onclick="restartAdmin(event)" class="btn-outline" style="padding:2px 8px;font-size:0.7rem;color:var(--danger);border-color:var(--danger);">↻ Restart</button>
+              <button type="button" onclick="restartAdmin(event)" class="btn-outline" style="padding:2px 8px;font-size:0.7rem;color:var(--danger);border-color:var(--danger);">↻ Restart</button>
               </div>
               <p class="text-sm text-muted" style="margin-top:4px;">Admin container needs restart to match ai-dev version</p>
             </div>
@@ -271,13 +276,13 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <h3>AI Runtime</h3>
         </div>
         <div class="ai-runtime__rows">
-          <a href={providerSummary.href} class="ai-runtime__row">
+          <a href={providerSummary.href} class="ai-runtime__row" aria-label={`Providers ${providerSummary.label}`}>
             <span class="ai-runtime__label">Providers</span>
-            <span class={`ai-runtime__value status-pill status-pill--${providerSummary.tone}`} aria-label={`Providers ${providerSummary.label}`}>{providerSummary.label}</span>
+            <span class={`ai-runtime__value status-pill status-pill--${providerSummary.tone}`}>{providerSummary.label}</span>
           </a>
-          <a href={subagentSummary.href} class="ai-runtime__row">
+          <a href={subagentSummary.href} class="ai-runtime__row" aria-label={`Subagents ${subagentSummary.label}`}>
             <span class="ai-runtime__label">Subagents</span>
-            <span class={`ai-runtime__value status-pill status-pill--${subagentSummary.tone}`} aria-label={`Subagents ${subagentSummary.label}`}>{subagentSummary.label}</span>
+            <span class={`ai-runtime__value status-pill status-pill--${subagentSummary.tone}`}>{subagentSummary.label}</span>
           </a>
         </div>
       </section>
@@ -380,7 +385,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
                   const top5 = [...data.savingsReport!.topSources].sort((a, b) => b[1] - a[1]).slice(0, 5);
                   const total = data.savingsReport!.tokensSaved;
                   return top5.map(([name, tokens]) => (
-                    <tr>
+                    <tr key={name}>
                       <td>{name}</td>
                       <td>{new Intl.NumberFormat("en-US").format(tokens)}</td>
                       <td>
@@ -406,7 +411,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         <table>
           <tr><th>Component</th><th>Version</th></tr>
           {Object.entries(data.versions).map(([name, version]) => (
-            <tr>
+            <tr key={name}>
               <td>{name}</td>
               <td>
                 {name === "AI-EngKit" ? (
@@ -428,7 +433,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             <div class="progress-bar mb-4"><div class="fill" id="inline-progress-fill" style={`width:${data.upgrade_progress_pct}%;`} /></div>
             <div id="inline-log-viewer" class="log-viewer" style="max-height:200px;">
               {data.upgrade_events.map(e => (
-                <div class="log-entry">
+                <div class="log-entry" key={e.id}>
                   <span class="step">{e.step}</span>
                   <span class={`status ${e.status === 'success' ? 'text-success' : e.status === 'failure' ? 'text-danger' : ''}`}>{e.status}</span>
                   <span>{e.message}</span>
