@@ -103,7 +103,7 @@ credentials back to plaintext after the helper returns them.
 
 The helper script itself is baked into the image, so only the git config is
 applied after a successful `glab auth login` — see
-`setupGlabCredentialHelper(hostname)` in `src/admin/routes/glab-auth.ts`:
+`setupGlabCredentialHelper(hostname)` in `src/admin/lib/glab-auth.ts`:
 
 ```typescript
 async function setupGlabCredentialHelper(hostname: string): Promise<void> {
@@ -155,14 +155,33 @@ async function setupGlabCredentialHelper(hostname: string): Promise<void> {
 
 - `scripts/git-credential-glab` — the credential helper script (single source,
   baked into the image via Dockerfile COPY)
-- `src/admin/routes/glab-auth.ts` — `setupGlabCredentialHelper()` function,
-  `parseGlabInstances()`
+- `src/admin/lib/glab-auth.ts` — `setupGlabCredentialHelper()`,
+  `listGlabInstances()`, `loginGlabWithToken()`, `readGlabToken()`
 - `src/admin/routes/projects.ts` — `PUT /api/projects/:name/git-remote` handler
   (removed `GIT_TERMINAL_PROMPT=0`)
 - `src/admin/routes/git-config.ts` — removed `/api/git/credentials` endpoint
 - `src/admin/views/git-config.tsx` — removed "Stored Credentials" UI section
 - `docs/knowledge/tooling/glab-multi-instance-auth.md` — related glab auth setup
 - `docs/knowledge/tooling/ssh-key-agent-workflow.md` — SSH key alternative
+
+## Managed Rotation Boundary
+
+AI-EngKit owns GitLab token inspection and rotation. EP callers use the managed
+Git channel and must not rotate or persist credentials themselves. Rotation
+requires `read_repository` and `self_rotate`, and must not use the broader
+`api` scope. Test tokens are for tests only.
+
+The scheduler defaults are `GITLAB_TOKEN_ROTATION_THRESHOLD_DAYS=7`,
+`GITLAB_TOKEN_ROTATION_LIFETIME_DAYS=30`, and
+`GIT_HOSTING_AUTH_CHECK_INTERVAL_MS=86400000`. Impersonation rotation also
+requires the hostname in `GITLAB_IMPERSONATION_ROTATION_CONFIRMED_HOSTS`.
+The replacement token is one-time output, immediately invalidates the old
+token, and must not be retried after an ambiguous response because the token
+family may already have been reused.
+
+GitHub is check-only today. The system can report validity and trusted expiry,
+but it does not rotate GitHub PATs. A future GitHub App flow is outside this
+contract.
 
 ## Tags
 
