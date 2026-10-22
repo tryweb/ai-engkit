@@ -10,8 +10,7 @@ const gitHosting = new Hono();
 gitHosting.get("/auth/git-hosting", async (c) => {
   const [ghStatus, instances, config] = await Promise.all([getGhStatus(), listGlabInstances(), readGlobalConfig()]);
   const authState = loadGitHostingAuthState();
-  const anyAuth = instances.some((i) => i.authenticated);
-  return c.html(GitHostingPage(ghStatus, instances, anyAuth ? "authenticated" : "not authenticated", config, authState));
+  return c.html(GitHostingPage(ghStatus, instances, config, authState));
 });
 
 export default gitHosting;

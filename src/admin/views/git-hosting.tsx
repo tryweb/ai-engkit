@@ -57,7 +57,7 @@ const GlabInstanceRow: FC<{ inst: GlabInstance }> = ({ inst }) => (
   </tr>
 );
 
-const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; glabStatus: string; config: Record<string, string>; authState: GitHostingAuthState }> = ({ ghStatus, glabInstances, glabStatus, config, authState }) => {
+const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; config: Record<string, string>; authState: GitHostingAuthState }> = ({ ghStatus, glabInstances, config, authState }) => {
   const ghAuthenticated = ghStatus === "authenticated";
   const ghState = authState.github;
   return (
@@ -257,10 +257,10 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
   );
 };
 
-export function GitHostingPage(ghStatus: string, glabInstances: GlabInstance[], glabStatus: string, config: Record<string, string>, authState: GitHostingAuthState = { gitlab: [], github: { validity: "unreachable", expiry: "unknown", expiry_known: false, expiry_unknown: true, checked_at: "" } }) {
+export function GitHostingPage(ghStatus: string, glabInstances: GlabInstance[], config: Record<string, string>, authState: GitHostingAuthState = { gitlab: [], github: { validity: "unreachable", expiry: "unknown", expiry_known: false, expiry_unknown: true, checked_at: "" } }) {
   return (
     <Layout title="Git Hosting" currentPath="/auth/git-hosting">
-      <GitHostingContent ghStatus={ghStatus} glabInstances={glabInstances} glabStatus={glabStatus} config={config} authState={authState} />
+      <GitHostingContent ghStatus={ghStatus} glabInstances={glabInstances} config={config} authState={authState} />
     </Layout>
   );
 }
