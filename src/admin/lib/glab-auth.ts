@@ -1,6 +1,6 @@
-import { execInAiDev, type ExecResult } from "./docker";
+import { execInAiDev, type ExecOptions, type ExecResult } from "./docker";
 
-export type GlabCommand = (command: string, timeoutMs: number) => Promise<ExecResult>;
+export type GlabCommand = (command: string, timeoutMs: number, options?: ExecOptions) => Promise<ExecResult>;
 
 export interface GlabInstance {
   hostname: string;
@@ -19,6 +19,28 @@ export function normalizeHostname(input: string): string {
   return input.trim().replace(/^https?:\/\//i, "").split("/")[0];
 }
 
+function redactAuthError(message: string, token?: string): string {
+  const redacted = token ? message.replaceAll(token, "[REDACTED]") : message;
+  return redacted.replace(/glpat-[A-Za-z0-9_-]+/g, "[REDACTED]");
+}
+
+/** Read one host token from glab config.yml without persisting or logging it. */
+export async function readGlabToken(hostname: string, command: GlabCommand = execInAiDev): Promise<string | null> {
+  const result = await command(
+    `python3 -c '
+import yaml
+with open("/home/devuser/.config/glab-cli/config.yml") as f:
+    data = yaml.safe_load(f) or {}
+host = data.get("hosts", {}).get(${JSON.stringify(normalizeHostname(hostname))}, {}) or {}
+print(host.get("token", "") or "")
+' 2>/dev/null`,
+    15_000,
+  );
+  if (result.exitCode !== 0) return null;
+  const token = result.stdout.trim();
+  return token || null;
+}
+
 /**
  * Configure git to use the git-credential-glab helper for the given hostname.
  *
@@ -34,14 +56,26 @@ export function normalizeHostname(input: string): string {
 export async function setupGlabCredentialHelper(hostname: string, command: GlabCommand = execInAiDev): Promise<void> {
   // Remove the global store helper (older entrypoints re-added it on every
   // start) so git never caches the token back to plaintext on disk.
-  await command("git config --global --unset credential.helper 2>/dev/null || true", 5_000);
+  await command("git config --global --unset credential.helper 2>/dev/null", 5_000);
 
   // Defensive re-normalization: only a bare hostname may enter the git config key.
   const escHost = JSON.stringify(normalizeHostname(hostname));
-  await command(`git config --global credential.https://${escHost}.helper glab 2>/dev/null || true`, 5_000);
-  await command(`git config --global credential.http://${escHost}.helper glab 2>/dev/null || true`, 5_000);
+  const httpsResult = await command(`git config --global credential.https://${escHost}.helper glab 2>/dev/null`, 5_000);
+  if (httpsResult.exitCode !== 0) throw new Error(redactAuthError("Failed to configure the HTTPS Git credential helper"));
+  const httpResult = await command(`git config --global credential.http://${escHost}.helper glab 2>/dev/null`, 5_000);
+  if (httpResult.exitCode !== 0) throw new Error(redactAuthError("Failed to configure the HTTP Git credential helper"));
 
-  await command(": > ~/.config/git/.git-credentials 2>/dev/null || true", 5_000);
+  const clearCredentialsResult = await command(": > ~/.config/git/.git-credentials 2>/dev/null", 5_000);
+  if (clearCredentialsResult.exitCode !== 0) throw new Error(redactAuthError("Failed to clear the Git credentials file"));
+
+  const verifyResult = await command(
+    `test "$(git config --global --get credential.https://${escHost}.helper)" = glab && ` +
+      `test "$(git config --global --get credential.http://${escHost}.helper)" = glab && ` +
+      `test -z "$(git config --global --get credential.helper)" && ` +
+      `test ! -s ~/.config/git/.git-credentials`,
+    5_000,
+  );
+  if (verifyResult.exitCode !== 0) throw new Error(redactAuthError("Git credential helper verification failed"));
 }
 
 export async function listGlabInstances(command: GlabCommand = execInAiDev): Promise<GlabInstance[]> {
@@ -91,14 +125,26 @@ export async function loginGlabWithToken(
   token: string,
   command: GlabCommand = execInAiDev,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const result = await command(
-    `glab auth login --hostname ${JSON.stringify(normalizeHostname(hostname))} --token ${JSON.stringify(token)} 2>&1 || true`,
-    30_000,
-  );
-  if (result.exitCode !== 0) {
-    return { ok: false, error: result.stderr || "Authentication failed" };
+  let result: ExecResult;
+  try {
+    result = await command(
+      `glab auth login --hostname ${JSON.stringify(normalizeHostname(hostname))} --stdin 2>&1`,
+      30_000,
+      { stdin: `${token}\n` },
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Authentication failed";
+    return { ok: false, error: redactAuthError(message, token) };
   }
-  await setupGlabCredentialHelper(hostname, command);
+  if (result.exitCode !== 0) {
+    return { ok: false, error: redactAuthError(result.stderr || result.stdout || "Authentication failed", token) };
+  }
+  try {
+    await setupGlabCredentialHelper(hostname, command);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Credential helper setup failed";
+    return { ok: false, error: redactAuthError(message, token) };
+  }
   return { ok: true };
 }
 
