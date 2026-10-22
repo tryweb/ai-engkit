@@ -27,8 +27,9 @@ function providerMeta(name) {
 
 function validateUrl(value) {
   if (!value) return true;
+  var url;
   try {
-    var url = new URL(value);
+    url = new URL(value);
     return url.protocol === 'http:' || url.protocol === 'https:';
   } catch (e) {
     return false;
@@ -110,17 +111,18 @@ function openProviderEdit(name) {
 }
 
 function patchField(field, value) {
+  var result;
   if (!editState) return;
   if (field === 'label') editState.name = value;
   else if (field === 'npm') {
     editState.npm = value;
-    var result = validateNpm(value);
+    result = validateNpm(value);
     showFieldError('edit', 'npm', result.valid ? null : result.error);
   }
   else if (field === 'baseURL') {
     editState.options = editState.options || {};
     editState.options.baseURL = value;
-    var result = validateBaseURL(value);
+    result = validateBaseURL(value);
     showFieldError('edit', 'baseurl', result.valid ? null : result.error);
   }
   else if (field === 'apiKey') {
@@ -202,21 +204,22 @@ function openAddProvider() {
 }
 
 function validateAddField(field, value) {
+  var result;
   if (!addState) return;
   if (field === 'name') {
     addName = value;
-    var result = validateProviderName(value);
+    result = validateProviderName(value);
     showFieldError('add', 'name', result.valid ? null : result.error);
   } else if (field === 'label') {
     addState.name = value;
   } else if (field === 'npm') {
     addState.npm = value;
-    var result = validateNpm(value);
+    result = validateNpm(value);
     showFieldError('add', 'npm', result.valid ? null : result.error);
   } else if (field === 'baseURL') {
     addState.options = addState.options || {};
     addState.options.baseURL = value;
-    var result = validateBaseURL(value);
+    result = validateBaseURL(value);
     showFieldError('add', 'baseurl', result.valid ? null : result.error);
   } else if (field === 'apiKey') {
     addApiKey = value;
@@ -239,13 +242,16 @@ function onAddRawInput(text) {
 }
 
 function saveNewProvider() {
+  var raw;
+  var parsed;
+  var baseURL;
   if (!addRawValid) return;
   if (!addState) return;
 
   if (isV2Mode) {
-    var raw = document.getElementById('add-raw').value;
+    raw = document.getElementById('add-raw').value;
     try {
-      var parsed = JSON.parse(raw);
+      parsed = JSON.parse(raw);
       if (parsed.url) {
         fetch('/api/providers/wellknown', {
           method: 'POST',
@@ -255,7 +261,7 @@ function saveNewProvider() {
         return;
       }
     } catch(e) {}
-    var baseURL = (addState.options && addState.options.baseURL) || '';
+    baseURL = (addState.options && addState.options.baseURL) || '';
     if (baseURL && validateUrl(baseURL) && baseURL.includes('wellknown') || baseURL.includes('.json')) {
       fetch('/api/providers/wellknown', {
         method: 'POST',
@@ -324,6 +330,10 @@ function deleteProvider(name) {
 }
 
 function addKey(name) {
+  var rn;
+  var acc;
+  var gw;
+  var acc2;
   var input = providerCard(name).querySelector('.key-add-input');
   var noteInput = providerCard(name).querySelector('.key-add-note-input');
   var value = input.value;
@@ -333,22 +343,22 @@ function addKey(name) {
   var answer = undefined;
   if (isV2Mode) {
     if (name === 'azure') {
-      var rn = prompt('Enter Azure Resource Name (required for Azure):');
+      rn = prompt('Enter Azure Resource Name (required for Azure):');
       if (rn === null) return;
       rn = rn.trim();
       if (!rn) { alert('Resource name required'); return; }
       answer = { resourceName: rn };
     } else if (name === 'cloudflare-ai-gateway') {
-      var acc = prompt('Enter Cloudflare Account ID:');
+      acc = prompt('Enter Cloudflare Account ID:');
       if (acc === null) return;
       acc = acc.trim();
-      var gw = prompt('Enter Cloudflare AI Gateway ID:');
+      gw = prompt('Enter Cloudflare AI Gateway ID:');
       if (gw === null) return;
       gw = gw.trim();
       if (!acc || !gw) { alert('Both fields required'); return; }
       answer = { accountId: acc, gatewayId: gw };
     } else if (name === 'cloudflare-workers-ai') {
-      var acc2 = prompt('Enter Cloudflare Account ID:');
+      acc2 = prompt('Enter Cloudflare Account ID:');
       if (acc2 === null) return;
       acc2 = acc2.trim();
       if (!acc2) { alert('Account ID required'); return; }
@@ -608,12 +618,14 @@ function startOAuthV2(name, methodID) {
   })
     .then(function(r){return r.json();})
     .then(function(j){
+      var codeEl2;
+      var link2;
       if (!j.ok) { oauthStatus('Could not start: '+(j.error||'unknown')); return; }
       oauthFlowId = j.attemptID;
       if (j.url) {
-        var codeEl2 = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
+        codeEl2 = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
         if (codeEl2) codeEl2.textContent = j.url;
-        var link2 = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
+        link2 = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
         if (link2) { link2.href = j.url; link2.textContent = j.url; }
       }
       oauthStatus(j.instructions || 'Complete authorization in your browser. Polling…');
