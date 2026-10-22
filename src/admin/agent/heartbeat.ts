@@ -1,4 +1,9 @@
 import { execInAiDev } from "../lib/docker";
+import {
+  EMPTY_GIT_HOSTING_AUTH_STATE,
+  loadGitHostingAuthState,
+  type GitHostingAuthState,
+} from "../lib/git-hosting-auth-state";
 import type { ContainerMap, StatusResponse } from "../lib/status";
 import type { UpdateCheckResult } from "../routes/versions";
 
@@ -15,6 +20,7 @@ export interface StatusReport {
   upgrade_state: string;
   upgrade_available: boolean;
   latest_version: string;
+  readonly gitHostingAuth?: GitHostingAuthState;
 }
 
 export interface HeartbeatDeps {
@@ -31,6 +37,16 @@ function getVersion(command: string): Promise<string> {
     },
     () => "",
   );
+}
+
+function loadAuthHealth(): GitHostingAuthState {
+  try {
+    return loadGitHostingAuthState();
+  } catch (error) {
+    if (error instanceof Error) console.warn("Unable to load git-hosting auth state", error.message);
+    else console.warn("Unable to load git-hosting auth state", String(error));
+    return EMPTY_GIT_HOSTING_AUTH_STATE;
+  }
 }
 
 /** Collect component versions from the shared ai-dev command adapter. */
@@ -73,6 +89,7 @@ export async function buildStatusReport(
     upgrade_state: upgradeState,
     upgrade_available: updateCheck.update_available,
     latest_version: updateCheck.latest,
+    gitHostingAuth: loadAuthHealth(),
   };
 }
 
