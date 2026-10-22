@@ -28,14 +28,14 @@ const IN_SYNC_INFO = { icon: "✓", label: "In sync", title: "Server is in sync"
 function driftBadge(drift: LspDriftReason | null) {
   if (drift === null)
     return (
-      <span class="badge badge-success lsp-status" title={IN_SYNC_INFO.title} aria-label={`${IN_SYNC_INFO.label} — ${IN_SYNC_INFO.title}`}>
+      <span class="badge badge-success lsp-status" title={IN_SYNC_INFO.title} role="img" aria-label={`${IN_SYNC_INFO.label} — ${IN_SYNC_INFO.title}`}>
         <span aria-hidden="true">{IN_SYNC_INFO.icon}</span>
         <span class="visually-hidden">{IN_SYNC_INFO.label}</span>
       </span>
     );
   const info = DRIFT_INFO[drift];
   return (
-    <span class="badge badge-warning lsp-status" title={info.title} aria-label={`${info.label} — ${info.title}`}>
+    <span class="badge badge-warning lsp-status" title={info.title} role="img" aria-label={`${info.label} — ${info.title}`}>
       <span aria-hidden="true">{info.icon}</span>
       <span class="visually-hidden">{info.label}</span>
     </span>
