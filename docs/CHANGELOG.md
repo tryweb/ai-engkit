@@ -1,6 +1,29 @@
 ## [Unreleased]
 
 
+## [1.22.0] - 2026-10-22
+
+### Added
+- Bump GH_VERSION 2.102.1 → 2.103.0
+- Carry redacted auth-health summary in heartbeat
+- Dispatch GitLab rotation through management channel
+- Add glab.token.rotate to management protocol
+- Start credential scheduler with server lifecycle
+- Surface credential health on Git Hosting page
+- Expose protected GitLab rotation controls
+- Expose structured Git-hosting auth state
+- Schedule startup and periodic credential checks
+- Persist redacted Git-hosting auth state
+- Add GitLab self-inspection and rotation service
+- Add GitHub validity and expiry-unknown status
+- Harden GitLab credential persistence and helper verification
+
+### Documentation
+- Document rotation policy, hazards, and test-token runbook
+
+### Changed
+- Upgrade GitHub CLI from 2.102.1 to 2.103.0.
+
 ## [1.21.3] - 2026-10-21
 
 ### Added
@@ -2263,7 +2286,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.22.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2450,3 +2473,4 @@
 [1.21.1]: https://github.com/tryweb/ai-engkit/compare/v1.21.0...v1.21.1
 [1.21.2]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...v1.21.2
 [1.21.3]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...v1.21.3
+[1.22.0]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...v1.22.0
