@@ -18,6 +18,7 @@ import {
   parseCommandName,
   parseCommandType,
   parseEnvelope,
+  parseGlabTokenRotatePayload,
 } from "./protocol";
 
 describe("agent protocol", () => {
@@ -217,6 +218,7 @@ describe("agent protocol", () => {
     expect(parseCommandName({ type: "gh.auth.logout" })).toBe("gh.auth.logout");
     expect(parseCommandName({ type: "glab.instance.add" })).toBe("glab.instance.add");
     expect(parseCommandName({ type: "glab.instance.remove" })).toBe("glab.instance.remove");
+    expect(parseCommandName({ type: "glab.token.rotate", hostname: "gitlab.example.com" })).toBe("glab.token.rotate");
     expect(parseCommandName({ type: "projects.create" })).toBe("projects.create");
     expect(parseCommandName({ type: "projects.set-remote" })).toBe("projects.set-remote");
     expect(parseCommandName({ type: "projects.enable" })).toBe("projects.enable");
@@ -230,6 +232,17 @@ describe("agent protocol", () => {
     expect(parseCommandName("upgrade")).toBeNull();
     expect(parseCommandName({ type: "git.config.get" })).toBeNull();
     expect(parseCommandName({ type: "agent-models.list" })).toBeNull();
+  });
+
+  it("validates the hostname-only GitLab token rotation payload", () => {
+    expect(parseGlabTokenRotatePayload({ hostname: "gitlab.example.com" })).toEqual({
+      hostname: "gitlab.example.com",
+    });
+    expect(parseGlabTokenRotatePayload({})).toBeNull();
+    expect(parseGlabTokenRotatePayload({ hostname: " " })).toBeNull();
+    expect(parseGlabTokenRotatePayload({ hostname: "gitlab.example.com", extra: true })).toBeNull();
+    expect(parseGlabTokenRotatePayload(null)).toBeNull();
+    expect(parseGlabTokenRotatePayload("gitlab.example.com")).toBeNull();
   });
 
   it("parses action and query command types", () => {
@@ -249,6 +262,7 @@ describe("agent protocol", () => {
       "gh.auth.logout",
       "glab.instance.add",
       "glab.instance.remove",
+      "glab.token.rotate",
       "projects.create",
       "projects.set-remote",
       "projects.enable",

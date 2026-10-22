@@ -43,6 +43,7 @@ export type CommandName =
   | "gh.auth.logout"
   | "glab.instance.add"
   | "glab.instance.remove"
+  | "glab.token.rotate"
   | "projects.create"
   | "projects.set-remote"
   | "projects.enable"
@@ -64,6 +65,25 @@ export type QueryName =
 
 /** Supported action and query command types. */
 export type CommandType = CommandName | QueryName;
+
+export interface GlabTokenRotatePayload {
+  readonly hostname: string;
+}
+
+export interface GlabTokenRotateResponse {
+  readonly ok: boolean;
+  readonly rotated: boolean;
+  readonly errorCode?: string;
+}
+
+export function parseGlabTokenRotatePayload(payload: unknown): GlabTokenRotatePayload | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null;
+  const hostname = Reflect.get(payload, "hostname");
+  if (Object.keys(payload).length !== 1 || typeof hostname !== "string" || hostname.trim() === "") {
+    return null;
+  }
+  return { hostname };
+}
 
 let messageSequence = 0;
 
@@ -228,6 +248,7 @@ export function parseCommandName(payload: unknown): CommandName | null {
     case "gh.auth.logout":
     case "glab.instance.add":
     case "glab.instance.remove":
+    case "glab.token.rotate":
     case "projects.create":
     case "projects.set-remote":
     case "projects.enable":
@@ -262,6 +283,7 @@ export function parseCommandType(payload: unknown): CommandType | null {
     case "gh.auth.logout":
     case "glab.instance.add":
     case "glab.instance.remove":
+    case "glab.token.rotate":
     case "projects.create":
     case "projects.set-remote":
     case "projects.enable":
