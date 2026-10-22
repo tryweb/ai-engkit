@@ -1,5 +1,6 @@
 import type { FC } from "hono/jsx";
 import { html } from "hono/html";
+import type { GitHostingAuthState, GitLabAuthHostState } from "../lib/git-hosting-auth-state";
 import { Layout } from "./layout";
 
 interface GlabInstance {
@@ -7,6 +8,45 @@ interface GlabInstance {
   username: string;
   authenticated: boolean;
 }
+
+const rotationGuidance: Record<string, string> = {
+  invalid_expired: "The credential is expired or invalid. Reauthorize this host, then retry rotation.",
+  insufficient_scope: "The credential lacks the required scope. Reauthorize with a token that can manage credentials.",
+  unsupported_version: "This GitLab version does not support rotation. Reauthorize this host manually.",
+  impersonation_unconfirmed: "Rotation needs impersonation confirmation. Reauthorize this host after confirming the policy.",
+  ambiguous_rotation: "Rotation could not be confirmed. Reauthorize this host and retry.",
+  persistence_failed: "Rotation completed but status could not be saved. Reauthorize or retry after checking storage.",
+  unreachable: "The GitLab host could not be reached. Reauthorize when it is available and retry.",
+};
+
+function hostTone(host: GitLabAuthHostState | undefined): string {
+  if (!host || host.validity === "unhealthy") return "badge-danger";
+  return host.days_remaining !== null && host.days_remaining <= 7 ? "badge-warning" : "badge-success";
+}
+
+function hostLabel(host: GitLabAuthHostState | undefined): string {
+  if (!host || host.validity === "unhealthy") return "failed";
+  return host.days_remaining !== null && host.days_remaining <= 7 ? "expiring soon" : "healthy";
+}
+
+const GitLabHealthRow: FC<{ hostname: string; state?: GitLabAuthHostState }> = ({ hostname, state }) => {
+  const resultId = `rotate-result-${hostname.replace(/[^a-zA-Z0-9]/g, "-")}`;
+  return (
+    <div class="form-group" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+        <strong><code>{hostname}</code></strong>
+        <span class={`badge ${hostTone(state)}`}>{hostLabel(state)}</span>
+      </div>
+      <div class="text-sm text-muted" style="margin-top:4px;">
+        {state?.checked_at ? `Checked ${state.checked_at}` : "No health check recorded"}
+        {state?.days_remaining !== null && state?.days_remaining !== undefined ? ` · ${state.days_remaining} days remaining` : ""}
+      </div>
+      {state?.error_code ? <p class="text-sm text-muted">{rotationGuidance[state.error_code] || "Reauthorize this host and retry."}</p> : null}
+      <button class="btn-outline" style="margin-top:8px;" onclick={`rotateGlab(${JSON.stringify(hostname)}, '${resultId}')`}>Rotate credential</button>
+      <span id={resultId} class="text-sm text-muted" style="margin-left:8px;" aria-live="polite" />
+    </div>
+  );
+};
 
 const GlabInstanceRow: FC<{ inst: GlabInstance }> = ({ inst }) => (
   <tr>
@@ -17,8 +57,9 @@ const GlabInstanceRow: FC<{ inst: GlabInstance }> = ({ inst }) => (
   </tr>
 );
 
-const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; glabStatus: string; config: Record<string, string> }> = ({ ghStatus, glabInstances, glabStatus, config }) => {
+const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; glabStatus: string; config: Record<string, string>; authState: GitHostingAuthState }> = ({ ghStatus, glabInstances, glabStatus, config, authState }) => {
   const ghAuthenticated = ghStatus === "authenticated";
+  const ghState = authState.github;
   return (
     <div>
       <h2 style="margin-bottom:24px;">Git Hosting</h2>
@@ -46,6 +87,8 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
       <div class="card">
         <div id="gh-user-info" />
         <h3>Status: <span class={`badge ${ghAuthenticated ? "badge-success" : "badge-warning"}`}>{ghStatus}</span></h3>
+        <p class="text-sm text-muted">Validity: {ghState.validity}; {ghState.expiry_unknown ? "expiry unknown" : `expiry ${ghState.expiry}`}. {ghState.checked_at ? `Checked ${ghState.checked_at}.` : "No health check recorded."}</p>
+        {ghState.expiry_unknown ? <p class="text-sm text-muted">Use the GitHub device flow below to reauthorize when access is invalid or revoked.</p> : null}
         {ghAuthenticated
           ? <button onclick="ghLogout()" class="btn-danger">Disconnect GitHub</button>
           : <button onclick="startGhAuth()" class="btn">Connect GitHub</button>
@@ -61,6 +104,12 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
       </div>
 
       <h3 style="margin-bottom:12px;margin-top:24px;">GitLab CLI Authentication</h3>
+      <div class="card">
+        <h3>Credential health</h3>
+        {glabInstances.length > 0
+          ? glabInstances.map((inst) => <GitLabHealthRow hostname={inst.hostname} state={authState.gitlab.find((host) => host.hostname === inst.hostname)} />)
+          : <p class="text-muted">No GitLab health checks recorded.</p>}
+      </div>
       <div class="card">
         <h3>Configured Instances</h3>
         {glabInstances.length > 0
@@ -176,15 +225,42 @@ const GitHostingContent: FC<{ ghStatus: string; glabInstances: GlabInstance[]; g
           });
           location.reload();
         }
+        async function rotateGlab(hostname, resultId) {
+          const button = event.target;
+          const result = document.getElementById(resultId);
+          button.disabled = true;
+          button.textContent = "Rotating...";
+          result.textContent = "";
+          try {
+            const response = await fetch("/api/auth/glab/rotate", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ hostname }),
+            });
+            const data = await response.json();
+            if (data.ok) {
+              result.textContent = data.rotated ? "Credential rotated." : "Credential is already current.";
+              result.className = "text-sm text-success";
+            } else {
+              result.textContent = "Rotation failed: " + (data.errorCode || "unknown error") + ". Reauthorize this host and retry.";
+              result.className = "text-sm text-danger";
+            }
+          } catch {
+            result.textContent = "Rotation failed. Reauthorize this host and retry.";
+            result.className = "text-sm text-danger";
+          } finally {
+            button.disabled = false;
+            button.textContent = "Rotate credential";
+          }
+        }
       `}</script>
     </div>
   );
 };
 
-export function GitHostingPage(ghStatus: string, glabInstances: GlabInstance[], glabStatus: string, config: Record<string, string>) {
+export function GitHostingPage(ghStatus: string, glabInstances: GlabInstance[], glabStatus: string, config: Record<string, string>, authState: GitHostingAuthState = { gitlab: [], github: { validity: "unreachable", expiry: "unknown", expiry_known: false, expiry_unknown: true, checked_at: "" } }) {
   return (
     <Layout title="Git Hosting" currentPath="/auth/git-hosting">
-      <GitHostingContent ghStatus={ghStatus} glabInstances={glabInstances} glabStatus={glabStatus} config={config} />
+      <GitHostingContent ghStatus={ghStatus} glabInstances={glabInstances} glabStatus={glabStatus} config={config} authState={authState} />
     </Layout>
   );
 }
