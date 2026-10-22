@@ -66,6 +66,10 @@ import {
 import { validateAgentChain } from "../lib/agent-model-config";
 import { collectStatus } from "../lib/status";
 import { restartAiDev as restartRealAiDev } from "../lib/restart-ai-dev";
+import {
+  createGitLabTokenRotationService,
+  type GitLabRotationResult,
+} from "../lib/gitlab-token-rotation";
 import { getState, runUpgrade as runRealUpgrade } from "../lib/upgrade";
 import {
   buildRecreateSubcommand,
@@ -82,6 +86,7 @@ import {
   buildError,
   buildResult,
   ERROR_CODES,
+  parseGlabTokenRotatePayload,
   parseCommandType,
   type Envelope,
   type QueryName,
@@ -139,6 +144,7 @@ export interface CommandDeps {
   glabAddInstance: (hostname: string, token: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   glabRemoveInstance: (hostname: string) => Promise<void>;
   glabListInstances: () => Promise<GlabInstance[]>;
+  glabTokenRotate?: (hostname: string) => Promise<GitLabRotationResult>;
   projectCreate: (name: string, payload: { gitInit?: boolean; gitRemote?: string }) => Promise<ProjectActionResult>;
   projectSetRemote: (name: string, remote: string) => Promise<ProjectActionResult>;
   projectEnable: (name: string) => Promise<ProjectActionResult>;
@@ -629,6 +635,8 @@ export async function waitForIdleSessions(
 /** Create a dispatcher that validates, defers, and asynchronously executes commands. */
 export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps): CommandDispatcher {
   const queue = createDeferralQueue<Envelope>();
+  const rotateGitLabToken = deps.glabTokenRotate ?? ((hostname: string) =>
+    createGitLabTokenRotationService().rotateIfNeeded(hostname));
 
   function sendMalformed(env: Envelope): void {
     sender.send(buildError(ERROR_CODES.malformed_command, "Malformed command payload", env.id));
@@ -1248,6 +1256,38 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
     }
   }
 
+  async function executeGlabTokenRotate(env: Envelope, payload: { readonly hostname: string }): Promise<void> {
+    const startedAt = deps.now();
+    try {
+      const result = await rotateGitLabToken(payload.hostname);
+      if (!("code" in result)) {
+        sender.send(buildAck(env.id, {
+          status: "success",
+          message: "GitLab token rotation completed",
+          started_at: startedAt,
+          finished_at: deps.now(),
+          data: { ok: true, hostname: payload.hostname, rotated: result.rotated },
+        }));
+        return;
+      }
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: "GitLab token rotation failed",
+        started_at: startedAt,
+        finished_at: deps.now(),
+        data: { ok: false, hostname: payload.hostname, rotated: false, errorCode: result.code },
+      }));
+    } catch {
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: "GitLab token rotation failed",
+        started_at: startedAt,
+        finished_at: deps.now(),
+        data: { ok: false, hostname: payload.hostname, rotated: false, errorCode: "unreachable" },
+      }));
+    }
+  }
+
   async function executeProjectEnable(env: Envelope, payload: ProjectNamePayload): Promise<void> {
     await executeAction(env, async () => {
       const result = await deps.projectEnable(payload.name);
@@ -1629,6 +1669,17 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
         void executeGlabInstanceRemove(env, payload);
         return;
       }
+      case "glab.token.rotate": {
+        const payload = isRecord(env.payload) && Object.keys(env.payload).length === 2 && env.payload["type"] === "glab.token.rotate"
+          ? parseGlabTokenRotatePayload({ hostname: env.payload["hostname"] })
+          : null;
+        if (payload === null) {
+          sendMalformed(env);
+          return;
+        }
+        void executeGlabTokenRotate(env, payload);
+        return;
+      }
       case "projects.create": {
         const payload = parseProjectCreate(env.payload);
         if (payload === null) {
@@ -1729,6 +1780,7 @@ export function createRealCommandDeps(
   restartDeps: Partial<RealRestartDeps> = {},
 ): CommandDeps {
   const agentModelsLib = createAgentModelsLib(AGENT_MODEL_REAL_DEPS);
+  const gitLabTokenRotationService = createGitLabTokenRotationService();
   const {
     getComposeProject: resolveComposeProject = getComposeProject,
     getSelfBindSource: resolveSelfBindSource = getSelfBindSource,
@@ -1863,6 +1915,8 @@ export function createRealCommandDeps(
     glabAddInstance: realLoginGlabWithToken,
     glabRemoveInstance: realLogoutGlab,
     glabListInstances: realListGlabInstances,
+    glabTokenRotate: (hostname) =>
+      gitLabTokenRotationService.rotateIfNeeded(hostname),
     projectCreate: (name, payload) => realCreateProject(name, payload, {}),
     projectSetRemote: (name, remote) => realSetProjectRemote(name, remote, {}),
     projectEnable: (name) => realEnableProject(name, {}),

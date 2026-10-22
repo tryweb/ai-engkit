@@ -7,6 +7,7 @@ import { collectProjectOverviews } from "../lib/projects-overview";
 import { collectProvidersMeta } from "../lib/provider-meta";
 import type { ProviderKey, ProviderKeysFile } from "../lib/provider-keys";
 import { collectStatus } from "../lib/status";
+import type { GitLabRotationResult } from "../lib/gitlab-token-rotation";
 import type { CommandDeps, CommandSender, IdleWaitOutcome } from "./commands";
 import { createCommandDispatcher, createRealCommandDeps, waitForIdleSessions } from "./commands";
 import type { StatusReport } from "./heartbeat";
@@ -49,6 +50,7 @@ interface Fixture {
   ghLogouts: () => number;
   glabAdds: Array<{ hostname: string; token: string }>;
   glabRemoves: string[];
+  glabTokenRotations: string[];
   projectCreates: string[];
   projectSetRemotes: Array<[string, string]>;
   projectEnables: string[];
@@ -144,6 +146,7 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
   const gitConfigSets: Array<[string, string]> = [];
   const glabAdds: Array<{ hostname: string; token: string }> = [];
   const glabRemoves: string[] = [];
+  const glabTokenRotations: string[] = [];
   let ghDeviceStarts = 0;
   let ghLogouts = 0;
   const projectCreates: string[] = [];
@@ -263,6 +266,10 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
         glabRemoves.push(hostname);
       },
       glabListInstances: async () => [{ hostname: "gitlab.com", username: "alice", authenticated: true }],
+      glabTokenRotate: async (hostname: string): Promise<GitLabRotationResult> => {
+        glabTokenRotations.push(hostname);
+        return { ok: true, rotated: true, expiresAt: "2026-09-09" };
+      },
       projectCreate: async (name: string) => {
         projectCreates.push(name);
         return { ok: true };
@@ -365,6 +372,7 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
     ghLogouts: () => ghLogouts,
     glabAdds,
     glabRemoves,
+    glabTokenRotations,
     projectCreates,
     projectSetRemotes,
     projectEnables,
@@ -1799,7 +1807,7 @@ describe("query result contracts", () => {
       id: "glab-add-1",
       payload: { status: "success", message: "GitLab instance gitlab.example.com connected" },
     });
-    expect(JSON.stringify(fixture.sent)).not.toContain("glpat-secret-token-xyz");
+    expect(JSON.stringify(fixture.sent)).not.toContain("token");
   });
 
   test("glab.instance.add rejects a missing token", async () => {
@@ -1830,6 +1838,76 @@ describe("query result contracts", () => {
       payload: { status: "success", message: "GitLab instance gitlab.example.com removed" },
     });
   });
+
+  test("glab.token.rotate returns a redacted rotation acknowledgement", async () => {
+    const fixture = createFixture();
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("glab-rotate-1", { type: "glab.token.rotate", hostname: "gitlab.example.com" }));
+    await flushAsyncWork();
+
+    expect(fixture.glabTokenRotations).toEqual(["gitlab.example.com"]);
+    expect(fixture.sent[0]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      id: "glab-rotate-1",
+      payload: {
+        status: "success",
+        data: { ok: true, hostname: "gitlab.example.com", rotated: true },
+      },
+    });
+    expect(JSON.stringify(fixture.sent)).not.toContain("glpat-secret-token-xyz");
+  });
+
+  test("glab.token.rotate rejects payloads that are not hostname-only", async () => {
+    const fixture = createFixture();
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("glab-rotate-bad", {
+      type: "glab.token.rotate",
+      hostname: "gitlab.example.com",
+      token: "unexpected-field",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.glabTokenRotations).toEqual([]);
+    expect(fixture.sent[0]).toMatchObject({
+      type: MESSAGE_TYPES.error,
+      payload: { code: ERROR_CODES.malformed_command },
+    });
+    expect(JSON.stringify(fixture.sent)).not.toContain("unexpected-field");
+  });
+
+  for (const errorCode of [
+    "invalid_expired",
+    "insufficient_scope",
+    "unsupported_version",
+    "impersonation_unconfirmed",
+    "persistence_failed",
+    "ambiguous_rotation",
+    "unreachable",
+  ] as const) {
+    test(`glab.token.rotate returns stable error code ${errorCode}`, async () => {
+      const fixture = createFixture({
+        glabTokenRotate: async (): Promise<GitLabRotationResult> => ({ ok: false, code: errorCode }),
+      });
+      const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+      dispatcher.handle(commandEnvelope(`glab-rotate-${errorCode}`, {
+        type: "glab.token.rotate",
+        hostname: "gitlab.example.com",
+      }));
+      await flushAsyncWork();
+
+      expect(fixture.sent[0]).toMatchObject({
+        type: MESSAGE_TYPES.ack,
+        payload: {
+          status: "failure",
+          data: { ok: false, hostname: "gitlab.example.com", rotated: false, errorCode },
+        },
+      });
+      expect(JSON.stringify(fixture.sent)).not.toContain('"token"');
+    });
+  }
 
   test("git.config.get returns the sanitized config as a query result", async () => {
     const fixture = createFixture();
