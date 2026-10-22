@@ -1,16 +1,93 @@
 import { describe, expect, test } from "bun:test";
 import type { ExecResult } from "./docker";
-import { getGhStatus, startDeviceFlow } from "./gh-auth";
+import { getGhStatus, getGhStatusDetails, startDeviceFlow } from "./gh-auth";
 
 function fakeCommand(handler: (command: string) => Partial<ExecResult>): (command: string, timeoutMs: number) => Promise<ExecResult> {
   return async (command) => ({ stdout: "", stderr: "", exitCode: 0, ...handler(command) });
 }
 
 describe("gh auth status", () => {
-  test("detects logged-in state across stdout and stderr", async () => {
-    expect(await getGhStatus(fakeCommand(() => ({ stdout: "Logged in to github.com" })))).toBe("authenticated");
-    expect(await getGhStatus(fakeCommand(() => ({ stderr: "Logged in to github.com" })))).toBe("authenticated");
-    expect(await getGhStatus(fakeCommand(() => ({ stdout: "not logged in" })))).toBe("not authenticated");
+  test("returns valid with unknown expiry when GitHub provides no expiry metadata", async () => {
+    const command = fakeCommand((value) => {
+      if (value.includes("--json hosts")) return { stdout: '{"hosts":{"github.com":[{"user":"alice"}]}}' };
+      return { stdout: '{"login":"alice"}' };
+    });
+
+    expect(await getGhStatusDetails(command)).toEqual({
+      validity: "valid",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: null,
+    });
+    expect(await getGhStatus(command)).toBe("authenticated");
+  });
+
+  test("classifies a known expiry within the trusted threshold", async () => {
+    const command = fakeCommand((value) => {
+      if (value.includes("--json hosts")) {
+        return { stdout: `{"hosts":{"github.com":[{"expiresAt":"${new Date(Date.now() + 86_400_000).toISOString()}"}]}}` };
+      }
+      return { stdout: '{"login":"alice"}' };
+    });
+
+    expect(await getGhStatusDetails(command)).toMatchObject({
+      validity: "valid",
+      expiry: "known-within-threshold",
+      expiry_unknown: false,
+    });
+  });
+
+  test("classifies a known expired credential as invalid", async () => {
+    const command = fakeCommand((value) => {
+      if (value.includes("--json hosts")) {
+        return { stdout: `{"hosts":{"github.com":[{"expiresAt":"${new Date(Date.now() - 86_400_000).toISOString()}"}]}}` };
+      }
+      return { stdout: '{"login":"alice"}' };
+    });
+
+    expect(await getGhStatusDetails(command)).toMatchObject({
+      validity: "invalid-revoked-expired",
+      expiry: "known-within-threshold",
+      expiry_unknown: false,
+    });
+  });
+
+  test("classifies revoked or expired credentials without exposing command output", async () => {
+    const command = fakeCommand((value) => {
+      if (value.includes("--json hosts")) return { stdout: "", stderr: "not logged in", exitCode: 1 };
+      return { stdout: "", stderr: "token=secret", exitCode: 1 };
+    });
+
+    expect(await getGhStatusDetails(command)).toEqual({
+      validity: "invalid-revoked-expired",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: "Reauthorize GitHub with the Connect GitHub device flow.",
+    });
+  });
+
+  test("classifies network failures as unreachable", async () => {
+    const command = fakeCommand(() => ({ stderr: "connection refused", exitCode: 1 }));
+
+    expect(await getGhStatusDetails(command)).toEqual({
+      validity: "unreachable",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: null,
+    });
+  });
+
+  test("requires the authenticated-user check after CLI status", async () => {
+    const commands: string[] = [];
+    const command = fakeCommand((value) => {
+      commands.push(value);
+      if (value.includes("--json hosts")) return { stdout: '{"hosts":{"github.com":[{}]}}' };
+      return { stdout: "", stderr: "Bad credentials", exitCode: 1 };
+    });
+
+    await getGhStatusDetails(command);
+    expect(commands).toEqual(["gh auth status --json hosts", "gh api user"]);
+    expect(commands.join(" ")).not.toContain("--show-token");
   });
 });
 
