@@ -36,7 +36,7 @@ const AgentSettingsContent: FC<AgentSettingsProps> = ({ status, env }) => (
       <div class="flex" style="gap:24px;align-items:center;flex-wrap:wrap;">
         <span id="agent-state-badge" class={`badge ${status.state === "connected" ? "badge-success" : status.state === "disabled" ? "" : "badge-warning"}`}>{status.state}</span>
         <span id="agent-last-error" class="text-sm text-muted">{formatAgentError(status.state, status.last_error)}</span>
-        <button class="btn-outline" style="padding:4px 10px;font-size:0.75rem;margin-left:auto;" onclick="refreshStatus()">↻ Refresh</button>
+        <button type="button" class="btn-outline" style="padding:4px 10px;font-size:0.75rem;margin-left:auto;" onclick="refreshStatus()">↻ Refresh</button>
       </div>
       <p class="text-sm text-muted" style="margin-top:12px;">
         This node connects outbound to the Center Server over WebSocket and answers remote commands (upgrade,
@@ -52,7 +52,7 @@ const AgentSettingsContent: FC<AgentSettingsProps> = ({ status, env }) => (
         const value = env[field.key] ?? "";
         const fieldId = `ag-${field.key}`;
         return (
-          <div class="form-group" data-field-key={field.key}>
+          <div class="form-group" key={field.key} data-field-key={field.key}>
             <label for={fieldId}>{field.key}</label>
             <div class="flex" style="gap:4px;align-items:center;">
               <input type={field.secret ? "password" : "text"} id={fieldId} value={value} placeholder={field.placeholder} autocomplete={field.secret ? "new-password" : "off"} style="flex:1;" />
@@ -63,7 +63,7 @@ const AgentSettingsContent: FC<AgentSettingsProps> = ({ status, env }) => (
         );
       })}
       <div class="flex gap-2" style="justify-content:flex-end;margin-top:8px;">
-        <button id="btn-save-agent" onclick="saveAgentConfig()">Save &amp; Apply</button>
+        <button type="button" id="btn-save-agent" onclick="saveAgentConfig()">Save &amp; Apply</button>
       </div>
     </div>
 
