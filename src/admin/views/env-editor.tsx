@@ -8,8 +8,8 @@ const EnvEditorContent: FC<{ envVars: Record<string, string>; envSchema: Array<{
       <h2>Environment Variables</h2>
       <div class="flex gap-2">
         <span id="restart-status" class="text-sm text-muted" style="align-self:center;"></span>
-        <button id="btn-restart" onclick="restartAiDev()" class="btn-outline" style="color:var(--danger);border-color:var(--danger);">↻ Restart ai-dev</button>
-        <button onclick="addVariable()" class="btn-outline" title="Add new variable to .env (restart required to apply)">+ Add Variable</button>
+        <button type="button" id="btn-restart" onclick="restartAiDev()" class="btn-outline" style="color:var(--danger);border-color:var(--danger);">↻ Restart ai-dev</button>
+        <button type="button" onclick="addVariable()" class="btn-outline" title="Add new variable to .env (restart required to apply)">+ Add Variable</button>
       </div>
     </div>
     <div class="card">
@@ -19,16 +19,16 @@ const EnvEditorContent: FC<{ envVars: Record<string, string>; envSchema: Array<{
           const schema = envSchema.find(s => s.key === key);
           const isSecret = key.toLowerCase().includes("password") || key.toLowerCase().includes("secret") || key.toLowerCase().includes("token");
           return (
-            <tr data-key={key}>
+            <tr key={key} data-key={key}>
               <td><code>{key}</code><br /><span class="text-sm text-muted">{schema?.description || ""}</span></td>
               <td>
                 <div class={"masked-value" + (isSecret ? "" : " show")} data-key={key}>
                   <span class="masked">••••••••</span>
                   <span class="revealed"><code>{value}</code></span>
-                  {isSecret && <button class="btn-outline" style="padding:2px 8px;font-size:0.75rem;margin-left:8px;" onclick={`toggleMask('${key}')`}>Show</button>}
+                  {isSecret && <button type="button" class="btn-outline" style="padding:2px 8px;font-size:0.75rem;margin-left:8px;" onclick={`toggleMask('${key}')`}>Show</button>}
                 </div>
               </td>
-              <td><button class="btn-outline" style="padding:4px 8px;font-size:0.75rem;" onclick={`editVar('${key}', '${value}')`}>Edit</button></td>
+              <td><button type="button" class="btn-outline" style="padding:4px 8px;font-size:0.75rem;" onclick={`editVar('${key}', '${value}')`}>Edit</button></td>
             </tr>
           );
         })}
@@ -37,11 +37,11 @@ const EnvEditorContent: FC<{ envVars: Record<string, string>; envSchema: Array<{
     <div id="edit-modal" class="modal-overlay" style="display:none;">
       <div class="modal">
         <h3 id="modal-title">Edit Variable</h3>
-        <div class="form-group"><label>Key</label><input type="text" id="edit-key" readonly /></div>
-        <div class="form-group"><label>Value</label><input type="text" id="edit-value" /></div>
+        <div class="form-group"><label for="edit-key">Key</label><input type="text" id="edit-key" readonly /></div>
+        <div class="form-group"><label for="edit-value">Value</label><input type="text" id="edit-value" /></div>
         <div class="flex gap-2" style="justify-content:flex-end;">
-          <button class="btn-outline" onclick="closeModal()">Cancel</button>
-          <button onclick="saveVar()">Save</button>
+          <button type="button" class="btn-outline" onclick="closeModal()">Cancel</button>
+          <button type="button" onclick="saveVar()">Save</button>
         </div>
       </div>
     </div>
