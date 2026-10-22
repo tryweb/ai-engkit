@@ -78,6 +78,7 @@ export interface ExecResult {
 
 export interface ExecOptions {
   readonly preserveOutput?: boolean;
+  readonly stdin?: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly dockerBinary?: string;
 }
@@ -135,8 +136,8 @@ export async function execInAiDev(
   options: ExecOptions = {},
 ): Promise<ExecResult> {
   const ref = await getAiDevContainerRef();
-  const args = ["docker", "exec", ref, "sh", "-c", command];
-  return runCommand(args, timeoutMs, options.preserveOutput === true);
+  const args = ["docker", "exec", ...(options.stdin === undefined ? [] : ["-i"]), ref, "sh", "-c", command];
+  return runCommand(args, timeoutMs, options.preserveOutput === true, options.env, options.stdin);
 }
 
 /**
@@ -368,15 +369,23 @@ async function runCommand(
   timeoutMs: number,
   preserveOutput = false,
   envOverrides: Readonly<Record<string, string | undefined>> = {},
+  stdin?: string,
 ): Promise<ExecResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const process = Bun.spawn(args, {
-      signal: controller.signal,
-      env: { ...Bun.env, ...envOverrides, DOCKER_HOST: "unix://" + DOCKER_SOCKET },
-    });
+    const env = { ...Bun.env, ...envOverrides, DOCKER_HOST: "unix://" + DOCKER_SOCKET };
+    const process = stdin === undefined
+      ? Bun.spawn(args, { signal: controller.signal, env })
+      : Bun.spawn(args, { signal: controller.signal, env, stdin: "pipe" });
+
+    if (stdin !== undefined) {
+      const input = process.stdin;
+      if (input === undefined) throw new Error("Failed to open command stdin");
+      input.write(stdin);
+      input.end();
+    }
 
     const stdout = await new Response(process.stdout).text();
     const stderr = await new Response(process.stderr).text();
