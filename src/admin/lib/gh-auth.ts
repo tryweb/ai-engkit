@@ -3,8 +3,132 @@ import { execInAiDev, type ExecResult } from "./docker";
 export type GhCommand = (command: string, timeoutMs: number) => Promise<ExecResult>;
 
 export interface DeviceFlowInfo {
-  device_code: string;
-  verification_uri: string;
+  readonly device_code: string;
+  readonly verification_uri: string;
+}
+
+export type GhValidity = "valid" | "invalid-revoked-expired" | "unreachable";
+export type GhExpiry = "known-within-threshold" | "unknown";
+
+export interface GhStatusDetails {
+  readonly validity: GhValidity;
+  readonly expiry: GhExpiry;
+  readonly expiry_unknown: boolean;
+  readonly reauthorization_guidance: string | null;
+}
+
+const REAUTHORIZATION_GUIDANCE = "Reauthorize GitHub with the Connect GitHub device flow.";
+const MAX_TRUSTED_EXPIRY_MS = 366 * 24 * 60 * 60 * 1000;
+
+type JsonObject = { readonly [key: string]: unknown };
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isUnreachable(result: ExecResult): boolean {
+  const diagnostic = `${result.stdout}\n${result.stderr}`.toLowerCase();
+  return ["could not resolve", "connection refused", "connection reset", "network", "timeout", "timed out"].some(
+    (term) => diagnostic.includes(term),
+  );
+}
+
+function expiryFromHost(host: JsonObject): number | null {
+  const value = host.expiresAt ?? host.expires_at ?? host.expiration;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 10_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function classifyExpiry(host: JsonObject): { readonly expiry: GhExpiry; readonly expiry_unknown: boolean; readonly expired: boolean } {
+  const expiry = expiryFromHost(host);
+  if (expiry === null) return { expiry: "unknown", expiry_unknown: true, expired: false };
+  if (expiry <= Date.now()) return { expiry: "known-within-threshold", expiry_unknown: false, expired: true };
+  if (expiry - Date.now() > MAX_TRUSTED_EXPIRY_MS) return { expiry: "unknown", expiry_unknown: true, expired: false };
+  return { expiry: "known-within-threshold", expiry_unknown: false, expired: false };
+}
+
+export async function getGhStatusDetails(command: GhCommand = execInAiDev): Promise<GhStatusDetails> {
+  const statusResult = await command("gh auth status --json hosts", 15_000);
+  if (statusResult.exitCode !== 0) {
+    return {
+      validity: isUnreachable(statusResult) ? "unreachable" : "invalid-revoked-expired",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: isUnreachable(statusResult) ? null : REAUTHORIZATION_GUIDANCE,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(statusResult.stdout);
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      return {
+        validity: "invalid-revoked-expired",
+        expiry: "unknown",
+        expiry_unknown: true,
+        reauthorization_guidance: REAUTHORIZATION_GUIDANCE,
+      };
+    }
+    throw error;
+  }
+
+  const hosts = isJsonObject(parsed) && isJsonObject(parsed.hosts) ? parsed.hosts : null;
+  const githubHost = hosts?.["github.com"];
+  const host = Array.isArray(githubHost) && isJsonObject(githubHost[0]) ? githubHost[0] : null;
+  if (host === null) {
+    return {
+      validity: "invalid-revoked-expired",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: REAUTHORIZATION_GUIDANCE,
+    };
+  }
+
+  const userResult = await command("gh api user", 15_000);
+  if (userResult.exitCode !== 0) {
+    return {
+      validity: isUnreachable(userResult) ? "unreachable" : "invalid-revoked-expired",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: isUnreachable(userResult) ? null : REAUTHORIZATION_GUIDANCE,
+    };
+  }
+
+  let user: unknown;
+  try {
+    user = JSON.parse(userResult.stdout);
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      return {
+        validity: "invalid-revoked-expired",
+        expiry: "unknown",
+        expiry_unknown: true,
+        reauthorization_guidance: REAUTHORIZATION_GUIDANCE,
+      };
+    }
+    throw error;
+  }
+  if (!isJsonObject(user) || typeof user.login !== "string" || user.login.length === 0) {
+    return {
+      validity: "invalid-revoked-expired",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: REAUTHORIZATION_GUIDANCE,
+    };
+  }
+
+  const expiry = classifyExpiry(host);
+  return {
+    validity: expiry.expired ? "invalid-revoked-expired" : "valid",
+    expiry: expiry.expiry,
+    expiry_unknown: expiry.expiry_unknown,
+    reauthorization_guidance: expiry.expired ? REAUTHORIZATION_GUIDANCE : null,
+  };
 }
 
 /**
@@ -26,11 +150,8 @@ export function parseScopes(output: string): string[] {
 }
 
 export async function getGhStatus(command: GhCommand = execInAiDev): Promise<string> {
-  const result = await command("gh auth status 2>&1 || true", 15_000);
-  if (result.stdout.includes("Logged in") || result.stderr.includes("Logged in")) {
-    return "authenticated";
-  }
-  return "not authenticated";
+  const details = await getGhStatusDetails(command);
+  return details.validity === "valid" ? "authenticated" : "not authenticated";
 }
 
 function parseDeviceFlowOutput(output: string): { device_code: string; verification_uri: string } {

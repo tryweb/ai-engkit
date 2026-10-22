@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
-import { getGhStatus, startDeviceFlow, logoutGh, parseScopes, ensureGitCredentialHelper } from "../lib/gh-auth";
+import { getGhStatusDetails, startDeviceFlow, logoutGh, parseScopes, ensureGitCredentialHelper } from "../lib/gh-auth";
 
 const ghAuth = new Hono();
 
@@ -34,14 +34,19 @@ async function getGhUserInfo(): Promise<GhUserInfo | null> {
 }
 
 ghAuth.get("/api/auth/gh/status", async (c) => {
-  const status = await getGhStatus();
-  if (status === "authenticated") {
+  const details = await getGhStatusDetails();
+  if (details.validity === "valid") {
     // The UI polls this endpoint while connecting; wire git to gh's
     // credential helper as soon as authentication lands (idempotent), so an
     // Admin connect is enough to make HTTPS pushes work.
     await ensureGitCredentialHelper();
   }
-  return c.json({ status });
+  return c.json({
+    status: details.validity === "valid" ? "authenticated" : "not authenticated",
+    ...details,
+    expiry_known: !details.expiry_unknown,
+    guidance: details.reauthorization_guidance,
+  });
 });
 
 ghAuth.get("/api/auth/gh/user", async (c) => {
