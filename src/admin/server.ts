@@ -44,6 +44,8 @@ import { collectProvidersMeta } from "./lib/provider-meta";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
 import { createLspReconciler } from "./lib/lsp-reconciler";
 import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
+import { createGitHostingAuthScheduler } from "./lib/git-hosting-auth-scheduler";
+import { loadGitHostingAuthState } from "./lib/git-hosting-auth-state";
 
 export const app = new Hono();
 
@@ -161,20 +163,19 @@ app.get("/", async (c) => {
     }
   };
 
-  const [containerRunning, uptime, ghResult, glabResult, gitResult, projectsResult, sshKeys] =
+  const authState = loadGitHostingAuthState();
+  const [containerRunning, uptime, gitResult, projectsResult, sshKeys] =
     await Promise.all([
       isAiDevRunning(),
       getAiDevUptime(),
-      exec("gh auth status 2>&1 || true", 10_000),
-      exec("glab auth status 2>&1 || true", 10_000),
       exec("git config --global user.name 2>/dev/null || echo ''", 10_000),
       exec("ls ~/workspace/ 2>/dev/null | wc -l || echo '0'", 10_000),
       listKeys(exec).catch(() => []),
     ]);
 
-  const ghAuth = ghResult.stdout.includes("Logged in") || ghResult.stderr.includes("Logged in")
+  const ghAuth = authState.github.validity === "valid"
     ? "authenticated" : "not authenticated";
-  const glabAuth = glabResult.stdout.includes("Logged in") || glabResult.stderr.includes("Logged in")
+  const glabAuth = authState.gitlab.some((host) => host.validity === "healthy")
     ? "authenticated" : "not authenticated";
   const gitUser = gitResult.stdout.trim();
   const projectCount = parseInt(projectsResult.stdout.trim() || "0", 10);
@@ -384,6 +385,14 @@ export default {
 };
 
 export const maintenanceScheduler = createMaintenanceScheduler();
+export const gitHostingAuthScheduler = createGitHostingAuthScheduler();
+
+const stopSchedulers = (): void => {
+  gitHostingAuthScheduler.stop();
+};
+
+process.once("SIGTERM", stopSchedulers);
+process.once("SIGINT", stopSchedulers);
 
 // Bun binds the declarative server after module evaluation; defer the agent until the next event-loop turn.
 setTimeout(() => {
@@ -396,5 +405,10 @@ setTimeout(() => {
     maintenanceScheduler.start();
   } catch (error: unknown) {
     console.error("Maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
+  }
+  try {
+    gitHostingAuthScheduler.start();
+  } catch {
+    console.error("Git hosting auth scheduler startup failed: unreachable");
   }
 }, 0);
