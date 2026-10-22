@@ -17,7 +17,7 @@ export function OpenChamberSettingsPage() {
             <span>Show update notifications</span>
           </label>
           <div class="flex items-center gap-2" style="margin-top:20px;">
-            <button id="save-settings" onclick="saveOpenChamberSettings()" disabled>Save settings</button>
+            <button type="button" id="save-settings" onclick="saveOpenChamberSettings()" disabled>Save settings</button>
             <span id="settings-status" class="text-sm text-muted" role="status" />
           </div>
         </div>
