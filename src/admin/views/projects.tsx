@@ -6,9 +6,9 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
     <div class="flex items-center justify-between mb-4 project-toolbar">
       <h2>OpenCode Projects</h2>
       <div class="flex gap-2">
-        <button onclick="syncProjects()" class="btn-outline">↻ Sync</button>
-        <button id="btn-tool-refresh" onclick="refreshToolStatus()" class="btn-outline">⟳ Re-scan</button>
-        <button onclick="showCreateForm()" class="btn-outline">+ New Project</button>
+        <button type="button" onclick="syncProjects()" class="btn-outline">↻ Sync</button>
+        <button type="button" id="btn-tool-refresh" onclick="refreshToolStatus()" class="btn-outline">⟳ Re-scan</button>
+        <button type="button" onclick="showCreateForm()" class="btn-outline">+ New Project</button>
       </div>
     </div>
 
@@ -42,13 +42,13 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         <option value="missing">Not indexed</option>
         <option value="unknown">Unknown</option>
       </select>
-      <button id="btn-clear-filters" class="btn-outline btn-clear" onclick="clearFilters()" hidden>Clear filters</button>
+      <button type="button" id="btn-clear-filters" class="btn-outline btn-clear" onclick="clearFilters()" hidden>Clear filters</button>
     </div>
 
     <div class="card project-card">
       <div id="project-list" class="project-list">
         {projects.map(name => (
-          <div class="project-row" data-project={name}>
+          <div class="project-row" key={name} data-project={name}>
             <span class="text-muted">Loading…</span>
           </div>
         ))}
@@ -62,8 +62,8 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         <div id="sync-status" class="text-sm" style="margin-bottom:8px;">Checking...</div>
         <div id="sync-results" style="display:none;"></div>
         <div id="sync-actions" style="display:none;justify-content:flex-end;margin-top:12px;gap:8px;" class="flex">
-          <button class="btn-outline" onclick="closeSync()">Cancel</button>
-          <button id="btn-sync-fix" onclick="applySync()">Fix All</button>
+          <button type="button" class="btn-outline" onclick="closeSync()">Cancel</button>
+          <button type="button" id="btn-sync-fix" onclick="applySync()">Fix All</button>
         </div>
       </div>
     </div>
@@ -83,8 +83,8 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         </div>
         <div id="create-error" class="text-sm text-danger" style="display:none;margin-bottom:8px;" />
         <div class="flex gap-2" style="justify-content:flex-end;">
-          <button class="btn-outline" onclick="closeCreate()">Cancel</button>
-          <button onclick="createProject()">Create</button>
+          <button type="button" class="btn-outline" onclick="closeCreate()">Cancel</button>
+          <button type="button" onclick="createProject()">Create</button>
         </div>
       </div>
     </div>
@@ -99,8 +99,8 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         </div>
         <div id="remote-error" class="text-sm text-danger" style="display:none;margin-bottom:8px;" />
         <div class="flex gap-2" style="justify-content:flex-end;">
-          <button class="btn-outline" onclick="closeRemote()">Cancel</button>
-          <button onclick="saveRemote()">Save Remote</button>
+          <button type="button" class="btn-outline" onclick="closeRemote()">Cancel</button>
+          <button type="button" onclick="saveRemote()">Save Remote</button>
         </div>
       </div>
     </div>
@@ -120,20 +120,20 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         </div>
         <div id="delete-error" class="text-sm text-danger" style="display:none;margin-bottom:8px;" />
         <div class="flex gap-2" style="justify-content:flex-end;">
-          <button class="btn-outline" onclick="closeDelete()">Cancel</button>
-          <button id="btn-delete-confirm" onclick="confirmDelete()" disabled style="background:var(--color-danger,#dc3545);color:#fff;border-color:var(--color-danger,#dc3545);">Delete Project</button>
+          <button type="button" class="btn-outline" onclick="closeDelete()">Cancel</button>
+          <button type="button" id="btn-delete-confirm" onclick="confirmDelete()" disabled style="background:var(--color-danger,#dc3545);color:#fff;border-color:var(--color-danger,#dc3545);">Delete Project</button>
         </div>
       </div>
     </div>
 
-    <div id="drawer-overlay" class="drawer-overlay" style="display:none;" onclick="closeDrawer()"></div>
+    <div id="drawer-overlay" class="drawer-overlay" style="display:none;" aria-hidden="true"></div>
     <aside id="project-drawer" class="drawer" style="display:none;" role="dialog" aria-modal="true" aria-label="Project details">
       <div class="drawer__header">
         <div style="min-width:0;">
-          <h3 id="drawer-name"></h3>
+          <h3 id="drawer-name">Project</h3>
           <span id="drawer-status" class="status-pill"></span>
         </div>
-        <button id="drawer-close" class="btn-outline drawer__close" onclick="closeDrawer()" aria-label="Close project details">✕</button>
+        <button type="button" id="drawer-close" class="btn-outline drawer__close" onclick="closeDrawer()" aria-label="Close project details">✕</button>
       </div>
       <div class="drawer__body">
         <div id="drawer-remote" class="drawer__section"></div>

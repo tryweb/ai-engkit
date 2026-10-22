@@ -122,7 +122,7 @@ async function loadFeatures() {
 
 function renderList() {
   const list = document.getElementById("project-list");
-  list.querySelectorAll(".project-row").forEach(r => r.remove());
+  list.querySelectorAll(".project-row").forEach(r => { r.remove(); });
   const emptyNote = document.getElementById("project-empty");
   if (emptyNote) emptyNote.hidden = projectNames().length > 0;
   for (const name of sortedNames()) {
@@ -779,6 +779,8 @@ async function confirmDelete() {
     btn.textContent = "Delete Project";
   }
 }
+const drawerOverlay = document.getElementById("drawer-overlay");
+if (drawerOverlay) drawerOverlay.addEventListener("click", closeDrawer);
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (drawerName) { closeDrawer(); return; }
