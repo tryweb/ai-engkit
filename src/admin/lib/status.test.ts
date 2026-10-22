@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { collectStatus, type StatusDeps } from "./status";
 import type { ExecResult } from "./docker";
+import {
+  EMPTY_GIT_HOSTING_AUTH_STATE,
+  type GitHostingAuthState,
+} from "./git-hosting-auth-state";
 import type { GainStats, LeanCtxSiteStats } from "./project-tool-status";
 
 const ok = (stdout: string): ExecResult => ({ stdout, stderr: "", exitCode: 0 });
@@ -12,6 +16,8 @@ interface DepOverrides {
   uptime?: number | null;
   leanctx?: LeanCtxSiteStats | null;
   gain?: GainStats | null;
+  gitHostingAuth?: GitHostingAuthState;
+  loadGitHostingAuthState?: () => GitHostingAuthState;
 }
 
 /** Full fake dep set: gh/glab authenticated, git user "u", 3 projects. */
@@ -34,6 +40,7 @@ function makeDeps(overrides: DepOverrides = {}): StatusDeps {
       if (command.startsWith("cat /opt/ai-engkit/VERSION")) return ok("1.2.3");
       return ok("");
     },
+    loadGitHostingAuthState: overrides.loadGitHostingAuthState ?? (() => overrides.gitHostingAuth ?? EMPTY_GIT_HOSTING_AUTH_STATE),
     probeLeanCtxSite: overrides.leanctx === undefined ? undefined : async () => overrides.leanctx ?? null,
     probeGain: overrides.gain === undefined ? undefined : async () => overrides.gain ?? null,
   };
@@ -49,6 +56,7 @@ describe("collectStatus", () => {
       "containers",
       "gain",
       "gh_auth",
+      "git_hosting_auth",
       "git_user",
       "glab_auth",
       "leanctx",
@@ -68,6 +76,7 @@ describe("collectStatus", () => {
       git_user: "u",
       project_count: 3,
       admin_version_mismatch: false,
+      git_hosting_auth: { available: false },
     });
     expect(typeof status.admin_version).toBe("string");
   });
@@ -109,6 +118,54 @@ describe("collectStatus", () => {
     expect(status.gh_auth).toBe("not authenticated");
     expect(status.glab_auth).toBe("not authenticated");
     expect(status.project_count).toBe(0);
+  });
+
+  test("includes the redacted persisted git hosting auth state", async () => {
+    const authState: GitHostingAuthState = {
+      gitlab: [{
+        hostname: "gitlab.example.com",
+        validity: "healthy",
+        expires_at: "2026-12-31T00:00:00.000Z",
+        days_remaining: 70,
+        rotation_needed: false,
+        rotation_done: false,
+        error_code: null,
+        checked_at: "2026-10-22T00:00:00.000Z",
+      }],
+      github: {
+        validity: "valid",
+        expiry: "known-within-threshold",
+        expiry_known: true,
+        expiry_unknown: false,
+        checked_at: "2026-10-22T00:00:00.000Z",
+      },
+    };
+
+    const status = await collectStatus(makeDeps({ gitHostingAuth: authState }));
+
+    expect(status.git_hosting_auth).toEqual({ available: true, ...authState });
+    expect(status.gh_auth).toBe("authenticated");
+    expect(status.glab_auth).toBe("authenticated");
+  });
+
+  test("reports unavailable auth state when the persisted file is missing", async () => {
+    const status = await collectStatus(makeDeps({
+      loadGitHostingAuthState: () => EMPTY_GIT_HOSTING_AUTH_STATE,
+    }));
+
+    expect(status.git_hosting_auth).toEqual({ available: false });
+  });
+
+  test("reports unavailable auth state when loading the persisted file fails", async () => {
+    const status = await collectStatus(makeDeps({
+      loadGitHostingAuthState: () => {
+        throw new Error("corrupt state");
+      },
+    }));
+
+    expect(status.git_hosting_auth).toEqual({ available: false });
+    expect(status.gh_auth).toBe("authenticated");
+    expect(status.glab_auth).toBe("authenticated");
   });
 
   test("includes site-level leanCTX statistics when a probe is wired", async () => {

@@ -7,6 +7,11 @@ import {
   type ExecResult,
 } from "./docker";
 import { readFileSync } from "node:fs";
+import {
+  EMPTY_GIT_HOSTING_AUTH_STATE,
+  loadGitHostingAuthState,
+  type GitHostingAuthState,
+} from "./git-hosting-auth-state";
 import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "./project-tool-status";
 
 export type AuthStatus = "authenticated" | "not authenticated";
@@ -32,6 +37,7 @@ export interface StatusResponse {
   restart_count: number;
   gh_auth: AuthStatus;
   glab_auth: AuthStatus;
+  git_hosting_auth?: GitHostingAuthStatus;
   git_user: string;
   project_count: number;
   /** Site-level leanCTX statistics; null when no probe is wired or the scan fails. */
@@ -48,12 +54,17 @@ export interface StatusResponse {
   admin_version_mismatch: boolean;
 }
 
+export type GitHostingAuthStatus =
+  | ({ readonly available: true } & GitHostingAuthState)
+  | { readonly available: false };
+
 export interface StatusDeps {
   isAiDevRunning: () => Promise<boolean>;
   getAiDevUptime: () => Promise<number | null>;
   getSelfContainerRef: () => Promise<string>;
   dockerCommand: (subcommand: string, timeoutMs: number) => Promise<ExecResult>;
   execInAiDev: (command: string, timeoutMs: number) => Promise<ExecResult>;
+  loadGitHostingAuthState: () => GitHostingAuthState;
   probeLeanCtxSite?: () => Promise<LeanCtxSiteStats | null>;
   probeGain?: () => Promise<GainStats | null>;
   probeValueReport?: () => Promise<ValueReportStats | null>;
@@ -67,6 +78,7 @@ const DEFAULT_DEPS: StatusDeps = {
   getSelfContainerRef,
   dockerCommand,
   execInAiDev,
+  loadGitHostingAuthState,
 };
 
 async function getAdminVersion(): Promise<string> {
@@ -115,9 +127,18 @@ async function getSelfUptime(deps: StatusDeps): Promise<number | null> {
   return Math.floor((Date.now() - startedAt.getTime()) / 1000);
 }
 
+function getGitHostingAuthStatus(deps: StatusDeps): GitHostingAuthStatus {
+  try {
+    const state = deps.loadGitHostingAuthState();
+    return state === EMPTY_GIT_HOSTING_AUTH_STATE ? { available: false } : { available: true, ...state };
+  } catch {
+    return { available: false };
+  }
+}
+
 export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promise<StatusResponse> {
   const deps: StatusDeps = { ...DEFAULT_DEPS, ...overrides };
-  const [containerRunning, uptime, ghResult, glabResult, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime] =
+  const [containerRunning, uptime, ghResult, glabResult, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime, gitHostingAuth] =
     await Promise.all([
       deps.isAiDevRunning(),
       deps.getAiDevUptime(),
@@ -135,6 +156,7 @@ export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promis
       getAiDevImageDigest(deps),
       getAiDevVersion(deps),
       getSelfUptime(deps),
+      Promise.resolve(getGitHostingAuthStatus(deps)),
     ]);
 
   const ghAuth: AuthStatus = ghResult.stdout.includes("Logged in") || ghResult.stderr.includes("Logged in")
@@ -167,6 +189,7 @@ export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promis
     restart_count: 0,
     gh_auth: ghAuth,
     glab_auth: glabAuth,
+    git_hosting_auth: gitHostingAuth,
     git_user: gitUser,
     project_count: projectCount,
     leanctx,
