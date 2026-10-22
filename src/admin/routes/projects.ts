@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
 import { createToolStatusProbe, type ProjectToolStatusProvider } from "../lib/project-tool-status";
+import { buildLeanCtxRepairCommand } from "../lib/leanctx-project-status";
 import type { ProjectOverview } from "../lib/projects-overview";
 import {
   checkFeature,
@@ -81,6 +82,36 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
   projects.post("/api/projects/tool-status/refresh", async (c) => {
     toolStatus.invalidate();
     return c.json({ ok: true });
+  });
+
+  projects.post("/api/projects/leanctx/repair", async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+    const project = (body as Record<string, unknown>).project;
+    if (project !== undefined && (typeof project !== "string" || !/^[a-zA-Z0-9_-]+$/.test(project))) {
+      return c.json({ error: "Invalid project name" }, 400);
+    }
+    if (typeof project === "string") {
+      const exists = await command(`test -d ${projectDir(project)} && echo yes`, 5_000);
+      if (exists.stdout.trim() !== "yes") return c.json({ error: "Project not found" }, 404);
+    }
+    const result = await command(buildLeanCtxRepairCommand(typeof project === "string" ? `${workspaceRoot}/${project}` : undefined), 30_000);
+    if (result.exitCode !== 0) return c.json({ error: result.stderr.trim() || "LeanCTX repair failed" }, 500);
+    let details: unknown;
+    try {
+      details = JSON.parse(result.stdout);
+    } catch {
+      return c.json({ error: "LeanCTX repair returned invalid output" }, 500);
+    }
+    toolStatus.invalidate();
+    return c.json(details);
   });
 
   projects.get("/api/projects/:name/features", async (c) => {

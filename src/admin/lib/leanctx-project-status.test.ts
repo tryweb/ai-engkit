@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  buildLeanCtxRepairCommand,
   buildLeanCtxProjectScanCommand,
   isScannableProjectRoot,
   LEANCTX_PROJECT_ROOTS_EOF,
@@ -16,8 +17,8 @@ interface ScanRun {
   exitCode: number;
 }
 
-async function runScan(projectRoots: string[], home: string): Promise<ScanRun> {
-  const process = Bun.spawn(["sh", "-c", buildLeanCtxProjectScanCommand(projectRoots)], {
+async function runScan(projectRoots: string[], home: string, command = buildLeanCtxProjectScanCommand(projectRoots)): Promise<ScanRun> {
+  const process = Bun.spawn(["sh", "-c", command], {
     stdout: "pipe",
     stderr: "pipe",
     env: { ...process_env(), HOME: home },
@@ -237,6 +238,52 @@ describe("batched scan shell", () => {
       await writeStore(f.knowledge, "bbb222", storeJson({ project_root: "/ws/other", project_hash: "bbb222" }));
       const { stdout } = await runScan(["/ws/alpha"], f.home);
       expect(JSON.parse(stdout.trim())).toEqual({ state: "unknown" });
+    } finally {
+      await f.cleanup();
+    }
+  });
+});
+
+describe("LeanCTX repair shell", () => {
+  test("quarantines duplicate matches except the most recently updated store", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_hash: "aaa111", updated_at: "2026-01-01" }));
+      await writeStore(f.knowledge, "bbb222", storeJson({ project_hash: "bbb222", updated_at: "2026-10-01" }));
+      const result = await runScan([], f.home, buildLeanCtxRepairCommand("/ws/alpha"));
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toBeTruthy();
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.quarantined).toHaveLength(1);
+      expect(parsed.roots).toEqual([{ root: "/ws/alpha", before: "unknown", after: "available" }]);
+      expect(await Bun.file(join(f.knowledge, "bbb222", "knowledge.json")).exists()).toBe(true);
+      expect(await Bun.file(join(f.home, ".local/share/lean-ctx", "quarantine", parsed.quarantined[0], "knowledge.json")).exists()).toBe(true);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("quarantines empty-root records", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_root: "", project_hash: "aaa111" }));
+      const result = await runScan([], f.home, buildLeanCtxRepairCommand());
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout).quarantined).toHaveLength(1);
+      expect(await Bun.file(join(f.knowledge, "aaa111")).exists()).toBe(false);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("leaves a single matching store untouched", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_hash: "aaa111" }));
+      const result = await runScan([], f.home, buildLeanCtxRepairCommand("/ws/alpha"));
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout).quarantined).toEqual([]);
+      expect(await Bun.file(join(f.knowledge, "aaa111", "knowledge.json")).exists()).toBe(true);
     } finally {
       await f.cleanup();
     }

@@ -89,6 +89,46 @@ export function buildLeanCtxProjectScanCommand(projectRoots: readonly string[]):
   ].join("\n");
 }
 
+export function buildLeanCtxRepairCommand(projectRoot?: string): string {
+  const projectFilter = projectRoot === undefined ? "true" : `.root == ${JSON.stringify(projectRoot)}`;
+  return [
+    `base="$HOME/.local/share/lean-ctx"`,
+    `knowledge="$base/knowledge"`,
+    `quarantine="$base/quarantine"`,
+    `mkdir -p "$quarantine"`,
+    `tmp="\${TMPDIR:-/tmp}/leanctx-repair-$$.jsonl"`,
+    `moves="$tmp.moves"`,
+    `moved="$tmp.moved"`,
+    `moved_dirs="$tmp.moved_dirs"`,
+    `refused="$tmp.refused"`,
+    `: > "$tmp"`,
+    `: > "$moved"`,
+    `: > "$moved_dirs"`,
+    `: > "$refused"`,
+    `for f in "$knowledge"/*/knowledge.json; do`,
+    `  [ -f "$f" ] || continue`,
+    `  dir=$(basename "$(dirname "$f")")`,
+    `  jq -c --arg dir "$dir" '{dir:$dir,root:.project_root,hash:.project_hash,updated_at:.updated_at,facts:(if (.facts|type)=="array" then (.facts|length) else 0 end),valid:(.project_hash==$dir and (.facts|type)=="array" and (.patterns|type)=="array" and (.history|type)=="array")}' "$f" >> "$tmp" 2>/dev/null || jq -cn --arg dir "$dir" '{dir:$dir,root:null,hash:null,updated_at:null,facts:0,valid:false}' >> "$tmp"`,
+    `done`,
+    `jq -sr '[.[] | select((.root|type)!="string" or .root=="") | .dir] | .[]' "$tmp" > "$moves"`,
+    `jq -sr '[.[] | select((.root|type)=="string" and .root!="") | select(${projectFilter})] | group_by(.root)[] | if length > 1 then (sort_by(.updated_at // "") | .[:-1][]) | .dir else empty end' "$tmp" >> "$moves"`,
+    `jq -sr '[.[] | select((.root|type)=="string" and .root!="") | select(${projectFilter})] | group_by(.root) | map({root:.[0].root,before:(if length==1 and .[0].valid then "available" else "unknown" end),count:length,dirs:map(.dir),valid:map(.valid)})' "$tmp" > "$tmp.roots"`,
+    `retry=false`,
+    `while IFS= read -r dir; do`,
+    `  [ -n "$dir" ] || continue`,
+    `  hash=$(jq -sr --arg dir "$dir" '[.[] | select(.dir==$dir)][0].hash | if type=="string" then . else "" end' "$tmp")`,
+    `  if [ "$hash" != "$dir" ]; then printf '%s\n' "$dir" >> "$refused"; retry=true; continue; fi`,
+    `  stamp=$(date -u +%Y%m%dT%H%M%SZ)`,
+    `  dest="$quarantine/$stamp-$hash"`,
+    `  if [ -e "$dest" ]; then dest="$dest-$$"; fi`,
+    `  if mv "$knowledge/$dir" "$dest"; then printf '%s\n' "$(basename "$dest")" >> "$moved"; printf '%s\n' "$dir" >> "$moved_dirs"; else printf '%s\n' "$dir" >> "$refused"; retry=true; fi`,
+    `done < "$moves"`,
+    `after=$(jq -c --argjson moved "$(jq -Rsc 'split("\\n") | map(select(length>0))' "$moved_dirs")" --argjson retry "$retry" '[.[] | . as $r | ($r.dirs - $moved) as $remaining | {root:$r.root,before:$r.before,after:(if ($remaining|length)==1 and $r.valid[($r.dirs|index($remaining[0]))] == true and $retry==false then "available" else "unknown" end)}]' "$tmp.roots")`,
+    `jq -cn --argjson before "$(jq -c '[.[] | {root,before}]' "$tmp.roots")" --argjson after "$after" --argjson quarantined "$(jq -Rsc 'split("\\n") | map(select(length>0))' "$moved")" --argjson refused "$(jq -Rsc 'split("\\n") | map(select(length>0))' "$refused")" --argjson retry "$retry" '{roots:[range(0; $before|length) as $i | {root:$before[$i].root,before:$before[$i].before,after:$after[$i].after}],quarantined:$quarantined,refused:$refused,retry:$retry}'`,
+    `rm -f "$tmp" "$moves" "$moved" "$moved_dirs" "$refused" "$tmp.roots"`,
+  ].join("\n");
+}
+
 function nonNegativeInt(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
