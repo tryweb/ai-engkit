@@ -36,7 +36,7 @@ const SecretsContent: FC<{ meta: SecretMeta[] }> = ({ meta }) => (
       const display = SECRET_DISPLAY[s.key] ?? { label: s.key, icon: "🔑" };
       const act = activationLabel(s.activationStatus);
       return (
-        <div class="card secret-card" data-key={s.key}>
+        <div class="card secret-card" key={s.key} data-key={s.key}>
           <div class="flex items-center gap-2 mb-4">
             <span style="font-size:1.5rem;">{display.icon}</span>
             <div>
@@ -53,13 +53,13 @@ const SecretsContent: FC<{ meta: SecretMeta[] }> = ({ meta }) => (
           <div class="secret-actions">
             <span class={`badge ${act.className.replace("text-", "badge-")}`} style="align-self:center;">{act.text}</span>
             <div class="secret-buttons">
-              <button class="btn-outline btn-secret-show" onclick={`showSecretValue('${s.key}')`}>Show</button>
-              <button class="btn-outline btn-secret-edit" onclick={`openSecretEdit('${s.key}')`}>Edit</button>
+              <button type="button" class="btn-outline btn-secret-show" onclick={`showSecretValue('${s.key}')`}>Show</button>
+              <button type="button" class="btn-outline btn-secret-edit" onclick={`openSecretEdit('${s.key}')`}>Edit</button>
             </div>
           </div>
           {s.note && (
             <div class="secret-note mt-4">
-              <button class="btn-outline btn-note-toggle" onclick="toggleNote(this)" style="font-size:var(--text-sm);padding:4px 8px;">
+              <button type="button" class="btn-outline btn-note-toggle" onclick="toggleNote(this)" style="font-size:var(--text-sm);padding:4px 8px;">
                 ℹ️ Learn more
               </button>
               <div class="note-content" style="display:none;margin-top:8px;padding:12px;background:rgba(0,0,0,0.2);border-radius:var(--radius);font-size:var(--text-sm);color:var(--text-muted);line-height:1.6;">
@@ -73,12 +73,12 @@ const SecretsContent: FC<{ meta: SecretMeta[] }> = ({ meta }) => (
     <div id="edit-modal" class="modal-overlay" style="display:none;">
       <div class="modal">
         <h3 id="modal-title">Edit Secret</h3>
-        <div class="form-group"><label>Name</label><input type="text" id="edit-key" readonly /></div>
-        <div class="form-group"><label>New Value</label><input type="password" id="edit-value" autocomplete="new-password" /></div>
+        <div class="form-group"><label for="edit-key">Name</label><input type="text" id="edit-key" readonly /></div>
+        <div class="form-group"><label for="edit-value">New Value</label><input type="password" id="edit-value" autocomplete="new-password" /></div>
         <div id="edit-status" class="text-sm text-muted" style="margin-bottom:8px;" />
         <div class="flex gap-2" style="justify-content:flex-end;flex-wrap:wrap;">
-          <button class="btn-outline" onclick="closeSecretEdit()">Cancel</button>
-          <button onclick="saveSecret()">Save</button>
+          <button type="button" class="btn-outline" onclick="closeSecretEdit()">Cancel</button>
+          <button type="button" onclick="saveSecret()">Save</button>
         </div>
       </div>
     </div>
