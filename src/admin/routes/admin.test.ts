@@ -45,7 +45,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
     },
     getSelfBindSource: async (dest: string) => {
       if (state.throwOnBind) throw state.throwOnBind;
-      if (dest === "/opt/ai-engkit/.env") return state.envSource;
+      if (dest === "/opt/ai-engkit/.env" || dest === "/opt/ai-engkit/.env.v2") return state.envSource;
       if (dest === state.effective.files[0]) return state.baseSource;
       return null;
     },
@@ -112,6 +112,38 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     expect(args).toContain("ai-admin");
     expect(args).not.toContain("--project-directory");
     expect(state.runCommandCalls[0].timeout).toBe(120_000);
+  });
+
+  test("Given V2 line (OMO_ENABLED=0), When POST /api/admin/restart, Then resolves the .env.v2 bind source", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    const seen: string[] = [];
+    try {
+      const { deps, state } = createDeps();
+      const v2deps: AdminRoutesDeps = {
+        ...deps,
+        getSelfBindSource: async (dest: string) => {
+          seen.push(dest);
+          if (dest === "/opt/ai-engkit/.env.v2") return "/host/.env.v2";
+          if (dest === state.effective.files[0]) return state.baseSource;
+          return null;
+        },
+      };
+      const app = createAdminRoutes(v2deps);
+
+      const res = await app.request("http://localhost/api/admin/restart", { method: "POST" });
+
+      expect(res.status).toBe(200);
+      expect(seen).toContain("/opt/ai-engkit/.env.v2");
+      expect(seen).not.toContain("/opt/ai-engkit/.env");
+      expect(state.runCommandCalls).toHaveLength(1);
+      const args = state.runCommandCalls[0].args;
+      const envFileIdx = args.indexOf("--env-file");
+      expect(args[envFileIdx + 1]).toBe("/host/.env.v2");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 
   test("Given an active overlay and staged base, When POST, Then the helper recreates from the staged base with --project-directory", async () => {
@@ -277,7 +309,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     const deps: AdminRoutesDeps = {
       getComposeProject: async () => state.project,
       getSelfBindSource: async (dest: string) => {
-        if (dest === "/opt/ai-engkit/.env") return state.envSource;
+        if (dest === "/opt/ai-engkit/.env" || dest === "/opt/ai-engkit/.env.v2") return state.envSource;
         return state.baseSource;
       },
       runCommand: async (args: string[], timeout: number) => {

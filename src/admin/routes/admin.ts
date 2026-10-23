@@ -3,7 +3,7 @@ import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSel
 import type { ExecResult } from "../lib/docker";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { readEnvFile } from "../lib/env";
+import { readEnvFile, resolveEnvPath } from "../lib/env";
 import {
   resolveEffectiveCompose,
   resolveOverlay,
@@ -100,7 +100,10 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
     let overlayActive: boolean;
     try {
       project = await deps.getComposeProject();
-      envSource = await deps.getSelfBindSource("/opt/ai-engkit/.env");
+      // Line-aware env path: V1 reads /opt/ai-engkit/.env, the V2 line reads
+      // /opt/ai-engkit/.env.v2. A hardcoded V1 path makes the restart
+      // preflight fail on V2 (HTTP 500, no side effects).
+      envSource = await deps.getSelfBindSource(resolveEnvPath());
       const effective = deps.resolveEffectiveAiAdmin();
       overlayActive = effective.overlayActive;
       baseFile = effective.files[0];
