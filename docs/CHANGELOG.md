@@ -1,6 +1,51 @@
 ## [Unreleased]
 
 
+## [2.0.5] - 2026-10-23
+
+### Added
+- Bump OpenCode CLI 2.1.2→2.1.3, OpenChamber 2.5.0→2.5.1, gh 2.102.1→2.103.0, Bun 1.4.3→1.4.4
+- Add LeanCTX duplicate-store one-click repair
+- Carry redacted auth-health summary in heartbeat
+- Dispatch GitLab rotation through management channel
+- Add glab.token.rotate to management protocol
+- Start credential scheduler with server lifecycle
+- Surface credential health on Git Hosting page
+- Expose protected GitLab rotation controls
+- Expose structured Git-hosting auth state
+- Schedule startup and periodic credential checks
+- Persist redacted Git-hosting auth state
+- Add GitLab self-inspection and rotation service
+- Add GitHub validity and expiry-unknown status
+- Harden GitLab credential persistence and helper verification
+
+### Fixed
+- Isolate heartbeat report test from on-disk auth state
+- Give the favicon SVG a title
+- Hoist the provider page variables out of their nested blocks
+- Hoist the nav toggle variables out of the guard block
+- Clear the Biome findings on the dashboard page
+- Clear the Biome findings on the projects page
+- Clear the Biome findings on the SSH keys page
+- Clear the Biome findings on the environment editor page
+- Clear the Biome findings on the secrets page
+- Type the agent page buttons and key its settings fields
+- Expose the LSP drift badges with a role that supports aria-label
+- Give the OpenChamber save button an explicit type
+- Clear the 8 Biome findings in the shared admin layout
+- Clear the 12 Biome a11y findings on the Git Hosting page
+- Clear lint findings introduced by the GitLab rotation port
+
+### Documentation
+- Document rotation policy, hazards, and test-token runbook
+
+### Changed
+- Drop the dead glabStatus prop from the Git Hosting view
+- Upgrade GitHub CLI from 2.102.1 to 2.103.0.
+- Upgrade OpenCode CLI from 2.1.2 to 2.1.3.
+- Upgrade OpenChamber from 2.5.0 to 2.5.1.
+- Upgrade Bun from 1.4.3 to 1.4.4.
+
 ## [2.0.4] - 2026-10-21
 
 ### Added
@@ -2326,7 +2371,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.5...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2510,3 +2555,4 @@
 [2.0.2]: https://github.com/tryweb/ai-engkit/compare/v2.0.1...v2.0.2
 [2.0.3]: https://github.com/tryweb/ai-engkit/compare/v2.0.2...v2.0.3
 [2.0.4]: https://github.com/tryweb/ai-engkit/compare/v2.0.3...v2.0.4
+[2.0.5]: https://github.com/tryweb/ai-engkit/compare/v2.0.4...v2.0.5
