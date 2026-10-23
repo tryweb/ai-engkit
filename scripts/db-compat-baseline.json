@@ -54,7 +54,7 @@
     "fixture_id": "ai-engkit-v119-fixture",
     "note": "Baseline captured from the disposable pinned v1.19.2 fixture with SQLite stdlib only. Build-time source mapping carries a gitHead provenance caveat, but this fixture is from the exact pinned binary.",
     "openchamber_version": "1.24.2",
-    "opencode_version": "1.19.3"
+    "opencode_version": "1.19.4"
   },
   "table_count": 20,
   "tables": [
