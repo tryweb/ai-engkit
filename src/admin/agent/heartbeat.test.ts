@@ -77,9 +77,20 @@ describe("heartbeat status report", () => {
       },
     };
 
-    const report = await buildStatusReport(deps, "running");
+    // Isolate from any real auth-state file on disk: the credential scheduler
+    // writes the default path at container startup, which would otherwise leak
+    // into this expectation (race-dependent CI failure).
+    const previousPath = process.env.GIT_HOSTING_AUTH_STATE_PATH;
+    process.env.GIT_HOSTING_AUTH_STATE_PATH = "/tmp/missing-heartbeat-auth-state.json";
 
-    expect(report).toEqual(expected);
+    try {
+      const report = await buildStatusReport(deps, "running");
+
+      expect(report).toEqual(expected);
+    } finally {
+      if (previousPath === undefined) delete process.env.GIT_HOSTING_AUTH_STATE_PATH;
+      else process.env.GIT_HOSTING_AUTH_STATE_PATH = previousPath;
+    }
   });
 
   test("includes the redacted git-hosting auth state when present", async () => {
