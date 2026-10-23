@@ -283,6 +283,15 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # (verified against the @openchamber/web@2.5.0 tarball with the module's
     # own check_version/classify). Anchor drift still fails the build closed.
     "2.5.0": PATCHES_V2,
+    # 2.5.1 keeps the v2 line's source shape: openchamber-routes.js and
+    # package-manager.js are byte-identical to 2.5.0; routes.js differs only
+    # by an AbortSignal timeout constant refactor (OPENCODE_INFO_TIMEOUT_MS)
+    # that leaves the /api/opencode/upgrade anchor and the surrounding
+    # upgrade-status handler untouched (verified against the
+    # @openchamber/web@2.5.1 tarball with the module's own
+    # check_version/classify: all three classify as apply). Anchor drift
+    # still fails the build closed.
+    "2.5.1": PATCHES_V2,
 }
 
 
