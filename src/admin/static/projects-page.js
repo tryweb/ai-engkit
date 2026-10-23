@@ -389,7 +389,40 @@ function renderLeanCtxSection(data) {
   stats.textContent = lines.join("\n");
   body.appendChild(stats);
   row.appendChild(body);
+  if (state === "unknown" && drawerName) {
+    const repairBtn = document.createElement("button");
+    repairBtn.className = "btn-outline drawer-cap__enable";
+    repairBtn.textContent = "Repair";
+    repairBtn.title = "Quarantine duplicate LeanCTX stores for this project";
+    const target = drawerName;
+    repairBtn.addEventListener("click", () => repairLeanCtx(target, repairBtn));
+    row.appendChild(repairBtn);
+  }
   sec.appendChild(row);
+}
+
+async function repairLeanCtx(name, btn) {
+  btn.disabled = true;
+  btn.textContent = "Repairing...";
+  try {
+    const res = await fetch("/api/projects/leanctx/repair", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name }),
+    });
+    if (res.ok) {
+      await loadFeatures();
+      if (drawerName === name) renderDrawer();
+    } else {
+      const d = await res.json().catch(() => null);
+      alert((d && d.error) || "LeanCTX repair failed");
+      btn.disabled = false;
+      btn.textContent = "Repair";
+    }
+  } catch (e) {
+    alert("LeanCTX repair failed");
+    btn.disabled = false;
+    btn.textContent = "Repair";
+  }
 }
 
 function renderDrawer() {

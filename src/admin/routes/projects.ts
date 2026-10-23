@@ -1,5 +1,11 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
+import {
+  buildLeanCtxProjectScanCommand,
+  buildLeanCtxRepairCommand,
+  parseLeanCtxProjectScan,
+  parseLeanCtxRepairResult,
+} from "../lib/leanctx-project-status";
 import { createToolStatusProbe, type ProjectToolStatusProvider } from "../lib/project-tool-status";
 import type { ProjectOverview } from "../lib/projects-overview";
 import {
@@ -81,6 +87,76 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
   projects.post("/api/projects/tool-status/refresh", async (c) => {
     toolStatus.invalidate();
     return c.json({ ok: true });
+  });
+
+  projects.post("/api/projects/leanctx/repair", async (c) => {
+    let body: unknown = null;
+    try {
+      body = await c.req.json();
+    } catch {
+      body = null;
+    }
+    const raw = body !== null && typeof body === "object" ? (body as Record<string, unknown>).project : undefined;
+    const project = typeof raw === "string" ? raw.trim() : "";
+
+    const scanState = async (roots: readonly string[]): Promise<Map<string, string>> => {
+      const states = new Map<string, string>();
+      if (roots.length === 0) return states;
+      try {
+        const exec = await command(buildLeanCtxProjectScanCommand(roots), 30_000);
+        const parsed = exec.exitCode === 0 ? parseLeanCtxProjectScan(exec.stdout, roots) : null;
+        for (const root of roots) states.set(root, parsed?.get(root)?.state ?? "unknown");
+      } catch {
+        for (const root of roots) states.set(root, "unknown");
+      }
+      return states;
+    };
+
+    if (project !== "") {
+      if (!isValidProjectName(project)) return c.json({ error: "Invalid project name" }, 400);
+      const exists = await command(`test -d ${projectDir(project)} && echo yes`, 5_000);
+      if (exists.stdout.trim() !== "yes") return c.json({ error: "Project not found" }, 404);
+      const roots = [`${workspaceRoot}/${project}`];
+      const before = await scanState(roots);
+      let repair: ReturnType<typeof parseLeanCtxRepairResult>;
+      try {
+        const exec = await command(buildLeanCtxRepairCommand(roots), 30_000);
+        if (exec.exitCode !== 0) return c.json({ error: "LeanCTX repair failed" }, 500);
+        repair = parseLeanCtxRepairResult(exec.stdout);
+        if (repair === null) return c.json({ error: "LeanCTX repair failed" }, 500);
+      } catch {
+        return c.json({ error: "LeanCTX repair failed" }, 500);
+      }
+      toolStatus.invalidate(project);
+      const after = await scanState(roots);
+      return c.json({
+        roots: roots.map((root) => ({ root, before: before.get(root) ?? "unknown", after: after.get(root) ?? "unknown" })),
+        quarantined: repair.quarantined,
+        refused: repair.refused,
+        retry: repair.retry,
+      });
+    }
+
+    const names = await listProjects(command, workspaceRoot);
+    const roots = names.map((name) => `${workspaceRoot}/${name}`);
+    const before = await scanState(roots);
+    let repair: ReturnType<typeof parseLeanCtxRepairResult>;
+    try {
+      const exec = await command(buildLeanCtxRepairCommand(roots), 60_000);
+      if (exec.exitCode !== 0) return c.json({ error: "LeanCTX repair failed" }, 500);
+      repair = parseLeanCtxRepairResult(exec.stdout);
+      if (repair === null) return c.json({ error: "LeanCTX repair failed" }, 500);
+    } catch {
+      return c.json({ error: "LeanCTX repair failed" }, 500);
+    }
+    toolStatus.invalidate();
+    const after = await scanState(roots);
+    return c.json({
+      roots: roots.map((root) => ({ root, before: before.get(root) ?? "unknown", after: after.get(root) ?? "unknown" })),
+      quarantined: repair.quarantined,
+      refused: repair.refused,
+      retry: repair.retry,
+    });
   });
 
   projects.get("/api/projects/:name/features", async (c) => {

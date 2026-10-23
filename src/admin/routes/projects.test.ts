@@ -845,3 +845,85 @@ describe("DELETE /api/projects/:name/features/:feature", () => {
     }
   });
 });
+
+describe("POST /api/projects/leanctx/repair", () => {
+  function repairCommand(options: { exists?: boolean; scanStates?: string[]; repair?: unknown; failRepair?: boolean } = {}): ProjectCommand {
+    const { exists = true, scanStates = ['{"state":"unknown"}'], repair = { quarantined: ["aaa111"], refused: [], retry: false }, failRepair = false } = options;
+    let scanCalls = 0;
+    const fn = (async (source: string) => {
+      if (source.includes("test -d")) return { exitCode: 0, stdout: exists ? "yes\n" : "\n", stderr: "" };
+      if (source.includes("leanctx-repair")) {
+        if (failRepair) return { exitCode: 1, stdout: "", stderr: "boom" };
+        return { exitCode: 0, stdout: `${JSON.stringify(repair)}\n`, stderr: "" };
+      }
+      if (source.includes("leanctx-project-scan")) {
+        scanCalls += 1;
+        const after = scanCalls > 1;
+        const lines = scanStates.map((s) => (after ? '{"state":"available","activeFacts":2,"archivedFacts":1,"patterns":1,"history":2,"lastUpdated":"2026-09-17T00:00:00Z"}' : s));
+        return { exitCode: 0, stdout: `${lines.join("\n")}\n`, stderr: "" };
+      }
+      if (source.startsWith("find ")) return { exitCode: 0, stdout: "demo\n", stderr: "" };
+      if (source.includes("SETTINGS=") || source.includes("DISABLED=")) return shellCommand(source);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    }) as ProjectCommand;
+    return fn;
+  }
+
+  function repairRequest(app: ReturnType<typeof createProjectRoutes>, payload: unknown) {
+    return app.request("http://localhost/api/projects/leanctx/repair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  test("repairs a single project from unknown to available", async () => {
+    const f = await fixture();
+    try {
+      const app = createProjectRoutes({ command: repairCommand(), settingsPath: f.settingsPath, disabledPath: f.disabledPath, workspaceRoot: f.workspaceRoot });
+      const res = await repairRequest(app, { project: "demo" });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { roots: Array<{ root: string; before: string; after: string }>; quarantined: string[]; refused: string[]; retry: boolean };
+      expect(body.roots).toHaveLength(1);
+      expect(body.roots[0].before).toBe("unknown");
+      expect(body.roots[0].after).toBe("available");
+      expect(body.quarantined).toEqual(["aaa111"]);
+      expect(body.retry).toBe(false);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("rejects invalid project names", async () => {
+    const f = await fixture();
+    try {
+      const app = createProjectRoutes({ command: repairCommand(), settingsPath: f.settingsPath, disabledPath: f.disabledPath, workspaceRoot: f.workspaceRoot });
+      const res = await repairRequest(app, { project: "bad/name" });
+      expect(res.status).toBe(400);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("returns 404 when the project directory is missing", async () => {
+    const f = await fixture();
+    try {
+      const app = createProjectRoutes({ command: repairCommand({ exists: false }), settingsPath: f.settingsPath, disabledPath: f.disabledPath, workspaceRoot: f.workspaceRoot });
+      const res = await repairRequest(app, { project: "ghost" });
+      expect(res.status).toBe(404);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("returns 500 when the repair script fails", async () => {
+    const f = await fixture();
+    try {
+      const app = createProjectRoutes({ command: repairCommand({ failRepair: true }), settingsPath: f.settingsPath, disabledPath: f.disabledPath, workspaceRoot: f.workspaceRoot });
+      const res = await repairRequest(app, { project: "demo" });
+      expect(res.status).toBe(500);
+    } finally {
+      await f.cleanup();
+    }
+  });
+});

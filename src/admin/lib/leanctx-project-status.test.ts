@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   buildLeanCtxProjectScanCommand,
+  buildLeanCtxRepairCommand,
   isScannableProjectRoot,
   LEANCTX_PROJECT_ROOTS_EOF,
+  LEANCTX_REPAIR_TARGETS_EOF,
   parseLeanCtxProjectScan,
   parseLeanCtxProjectStatusLine,
+  parseLeanCtxRepairResult,
 } from "./leanctx-project-status";
 
 interface ScanRun {
@@ -289,5 +292,132 @@ describe("parseLeanCtxProjectScan", () => {
   test("returns null when the line count does not match the requested roots", () => {
     expect(parseLeanCtxProjectScan('{"state":"empty"}', ["/a", "/b"])).toBeNull();
     expect(parseLeanCtxProjectScan('{"state":"empty"}\n{"state":"empty"}', ["/a"])).toBeNull();
+  });
+});
+
+async function runRepair(projectRoots: readonly string[] | undefined, home: string) {
+  const process = Bun.spawn(["sh", "-c", buildLeanCtxRepairCommand(projectRoots)], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process_env(), HOME: home },
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+  return { stdout, stderr, exitCode };
+}
+
+describe("buildLeanCtxRepairCommand", () => {
+  test("never deletes and never invokes the lean-ctx binary", () => {
+    const source = buildLeanCtxRepairCommand(["/ws/alpha"]);
+    expect(source).not.toMatch(/\brm\s+-rf?\b/);
+    expect(source).not.toMatch(/\blean-ctx\s+[a-z-]/);
+    expect(source).toContain("mv ");
+    expect(source).toContain("quarantine");
+  });
+
+  test("keeps the newest duplicate and quarantines the older store", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_root: "/ws/alpha", project_hash: "aaa111", updated_at: "2026-09-01T00:00:00Z" }));
+      await writeStore(f.knowledge, "bbb222", storeJson({ project_root: "/ws/alpha", project_hash: "bbb222", updated_at: "2026-09-17T00:00:00Z" }));
+      const before = await runScan(["/ws/alpha"], f.home);
+      expect(JSON.parse(before.stdout.trim())).toEqual({ state: "unknown" });
+      const repaired = await runRepair(["/ws/alpha"], f.home);
+      expect(repaired.exitCode).toBe(0);
+      const result = parseLeanCtxRepairResult(repaired.stdout);
+      expect(result).not.toBeNull();
+      expect(result?.quarantined).toEqual(["aaa111"]);
+      expect(result?.refused).toEqual([]);
+      expect(result?.retry).toBe(false);
+      const after = await runScan(["/ws/alpha"], f.home);
+      expect(JSON.parse(after.stdout.trim()).state).toBe("available");
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("isolates empty-string root records", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_root: "", project_hash: "aaa111" }));
+      await writeStore(f.knowledge, "bbb222", storeJson({ project_root: "/ws/alpha", project_hash: "bbb222" }));
+      const repaired = await runRepair(["/ws/alpha"], f.home);
+      expect(repaired.exitCode).toBe(0);
+      const result = parseLeanCtxRepairResult(repaired.stdout);
+      expect(result?.quarantined).toContain("aaa111");
+      expect(result?.retry).toBe(false);
+      const after = await runScan(["/ws/alpha"], f.home);
+      expect(JSON.parse(after.stdout.trim()).state).toBe("available");
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("leaves a single valid store untouched", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson());
+      const repaired = await runRepair(["/ws/alpha"], f.home);
+      const result = parseLeanCtxRepairResult(repaired.stdout);
+      expect(result).toEqual({ quarantined: [], refused: [], retry: false });
+      const after = await runScan(["/ws/alpha"], f.home);
+      expect(JSON.parse(after.stdout.trim()).state).toBe("available");
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("refuses moves that fail the hash guard and sets retry", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_root: "/ws/alpha", project_hash: "wrong", updated_at: "2026-09-01T00:00:00Z" }));
+      await writeStore(f.knowledge, "bbb222", storeJson({ project_root: "/ws/alpha", project_hash: "bbb222", updated_at: "2026-09-17T00:00:00Z" }));
+      const repaired = await runRepair(["/ws/alpha"], f.home);
+      const result = parseLeanCtxRepairResult(repaired.stdout);
+      expect(result?.quarantined).toEqual([]);
+      expect(result?.refused).toEqual(["aaa111"]);
+      expect(result?.retry).toBe(true);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("repairs every root when no filter is given", async () => {
+    const f = await homeFixture();
+    try {
+      await writeStore(f.knowledge, "aaa111", storeJson({ project_root: "/ws/alpha", project_hash: "aaa111", updated_at: "2026-09-01T00:00:00Z" }));
+      await writeStore(f.knowledge, "bbb222", storeJson({ project_root: "/ws/alpha", project_hash: "bbb222", updated_at: "2026-09-17T00:00:00Z" }));
+      const repaired = await runRepair(undefined, f.home);
+      const result = parseLeanCtxRepairResult(repaired.stdout);
+      expect(result?.quarantined).toEqual(["aaa111"]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("keeps crafted roots literal inside the quoted heredoc", () => {
+    const crafted = "/ws/a; touch /tmp/leanctx-pwned $(echo injected)";
+    const source = buildLeanCtxRepairCommand([crafted]);
+    expect(source).toContain(`<<'${LEANCTX_REPAIR_TARGETS_EOF}'`);
+    expect(source).toContain(crafted);
+  });
+});
+
+describe("parseLeanCtxRepairResult", () => {
+  test("parses a valid repair payload", () => {
+    expect(parseLeanCtxRepairResult('{"quarantined":["aaa"],"refused":[],"retry":false}')).toEqual({
+      quarantined: ["aaa"],
+      refused: [],
+      retry: false,
+    });
+  });
+
+  test("rejects malformed payloads", () => {
+    expect(parseLeanCtxRepairResult("not json")).toBeNull();
+    expect(parseLeanCtxRepairResult('{"quarantined":[],"refused":[]}')).toBeNull();
+    expect(parseLeanCtxRepairResult('{"quarantined":[1],"refused":[],"retry":false}')).toBeNull();
   });
 });

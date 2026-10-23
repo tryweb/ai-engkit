@@ -130,3 +130,118 @@ export function parseLeanCtxProjectScan(
   }
   return result;
 }
+
+/** Heredoc delimiter for the repair target roots (validated to never appear as a root). */
+export const LEANCTX_REPAIR_TARGETS_EOF = "LEANCTX_REPAIR_TARGETS_EOF";
+
+/** Structured result emitted by the repair script (stdout JSON). */
+export interface LeanCtxRepairResult {
+  quarantined: string[];
+  refused: string[];
+  retry: boolean;
+}
+
+/**
+ * Build the duplicate-store quarantine script.
+ *
+ * Policy (never delete, never merge — diagnose and isolate only):
+ * - duplicate `project_root` hits keep the `updated_at` newest; the rest move
+ *   to `$base/quarantine/<timestamp>-<hash>/` via `mv`;
+ * - empty or non-string `project_root` records are always isolated;
+ * - a hash guard allows a move only when `project_hash == directory basename`;
+ *   otherwise the directory is refused and `retry` is true;
+ * - unreadable `knowledge.json` files cannot satisfy the guard and are refused.
+ *
+ * Roots travel inside a quoted heredoc body (same mechanism as the scan), so
+ * shell metacharacters stay literal; callers must still pass only
+ * `isScannableProjectRoot` roots. An empty filter repairs every distinct root
+ * plus the global empty-root pollution. Output is one JSON line:
+ * `{"quarantined":[...],"refused":[...],"retry":bool}` — directory basenames
+ * only, never paths, roots, or facts.
+ */
+export function buildLeanCtxRepairCommand(projectRoots?: readonly string[]): string {
+  const targets = (projectRoots ?? []).filter(isScannableProjectRoot);
+  const filterProvided = targets.length > 0;
+  return [
+    `base="$HOME/.local/share/lean-ctx"`,
+    `qbase="$base/quarantine"`,
+    `tmp="\${TMPDIR:-/tmp}/leanctx-repair-$$.jsonl"`,
+    `ttargets="\${TMPDIR:-/tmp}/leanctx-repair-targets-$$.txt"`,
+    `qtrack="\${TMPDIR:-/tmp}/leanctx-repair-q-$$.txt"`,
+    `rtrack="\${TMPDIR:-/tmp}/leanctx-repair-r-$$.txt"`,
+    `: > "$tmp"; : > "$ttargets"; : > "$qtrack"; : > "$rtrack"`,
+    `for f in "$base"/knowledge/*/knowledge.json; do`,
+    `  [ -f "$f" ] || continue`,
+    `  dir=$(basename "$(dirname "$f")")`,
+    `  if rec=$(jq -c --arg dir "$dir" '{dir:$dir,root:(if (.project_root|type)=="string" then .project_root else null end),hash:(if (.project_hash|type)=="string" then .project_hash else "" end),updated_at:(if (.updated_at|type)=="string" then .updated_at else "" end)}' "$f" 2>/dev/null); then`,
+    `    printf '%s\\n' "$rec" >> "$tmp"`,
+    `  else`,
+    `    printf '%s\\n' "$dir" >> "$rtrack"`,
+    `  fi`,
+    `done`,
+    ...(filterProvided
+      ? [
+          `cat >> "$ttargets" <<'${LEANCTX_REPAIR_TARGETS_EOF}'`,
+          ...targets,
+          LEANCTX_REPAIR_TARGETS_EOF,
+        ]
+      : [
+          `jq -s -r '[.[] | select((.root|type)=="string" and .root!="") | .root] | unique[]' "$tmp" 2>/dev/null > "$ttargets" || : > "$ttargets"`,
+        ]),
+    `ts=$(date -u +%Y%m%dT%H%M%SZ 2>/dev/null || date +%Y%m%dT%H%M%S)`,
+    `ts="$ts-$$"`,
+    `mkdir -p "$qbase" 2>/dev/null || true`,
+    `jq -s -r '[.[] | select((.root|type)!="string" or .root=="") | .dir] | unique | .[]' "$tmp" 2>/dev/null | while IFS= read -r d; do`,
+    `  [ -n "$d" ] || continue`,
+    `  h=$(jq -s -r --arg dir "$d" '[.[] | select(.dir==$dir)][0] | .hash // ""' "$tmp" 2>/dev/null || printf '')`,
+    `  if [ -n "$h" ] && [ "$h" = "$d" ]; then`,
+    `    dest="$qbase/$ts-$d"`,
+    `    if mv "$base/knowledge/$d" "$dest" 2>/dev/null; then printf '%s\\n' "$d" >> "$qtrack"; else printf '%s\\n' "$d" >> "$rtrack"; fi`,
+    `  else`,
+    `    printf '%s\\n' "$d" >> "$rtrack"`,
+    `  fi`,
+    `done`,
+    `while IFS= read -r root; do`,
+    `  [ -n "$root" ] || continue`,
+    `  count=$(jq -s --arg root "$root" '[.[] | select(.root==$root)] | length' "$tmp" 2>/dev/null || printf '0')`,
+    `  case $count in ''|*[!0-9]*) count=0;; esac`,
+    `  if [ "$count" -gt 1 ]; then`,
+    `    ordered=$(jq -s -r --arg root "$root" '[.[] | select(.root==$root)] | sort_by(.updated_at) | reverse | .[].dir' "$tmp" 2>/dev/null || true)`,
+    `    first=1`,
+    `    for d in $ordered; do`,
+    `      if [ "$first" = 1 ]; then first=0; continue; fi`,
+    `      h=$(jq -s -r --arg dir "$d" '[.[] | select(.dir==$dir)][0] | .hash // ""' "$tmp" 2>/dev/null || printf '')`,
+    `      if [ -n "$h" ] && [ "$h" = "$d" ]; then`,
+    `        dest="$qbase/$ts-$d"`,
+    `        if mv "$base/knowledge/$d" "$dest" 2>/dev/null; then printf '%s\\n' "$d" >> "$qtrack"; else printf '%s\\n' "$d" >> "$rtrack"; fi`,
+    `      else`,
+    `        printf '%s\\n' "$d" >> "$rtrack"`,
+    `      fi`,
+    `    done`,
+    `  fi`,
+    `done < "$ttargets"`,
+    `qjson=$(jq -R -s 'split("\\n") | map(select(length>0)) | unique' "$qtrack" 2>/dev/null || printf '[]')`,
+    `rjson=$(jq -R -s 'split("\\n") | map(select(length>0)) | unique' "$rtrack" 2>/dev/null || printf '[]')`,
+    `rlen=$(printf '%s' "$rjson" | jq 'length' 2>/dev/null || printf '1')`,
+    `retry=false`,
+    `case $rlen in ''|*[!0-9]*) retry=true;; *) [ "$rlen" -gt 0 ] && retry=true;; esac`,
+    `printf '{"quarantined":%s,"refused":%s,"retry":%s}\\n' "$qjson" "$rjson" "$retry"`,
+    `rm -f "$tmp" "$ttargets" "$qtrack" "$rtrack"`,
+  ].join("\n");
+}
+
+/** Parse the repair script stdout; anything unexpected → null. */
+export function parseLeanCtxRepairResult(stdout: string): LeanCtxRepairResult | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout.trim());
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const record = parsed as Record<string, unknown>;
+  if (!Array.isArray(record.quarantined) || !record.quarantined.every((v): v is string => typeof v === "string")) return null;
+  if (!Array.isArray(record.refused) || !record.refused.every((v): v is string => typeof v === "string")) return null;
+  if (typeof record.retry !== "boolean") return null;
+  return { quarantined: [...record.quarantined], refused: [...record.refused], retry: record.retry };
+}
