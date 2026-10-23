@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 
+## [1.22.1] - 2026-10-23
+
+### Added
+- Bump oh-my-openagent 5.1.42 → 5.1.43
+- Bump OpenCode 1.19.3 → 1.19.4
+- Bump oh-my-openagent 5.1.40 → 5.1.42
+- Quarantine duplicate LeanCTX stores via repair endpoint
+
+### Changed
+- Upgrade OpenCode from 1.19.3 to 1.19.4.
+- Upgrade oh-my-openagent from 5.1.40 to 5.1.43.
+
 ## [1.22.0] - 2026-10-22
 
 ### Added
@@ -2286,7 +2298,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.22.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.22.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2474,3 +2486,4 @@
 [1.21.2]: https://github.com/tryweb/ai-engkit/compare/v1.21.1...v1.21.2
 [1.21.3]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...v1.21.3
 [1.22.0]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...v1.22.0
+[1.22.1]: https://github.com/tryweb/ai-engkit/compare/v1.22.0...v1.22.1
