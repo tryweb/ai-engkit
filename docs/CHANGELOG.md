@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [2.0.8] - 2026-10-24
+
+### Fixed
+- Resolve ai-dev digest via compose labels so admin restart button appears on V2
+
 ## [2.0.7] - 2026-10-24
 
 ### Fixed
@@ -2381,7 +2386,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.7...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.8...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2568,3 +2573,4 @@
 [2.0.5]: https://github.com/tryweb/ai-engkit/compare/v2.0.4...v2.0.5
 [2.0.6]: https://github.com/tryweb/ai-engkit/compare/v2.0.5...v2.0.6
 [2.0.7]: https://github.com/tryweb/ai-engkit/compare/v2.0.6...v2.0.7
+[2.0.8]: https://github.com/tryweb/ai-engkit/compare/v2.0.7...v2.0.8
