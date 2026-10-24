@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [2.0.7] - 2026-10-24
+
+### Fixed
+- Remove image VOLUME to stop anonymous volume leaks
+
 ## [2.0.6] - 2026-10-23
 
 ### Fixed
@@ -2376,7 +2381,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.6...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.7...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2562,3 +2567,4 @@
 [2.0.4]: https://github.com/tryweb/ai-engkit/compare/v2.0.3...v2.0.4
 [2.0.5]: https://github.com/tryweb/ai-engkit/compare/v2.0.4...v2.0.5
 [2.0.6]: https://github.com/tryweb/ai-engkit/compare/v2.0.5...v2.0.6
+[2.0.7]: https://github.com/tryweb/ai-engkit/compare/v2.0.6...v2.0.7
