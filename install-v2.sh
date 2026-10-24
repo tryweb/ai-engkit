@@ -141,6 +141,11 @@ fetch_assets() {
 
 prompt_passwords() {
     header "4. Passwords"
+    # Precedence: shell environment > existing $ENV_FILE > prompt. The file
+    # fallback keeps re-runs from prompting for already-stored passwords.
+    if [ -z "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+        OPENCHAMBER_UI_PASSWORD=$(grep -E '^OPENCHAMBER_UI_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    fi
     if [ -z "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
         read -s -p "  OpenChamber UI password: " OPENCHAMBER_UI_PASSWORD < /dev/tty || true
         echo
@@ -149,6 +154,9 @@ prompt_passwords() {
         ok "UI password set"
     else
         ok "UI password already set in environment"
+    fi
+    if [ -z "${ADMIN_PASSWORD:-}" ]; then
+        ADMIN_PASSWORD=$(grep -E '^ADMIN_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
     fi
     if [ -z "${ADMIN_PASSWORD:-}" ]; then
         read -s -p "  Admin Dashboard password (required): " ADMIN_PASSWORD < /dev/tty || true
