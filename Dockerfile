@@ -427,19 +427,6 @@ ENV PATH=/home/${USERNAME}/.local/bin:/home/${USERNAME}/.bun/bin:/home/linuxbrew
 
 WORKDIR /home/${USERNAME}/workspace
 
-VOLUME [ \
-    "/home/${USERNAME}/workspace", \
-    "/home/${USERNAME}/.local/share/opencode", \
-    "/home/${USERNAME}/.local/share/lean-ctx", \
-    "/home/${USERNAME}/.local/state/lean-ctx", \
-    "/home/${USERNAME}/.config/opencode", \
-    "/home/${USERNAME}/.cache/opencode", \
-    "/home/${USERNAME}/.cache/oh-my-opencode", \
-    "/home/${USERNAME}/.config/openchamber", \
-    "/home/${USERNAME}/.ssh", \
-    "/home/${USERNAME}/.config/git" \
-]
-
 EXPOSE 3000 4095
 
 # tini 用絕對路徑，避免 PATH 未初始化時找不到
