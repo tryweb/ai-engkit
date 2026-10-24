@@ -1,6 +1,7 @@
 import {
   isAiDevRunning,
   getAiDevUptime,
+  getAiDevContainerRef,
   getSelfContainerRef,
   dockerCommand,
   execInAiDev,
@@ -61,6 +62,7 @@ export type GitHostingAuthStatus =
 export interface StatusDeps {
   isAiDevRunning: () => Promise<boolean>;
   getAiDevUptime: () => Promise<number | null>;
+  getAiDevContainerRef: () => Promise<string>;
   getSelfContainerRef: () => Promise<string>;
   dockerCommand: (subcommand: string, timeoutMs: number) => Promise<ExecResult>;
   execInAiDev: (command: string, timeoutMs: number) => Promise<ExecResult>;
@@ -75,6 +77,7 @@ export interface StatusDeps {
 const DEFAULT_DEPS: StatusDeps = {
   isAiDevRunning,
   getAiDevUptime,
+  getAiDevContainerRef,
   getSelfContainerRef,
   dockerCommand,
   execInAiDev,
@@ -100,8 +103,9 @@ async function getAdminImageDigest(deps: StatusDeps): Promise<string | null> {
 }
 
 async function getAiDevImageDigest(deps: StatusDeps): Promise<string | null> {
+  const ref = await deps.getAiDevContainerRef();
   const result = await deps.dockerCommand(
-    `inspect --format='{{.Image}}' ai-engkit`,
+    `inspect --format='{{.Image}}' ${ref}`,
     10_000,
   );
   if (result.exitCode !== 0 || !result.stdout) return null;

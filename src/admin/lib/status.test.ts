@@ -27,6 +27,7 @@ function makeDeps(overrides: DepOverrides = {}): StatusDeps {
   return {
     isAiDevRunning: async () => overrides.running ?? true,
     getAiDevUptime: async () => (overrides.uptime === undefined ? 3600 : overrides.uptime),
+    getAiDevContainerRef: async () => "aidev-ref",
     getSelfContainerRef: async () => "self-ref",
     dockerCommand: async (subcommand: string) => {
       if (subcommand.includes("State.StartedAt")) return ok(new Date(0).toISOString());

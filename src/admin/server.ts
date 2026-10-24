@@ -28,7 +28,7 @@ import { createRetentionPolicyRoutes } from "./routes/retention-policy";
 import { getUpdateCheck } from "./routes/versions";
 import { getStatus as getUpgradeStatus } from "./lib/upgrade";
 import { DashboardPage } from "./views/dashboard";
-import { getSelfContainerRef, dockerCommand, execInAiDev } from "./lib/docker";
+import { getSelfContainerRef, getAiDevContainerRef, dockerCommand, execInAiDev } from "./lib/docker";
 import { listKeys } from "./lib/ssh-keys";
 import { createToolStatusProbe } from "./lib/project-tool-status";
 import leanctxRoutes from "./routes/leanctx";
@@ -303,7 +303,8 @@ app.get("/", async (c) => {
       return result.exitCode === 0 && result.stdout ? result.stdout.trim() : null;
     })(),
     (async () => {
-      const result = await dockerCommand(`inspect --format='{{.Image}}' ai-engkit`, 10_000);
+      const ref = await getAiDevContainerRef();
+      const result = await dockerCommand(`inspect --format='{{.Image}}' ${ref}`, 10_000);
       return result.exitCode === 0 && result.stdout ? result.stdout.trim() : null;
     })(),
   ]);
