@@ -292,6 +292,14 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # check_version/classify: all three classify as apply). Anchor drift
     # still fails the build closed.
     "2.5.1": PATCHES_V2,
+    # 2.5.2 keeps the v2 line's source shape: openchamber-routes.js and
+    # routes.js are byte-identical to 2.5.1; package-manager.js differs only
+    # by a one-line detectPackageManager addition ('/pnpm-store/') outside
+    # executeUpdate, whose body is byte-identical to 2.5.1 (verified against
+    # the @openchamber/web@2.5.2 tarball with the module's own
+    # check_version/classify: all three anchors unique, all three classify
+    # as apply). Anchor drift still fails the build closed.
+    "2.5.2": PATCHES_V2,
 }
 
 
