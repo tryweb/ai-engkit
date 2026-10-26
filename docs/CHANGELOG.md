@@ -1,8 +1,16 @@
 ## [Unreleased]
 
+
+## [2.0.9] - 2026-10-26
+
 ### Added
 - Port `enable-security-audit` to V2: pinned Cloudflare `security-audit` tree (21 files, `c1c8a8c`) as opt-in baked skill with `AGENTS.md` routing note, admin Projects Enable/Disable (true-delete disable), and entrypoint auto-upgrade. V2 drops the omo/`team_mode` handling — audit never required it; native subagents apply.
 
+### Changed
+- Upgrade GitHub CLI from 2.103.0 to 2.103.2.
+- Upgrade OpenSpec from 1.14.3 to 1.15.0.
+- Upgrade OpenCode CLI from 2.1.3 to 2.1.4 (V2 dev image).
+- Upgrade OpenChamber from 2.5.1 to 2.5.2 (V2 dev image).
 
 ## [2.0.8] - 2026-10-24
 
@@ -2389,7 +2397,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.8...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.9...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2577,3 +2585,4 @@
 [2.0.6]: https://github.com/tryweb/ai-engkit/compare/v2.0.5...v2.0.6
 [2.0.7]: https://github.com/tryweb/ai-engkit/compare/v2.0.6...v2.0.7
 [2.0.8]: https://github.com/tryweb/ai-engkit/compare/v2.0.7...v2.0.8
+[2.0.9]: https://github.com/tryweb/ai-engkit/compare/v2.0.8...v2.0.9
