@@ -162,3 +162,15 @@ docker exec -it ai-dev vi ~/.git-credentials
 | `ssh-keys` | `/home/devuser/.ssh` | SSH keys, `known_hosts` |
 | `gh-config` | `/home/devuser/.config/gh` | GitHub CLI auth state |
 | `glab-config` | `/home/devuser/.config/glab-cli` | GitLab CLI auth state |
+
+Each Docker Compose project gets its own set of these volumes, prefixed by
+project name (for example `v2_glab-config-v2` versus
+`v2dev_glab-config-v2dev` on a host running several projects side by side).
+A PAT added through one environment's Admin UI is written via `docker exec`
+into that environment's sibling ai-dev container only, and lives only in
+that project's volume — other environments never see it. The ai-admin
+container itself holds no git credentials, so rebuilding ai-admin is safe;
+recreating ai-dev preserves credentials as long as its volumes are kept
+(`docker compose up -d` without `-v`). To verify which volume an ai-dev
+uses, inspect its mounts (`docker inspect <ai-dev-container>`) and list the
+`hosts:` keys in that volume's `config.yml`, redacting token values.

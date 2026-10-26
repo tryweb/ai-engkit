@@ -31,6 +31,13 @@ This is a disposable-credential integration harness for GitLab token rotation an
 
 4. Run the application against isolated `glab`/`git` state, not the normal credential volumes described in [`GIT_AUTHENTICATION.md`](GIT_AUTHENTICATION.md). For a containerized run, use a temporary `HOME`, `XDG_CONFIG_HOME`, and `GLAB_CONFIG_DIR`; destroy them after the run.
 
+   On hosts running multiple Compose projects side by side (for example
+   v1/dev/v2/v2dev on one machine), every project has its own independent
+   `glab-config`/`gh-config` named volumes, prefixed per project. A
+   credential added in one environment is visible only there, so never point
+   this harness at a production project's volume — the temporary state above
+   is what keeps the run isolated.
+
    ```bash
    export AUTH14_TMP="$(mktemp -d)"
    export HOME="$AUTH14_TMP/home"
