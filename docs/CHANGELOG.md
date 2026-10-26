@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- Port `enable-security-audit` to V2: pinned Cloudflare `security-audit` tree (21 files, `c1c8a8c`) as opt-in baked skill with `AGENTS.md` routing note, admin Projects Enable/Disable (true-delete disable), and entrypoint auto-upgrade. V2 drops the omo/`team_mode` handling — audit never required it; native subagents apply.
+
 
 ## [2.0.8] - 2026-10-24
 

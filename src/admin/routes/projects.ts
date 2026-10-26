@@ -64,7 +64,7 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
   projects.get("/api/projects/overview", async (c) => {
     const overviews = await collectProjectOverviews(command, workspaceRoot, settingsPath, disabledPath, toolStatus);
     const data: Record<string, {
-      features: { knowledge: boolean; maintenance: boolean; openspec: boolean; superpowers: boolean };
+      features: { knowledge: boolean; maintenance: boolean; openspec: boolean; superpowers: boolean; "security-audit": boolean };
       remote: string | null;
       disabled: boolean;
       codegraph: ProjectOverview["codegraph"];
@@ -167,13 +167,14 @@ export function createProjectRoutes(options: ProjectRoutesOptions = {}) {
     const exists = await command(`test -d ${projectDir(name)} && echo yes`, 5_000);
     if (exists.stdout.trim() !== "yes") return c.json({ error: "Project not found" }, 404);
 
-    const [knowledge, maintenance, openspec, superpowers] = await Promise.all([
+    const [knowledge, maintenance, openspec, superpowers, securityAudit] = await Promise.all([
       checkFeature(command, workspaceRoot, name, "docs/knowledge/README.md"),
       checkFeature(command, workspaceRoot, name, "docs/knowledge/maintenance/README.md"),
       checkFeature(command, workspaceRoot, name, "openspec"),
       checkFeature(command, workspaceRoot, name, ".opencode/superpowers"),
+      checkFeature(command, workspaceRoot, name, ".opencode/skills/security-audit/SKILL.md"),
     ]);
-    return c.json({ knowledge, maintenance, openspec, superpowers });
+    return c.json({ knowledge, maintenance, openspec, superpowers, "security-audit": securityAudit });
   });
 
   projects.post("/api/projects", async (c) => {

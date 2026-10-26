@@ -449,7 +449,7 @@ describe("command dispatcher", () => {
   test("returns the project overview map for a projects.list query", async () => {
     const projects = {
       alpha: {
-        features: { knowledge: true, maintenance: false, openspec: true, superpowers: false },
+        features: { knowledge: true, maintenance: false, openspec: true, superpowers: false, "security-audit": false },
         remote: "https://example.com/alpha.git",
         disabled: false,
       },
@@ -1453,7 +1453,7 @@ describe("query result contracts", () => {
     expect(typeof collectProvidersMeta).toBe("function");
     expect(overviews).toEqual([{
       name: "alpha",
-      features: { knowledge: true, maintenance: false, openspec: false, superpowers: false },
+      features: { knowledge: true, maintenance: false, openspec: false, superpowers: false, "security-audit": false },
       remote: "https://example.com/alpha.git",
       disabled: false,
     }]);
@@ -1524,7 +1524,7 @@ describe("query result contracts", () => {
   test("projects.list pins the project overview schema and query correlation", async () => {
     const projects = {
       alpha: {
-        features: { knowledge: true, maintenance: false, openspec: true, superpowers: false },
+        features: { knowledge: true, maintenance: false, openspec: true, superpowers: false, "security-audit": false },
         remote: "https://example.com/alpha.git",
         disabled: false,
       },
@@ -1613,7 +1613,7 @@ describe("query result contracts", () => {
       overrides: {
         readProjects: async () => ({
           alpha: {
-            features: { knowledge: true, maintenance: false, openspec: false, superpowers: false },
+            features: { knowledge: true, maintenance: false, openspec: false, superpowers: false, "security-audit": false },
             remote: `https://example.com/alpha.git?token=${RAW_KEY_MATERIAL}`,
             disabled: false,
           },

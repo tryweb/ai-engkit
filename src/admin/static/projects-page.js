@@ -3,6 +3,7 @@ const CAPABILITIES = [
   { key: "maintenance", glyph: "M", label: "Maintenance" },
   { key: "openspec", glyph: "OS", label: "OpenSpec" },
   { key: "superpowers", glyph: "SP", label: "SuperPower" },
+  { key: "security-audit", glyph: "SA", label: "Security Audit" },
 ];
 
 let overviewData = {};

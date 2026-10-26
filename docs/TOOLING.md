@@ -110,6 +110,9 @@ AI-EngKit also bakes in project-visible skills such as:
 - `knowledge-capture`
 - `enable-project-knowledge`
 - `enable-finalize-maintenance`
+- `enable-security-audit` (opt-in per project: pinned Cloudflare
+  `security-audit` tree + `AGENTS.md` routing note; no `team_mode`
+  toggle on V2 — audit runs with native subagents)
 
 Related files:
 

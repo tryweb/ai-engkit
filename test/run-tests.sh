@@ -57,6 +57,13 @@ else
   fail "AGENTS synchronization marker tests failed"
 fi
 
+SECURITY_AUDIT_TEST="$(dirname "${BASH_SOURCE[0]}")/test-security-audit-skill.sh"
+if [ -x "$SECURITY_AUDIT_TEST" ] && bash "$SECURITY_AUDIT_TEST" >/dev/null 2>&1; then
+  pass "security-audit skill host tests pass"
+else
+  fail "security-audit skill host tests failed"
+fi
+
 if docker exec "$CONTAINER" test ! -e /entrypoint.d/02-init-config.test.sh 2>/dev/null; then
   pass "runtime image excludes entrypoint test helpers"
 else
@@ -609,6 +616,23 @@ if docker exec "$CONTAINER" sh -c 'test -d /opt/opencode/baked-plugins/superpowe
   pass "superpowers baked plugin source present for per-project enablement"
 else
   fail "superpowers baked plugin source missing (per-project enablement broken)"
+fi
+
+# --------------------------------------------------
+# 8.5 Security Audit (opt-in baked skill)
+# --------------------------------------------------
+# Host behavior is covered by test/test-security-audit-skill.sh (runs on the
+# host, no container needed). Here verify the image actually ships the
+# vendored tree and the runtime symlink so per-project Enable works.
+if docker exec "$CONTAINER" sh -c 'test -f /opt/opencode/baked-skills/enable-security-audit/SKILL.md' 2>/dev/null; then
+  pass "security-audit baked skill present in image"
+else
+  fail "security-audit baked skill missing in image (rebuild required)"
+fi
+if docker exec "$CONTAINER" sh -c 'test -L /home/devuser/.config/opencode/skills/enable-security-audit' 2>/dev/null; then
+  pass "security-audit baked skill symlinked into config"
+else
+  fail "security-audit baked skill not symlinked into config"
 fi
 
 # --------------------------------------------------

@@ -11,7 +11,7 @@ import { checkFeature, collectProjectOverviews, listProjects } from "./projects-
 
 export type ProjectCommand = SettingsCommand;
 
-export const PROJECT_FEATURES = ["knowledge", "maintenance", "openspec", "superpowers"] as const;
+export const PROJECT_FEATURES = ["knowledge", "maintenance", "openspec", "superpowers", "security-audit"] as const;
 export type ProjectFeature = (typeof PROJECT_FEATURES)[number];
 
 export interface ProjectLibOptions {
@@ -307,6 +307,9 @@ export async function enableProjectFeature(
     case "superpowers":
       cmd = `mkdir -p ${PROJECT_ROOT}/.opencode/skills && for d in /opt/opencode/baked-plugins/superpowers/skills/*/; do ln -sfn "$d" "${PROJECT_ROOT}/.opencode/skills/$(basename "$d")"; done && mkdir -p ${PROJECT_ROOT}/.opencode/superpowers`;
       break;
+    case "security-audit":
+      cmd = `bash ~/.config/opencode/skills/enable-security-audit/bootstrap.sh ${PROJECT_ROOT}`;
+      break;
     default:
       return { ok: false, error: `Unknown feature '${feature}'. Valid: ${PROJECT_FEATURES.join(", ")}` };
   }
@@ -330,6 +333,19 @@ export async function disableProjectFeature(
   switch (feature) {
     case "superpowers":
       cmd = `rm -rf ${PROJECT_ROOT}/.opencode/superpowers && find ${PROJECT_ROOT}/.opencode/skills -maxdepth 1 -type l -exec sh -c 'readlink "$1" | grep -q baked-plugins/superpowers && rm "$1"' _ {} \\;`;
+      break;
+    case "security-audit":
+      // True deletion: the tree is 100% upstream-owned and rebuildable via
+      // bootstrap.sh. Remove the skill tree, then strip the routing-note
+      // segment from AGENTS.md; delete AGENTS.md when the note was its only
+      // content. (Do NOT copy the knowledge/maintenance no-op — those guard
+      // user content, while this tree is regenerable.)
+      cmd = `rm -rf ${PROJECT_ROOT}/.opencode/skills/security-audit && `
+        + `if [ -f ${PROJECT_ROOT}/AGENTS.md ]; then `
+        + `awk 'BEGIN{p=1} /<!-- security-audit-routing -->/{p=0;next} /<!-- \\/security-audit-routing -->/{if(p==0){p=1;next}} p' ${PROJECT_ROOT}/AGENTS.md > ${PROJECT_ROOT}/AGENTS.md.tmp && `
+        + `mv ${PROJECT_ROOT}/AGENTS.md.tmp ${PROJECT_ROOT}/AGENTS.md; `
+        + `if [ ! -s ${PROJECT_ROOT}/AGENTS.md ] || ! grep -q '[^[:space:]]' ${PROJECT_ROOT}/AGENTS.md; then rm -f ${PROJECT_ROOT}/AGENTS.md; fi; `
+        + `fi`;
       break;
     case "knowledge":
     case "maintenance":

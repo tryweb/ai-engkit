@@ -30,6 +30,8 @@ const ProjectsContent: FC<{ projects: string[] }> = ({ projects }) => (
         <option value="knowledge">Has Knowledge</option>
         <option value="maintenance">Has Maintenance</option>
         <option value="openspec">Has OpenSpec</option>
+        <option value="superpowers">Has Superpowers</option>
+        <option value="security-audit">Has Security Audit</option>
       </select>
       <select id="filter-remote" aria-label="Filter by git remote" onchange="applyFilters()">
         <option value="all">Any remote</option>

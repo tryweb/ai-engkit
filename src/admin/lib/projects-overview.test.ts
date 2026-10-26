@@ -103,6 +103,22 @@ describe("checkFeature", () => {
       await f.cleanup();
     }
   });
+
+  test("detects the security-audit skill marker", async () => {
+    const f = await fixture();
+    try {
+      const command = createCommand(f.workspaceRoot);
+      expect(await checkFeature(command, f.workspaceRoot, "alpha", ".opencode/skills/security-audit/SKILL.md")).toBe(false);
+      await mkdir(join(f.workspaceRoot, "alpha", ".opencode", "skills", "security-audit"), { recursive: true });
+      await writeFile(join(f.workspaceRoot, "alpha", ".opencode", "skills", "security-audit", "SKILL.md"), "# audit\n");
+      expect(await checkFeature(command, f.workspaceRoot, "alpha", ".opencode/skills/security-audit/SKILL.md")).toBe(true);
+      const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath);
+      expect(overviews.find((o) => o.name === "alpha")?.features["security-audit"]).toBe(true);
+      expect(overviews.find((o) => o.name === "beta")?.features["security-audit"]).toBe(false);
+    } finally {
+      await f.cleanup();
+    }
+  });
 });
 
 describe("collectProjectOverviews", () => {
@@ -119,13 +135,13 @@ describe("collectProjectOverviews", () => {
 
       expect(byName.get("alpha")).toEqual({
         name: "alpha",
-        features: { knowledge: true, maintenance: false, openspec: true, superpowers: true },
+        features: { knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": false },
         remote: "https://example.com/alpha.git",
         disabled: false,
       });
       expect(byName.get("beta")).toEqual({
         name: "beta",
-        features: { knowledge: false, maintenance: false, openspec: false, superpowers: false },
+        features: { knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false },
         remote: null,
         disabled: true,
       });
@@ -305,7 +321,7 @@ describe("collectProjectOverviews", () => {
       );
       const alpha = overviews.find((o) => o.name === "alpha");
       expect(alpha?.codegraph).toBeUndefined();
-      expect(alpha?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true });
+      expect(alpha?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": false });
     } finally {
       await f.cleanup();
     }
@@ -328,7 +344,7 @@ describe("collectProjectOverviews", () => {
       const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath, toolStatus);
       const byName = new Map(overviews.map((o) => [o.name, o]));
 
-      expect(byName.get("alpha")?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true });
+      expect(byName.get("alpha")?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": false });
       expect(byName.get("alpha")?.codegraph).toBeUndefined();
     } finally {
       await f.cleanup();
@@ -337,7 +353,7 @@ describe("collectProjectOverviews", () => {
 });
 
 describe("parseFeatureStats", () => {
-  const features: ProjectFeatures = { knowledge: true, maintenance: true, openspec: true, superpowers: true };
+  const features: ProjectFeatures = { knowledge: true, maintenance: true, openspec: true, superpowers: true, "security-audit": true };
 
   test("parses per-feature stats from command output", () => {
     const stats = parseFeatureStats(
@@ -361,7 +377,7 @@ describe("parseFeatureStats", () => {
   test("returns null for features that are not enabled", () => {
     const stats = parseFeatureStats(
       '{"knowledge":null,"maintenance":null,"openspec":{"active":2,"archived":0,"specs":3}}',
-      { knowledge: true, maintenance: true, openspec: true, superpowers: true },
+      { knowledge: true, maintenance: true, openspec: true, superpowers: true, "security-audit": true },
     );
     expect(stats.knowledge).toBeNull();
     expect(stats.maintenance).toBeNull();
@@ -384,7 +400,7 @@ describe("parseFeatureStats", () => {
   test("does not parse a feature that is disabled in the feature set", () => {
     const stats = parseFeatureStats(
       '{"knowledge":null,"maintenance":{"reports":1,"lastReportDate":null,"months":0},"openspec":null}',
-      { knowledge: false, maintenance: true, openspec: false, superpowers: false },
+      { knowledge: false, maintenance: true, openspec: false, superpowers: false, "security-audit": true },
     );
     expect(stats).toEqual({
       knowledge: null,

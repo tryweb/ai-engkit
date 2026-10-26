@@ -353,7 +353,7 @@ describe("GET /api/projects/overview tool status", () => {
       const body = await res.json() as Record<string, unknown>;
       const demo = body["demo"] as Record<string, unknown>;
       expect(demo.codegraph).toEqual({ initialized: true, nodeCount: 42 });
-      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false });
+      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false });
       expect(demo.disabled).toBe(false);
       expect(demo.remote).toBeNull();
     } finally {
@@ -582,7 +582,7 @@ describe("GET /api/projects/overview tool status", () => {
       const body = await res.json() as Record<string, unknown>;
       const demo = body["demo"] as Record<string, unknown>;
       expect(demo.codegraph).toBeNull();
-      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false });
+      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false });
     } finally {
       await f.cleanup();
     }
@@ -840,6 +840,56 @@ describe("DELETE /api/projects/:name/features/:feature", () => {
       const postRes = await requestPost(app, "demo", "superpowers");
       expect(postRes.status).toBe(200);
       expect(await postRes.json()).toMatchObject({ ok: true });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("disable security-audit removes the skill tree and its lone routing note", async () => {
+    const f = await fixture();
+    try {
+      const projectPath = join(f.workspaceRoot, "demo");
+      await mkdir(join(projectPath, ".opencode", "skills", "security-audit"), { recursive: true });
+      await writeFile(join(projectPath, ".opencode", "skills", "security-audit", "SKILL.md"), "# audit\n");
+      await writeFile(
+        join(projectPath, "AGENTS.md"),
+        "<!-- security-audit-routing -->\nnote\n<!-- /security-audit-routing -->\n",
+      );
+
+      const app = appFor(f, realCommand());
+      const res = await requestDelete(app, "demo", "security-audit");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true });
+
+      const tree = await shellCommand(`test -e "${join(projectPath, ".opencode", "skills", "security-audit")}" && echo exists || echo gone`);
+      expect(tree.stdout.trim()).toBe("gone");
+      const agents = await shellCommand(`test -e "${join(projectPath, "AGENTS.md")}" && echo exists || echo gone`);
+      expect(agents.stdout.trim()).toBe("gone");
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("disable security-audit preserves user content outside the routing note", async () => {
+    const f = await fixture();
+    try {
+      const projectPath = join(f.workspaceRoot, "demo");
+      await mkdir(join(projectPath, ".opencode", "skills", "security-audit"), { recursive: true });
+      await writeFile(join(projectPath, ".opencode", "skills", "security-audit", "SKILL.md"), "# audit\n");
+      await writeFile(
+        join(projectPath, "AGENTS.md"),
+        "# My project\n\n<!-- security-audit-routing -->\nnote\n<!-- /security-audit-routing -->\n",
+      );
+
+      const app = appFor(f, realCommand());
+      const res = await requestDelete(app, "demo", "security-audit");
+      expect(res.status).toBe(200);
+
+      const content = await readFile(join(projectPath, "AGENTS.md"), "utf8");
+      expect(content).toContain("# My project");
+      expect(content).not.toContain("security-audit-routing");
+      const tree = await shellCommand(`test -e "${join(projectPath, ".opencode", "skills", "security-audit")}" && echo exists || echo gone`);
+      expect(tree.stdout.trim()).toBe("gone");
     } finally {
       await f.cleanup();
     }
