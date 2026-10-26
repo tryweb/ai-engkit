@@ -63,6 +63,25 @@ else
   fail "runtime image executes host-only entrypoint test helpers"
 fi
 
+SECURITY_AUDIT_SKILL_TEST="$(dirname "${BASH_SOURCE[0]}")/test-security-audit-skill.sh"
+if [ -x "$SECURITY_AUDIT_SKILL_TEST" ] && BASH_ENV=/dev/null CLAUDE_ENV_FILE= bash --noprofile --norc "$SECURITY_AUDIT_SKILL_TEST" >/dev/null 2>&1; then
+  pass "security-audit enable skill bootstrap tests pass"
+else
+  fail "security-audit enable skill bootstrap tests failed"
+fi
+
+if docker exec "$CONTAINER" test -f /home/devuser/.config/opencode/skills/enable-security-audit/SKILL.md 2>/dev/null; then
+  pass "enable-security-audit baked skill is discoverable"
+else
+  fail "enable-security-audit baked skill is not installed"
+fi
+
+if docker exec "$CONTAINER" test -f /home/devuser/.config/opencode/skills/enable-security-audit/skill/validate-findings.cjs 2>/dev/null; then
+  pass "vendored security-audit tree ships inside the baked skill"
+else
+  fail "vendored security-audit tree is missing from the baked skill"
+fi
+
 if [ "${RUN_AGENTS_TESTS_ONLY:-0}" = "1" ]; then
   exit "$FAIL"
 fi

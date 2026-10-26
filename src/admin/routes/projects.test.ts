@@ -353,7 +353,7 @@ describe("GET /api/projects/overview tool status", () => {
       const body = await res.json() as Record<string, unknown>;
       const demo = body["demo"] as Record<string, unknown>;
       expect(demo.codegraph).toEqual({ initialized: true, nodeCount: 42 });
-      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false });
+      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false });
       expect(demo.disabled).toBe(false);
       expect(demo.remote).toBeNull();
     } finally {
@@ -582,7 +582,7 @@ describe("GET /api/projects/overview tool status", () => {
       const body = await res.json() as Record<string, unknown>;
       const demo = body["demo"] as Record<string, unknown>;
       expect(demo.codegraph).toBeNull();
-      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false });
+      expect(demo.features).toEqual({ knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false });
     } finally {
       await f.cleanup();
     }
@@ -819,6 +819,54 @@ describe("DELETE /api/projects/:name/features/:feature", () => {
       const res = await requestDelete(app, "demo", "knowledge");
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ ok: true });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("enable security-audit runs the enable-security-audit bootstrap", async () => {
+    const f = await fixture();
+    try {
+      await mkdir(join(f.workspaceRoot, "demo"), { recursive: true });
+      const seen: string[] = [];
+      const stub = (async (source: string) => {
+        seen.push(source);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }) as ProjectCommand;
+      const app = appFor(f, stub);
+      const res = await requestPost(app, "demo", "security-audit");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true });
+      expect(seen.some((s) => s.includes("enable-security-audit/bootstrap.sh"))).toBe(true);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("disable security-audit removes the tree and the routing note", async () => {
+    const f = await fixture();
+    try {
+      const projectPath = join(f.workspaceRoot, "demo");
+      await mkdir(join(projectPath, ".opencode", "skills", "security-audit"), { recursive: true });
+      await writeFile(join(projectPath, ".opencode", "skills", "security-audit", "SKILL.md"), "# Security Audit\n");
+      await writeFile(join(projectPath, "AGENTS.md"), "# My notes\n\n## Security Skill Routing (project-local)\n\n- audit on\n");
+      const app = appFor(f, realCommand());
+      const res = await requestDelete(app, "demo", "security-audit");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true });
+
+      const tree = await shellCommand(`test -e "${join(projectPath, ".opencode", "skills", "security-audit")}" && echo exists || echo gone`);
+      expect(tree.stdout.trim()).toBe("gone");
+
+      const agents = await shellCommand(`cat "${join(projectPath, "AGENTS.md")}"`);
+      expect(agents.stdout).toBe("# My notes\n");
+
+      // Note-only file is removed entirely, restoring the pre-enable state.
+      await writeFile(join(projectPath, "AGENTS.md"), "## Security Skill Routing (project-local)\n\n- audit on\n");
+      const res2 = await requestDelete(app, "demo", "security-audit");
+      expect(res2.status).toBe(200);
+      const gone = await shellCommand(`test -e "${join(projectPath, "AGENTS.md")}" && echo exists || echo gone`);
+      expect(gone.stdout.trim()).toBe("gone");
     } finally {
       await f.cleanup();
     }

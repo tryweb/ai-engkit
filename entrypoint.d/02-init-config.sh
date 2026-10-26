@@ -536,6 +536,7 @@ upgrade_bootstrapped_skills() {
 UPGRADEABLE_SKILLS=(
   "knowledge-capture:$SKILLS_ROOT/enable-project-knowledge"
   "finalize-maintenance:$SKILLS_ROOT/enable-finalize-maintenance"
+  "security-audit:$SKILLS_ROOT/enable-security-audit"
 )
 
 for _entry in "${UPGRADEABLE_SKILLS[@]}"; do

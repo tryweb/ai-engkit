@@ -67,6 +67,8 @@ async function fixture(): Promise<Fixture> {
   await mkdir(join(workspaceRoot, "alpha", "openspec", "changes", "archive", "old-a"), { recursive: true });
   await mkdir(join(workspaceRoot, "alpha", "openspec", "specs", "s1"), { recursive: true });
   await mkdir(join(workspaceRoot, "alpha", ".opencode", "superpowers"), { recursive: true });
+  await mkdir(join(workspaceRoot, "alpha", ".opencode", "skills", "security-audit"), { recursive: true });
+  await writeFile(join(workspaceRoot, "alpha", ".opencode", "skills", "security-audit", "SKILL.md"), "# Security Audit\n");
   // beta: no features, disabled.
   await mkdir(join(workspaceRoot, "beta"), { recursive: true });
   await writeFile(disabledPath, JSON.stringify({ disabled: ["beta"] }) + "\n");
@@ -119,13 +121,13 @@ describe("collectProjectOverviews", () => {
 
       expect(byName.get("alpha")).toEqual({
         name: "alpha",
-        features: { knowledge: true, maintenance: false, openspec: true, superpowers: true },
+        features: { knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": true },
         remote: "https://example.com/alpha.git",
         disabled: false,
       });
       expect(byName.get("beta")).toEqual({
         name: "beta",
-        features: { knowledge: false, maintenance: false, openspec: false, superpowers: false },
+        features: { knowledge: false, maintenance: false, openspec: false, superpowers: false, "security-audit": false },
         remote: null,
         disabled: true,
       });
@@ -305,7 +307,7 @@ describe("collectProjectOverviews", () => {
       );
       const alpha = overviews.find((o) => o.name === "alpha");
       expect(alpha?.codegraph).toBeUndefined();
-      expect(alpha?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true });
+      expect(alpha?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": true });
     } finally {
       await f.cleanup();
     }
@@ -328,7 +330,7 @@ describe("collectProjectOverviews", () => {
       const overviews = await collectProjectOverviews(command, f.workspaceRoot, f.settingsPath, f.disabledPath, toolStatus);
       const byName = new Map(overviews.map((o) => [o.name, o]));
 
-      expect(byName.get("alpha")?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true });
+      expect(byName.get("alpha")?.features).toEqual({ knowledge: true, maintenance: false, openspec: true, superpowers: true, "security-audit": true });
       expect(byName.get("alpha")?.codegraph).toBeUndefined();
     } finally {
       await f.cleanup();
@@ -337,7 +339,7 @@ describe("collectProjectOverviews", () => {
 });
 
 describe("parseFeatureStats", () => {
-  const features: ProjectFeatures = { knowledge: true, maintenance: true, openspec: true, superpowers: true };
+  const features: ProjectFeatures = { knowledge: true, maintenance: true, openspec: true, superpowers: true, "security-audit": true };
 
   test("parses per-feature stats from command output", () => {
     const stats = parseFeatureStats(
@@ -361,7 +363,7 @@ describe("parseFeatureStats", () => {
   test("returns null for features that are not enabled", () => {
     const stats = parseFeatureStats(
       '{"knowledge":null,"maintenance":null,"openspec":{"active":2,"archived":0,"specs":3}}',
-      { knowledge: true, maintenance: true, openspec: true, superpowers: true },
+      { knowledge: true, maintenance: true, openspec: true, superpowers: true, "security-audit": true },
     );
     expect(stats.knowledge).toBeNull();
     expect(stats.maintenance).toBeNull();
@@ -384,7 +386,7 @@ describe("parseFeatureStats", () => {
   test("does not parse a feature that is disabled in the feature set", () => {
     const stats = parseFeatureStats(
       '{"knowledge":null,"maintenance":{"reports":1,"lastReportDate":null,"months":0},"openspec":null}',
-      { knowledge: false, maintenance: true, openspec: false, superpowers: false },
+      { knowledge: false, maintenance: true, openspec: false, superpowers: false, "security-audit": false },
     );
     expect(stats).toEqual({
       knowledge: null,

@@ -52,6 +52,7 @@ The installer-generated `.env` is the source of truth for your ports and credent
 - OpenCode AI agent (backend) with OpenChamber web UI (frontend); the CLI is available inside the container via `docker exec`
 - CodeGraph, lean-ctx, and Playwright MCP integrations
 - OpenSpec, Superpowers, baked skills, and OpenCode plugin support
+- Optional per-project `security-audit` skill (Cloudflare multi-phase audit) via the `enable-security-audit` baked skill
 - `git`, `gh`, `glab`, Docker Compose, Buildx, Homebrew, bun, Python, ripgrep, jq, tmux, SSH, rsync, and common build tools
 - Bundled Playwright Chromium, resolved at runtime through the `pw-mcp` wrapper
 

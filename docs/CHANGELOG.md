@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Added
+- Add `enable-security-audit` baked skill: opt-in project-local install of the
+  vendored Cloudflare `security-audit` skill (pinned commit `c1c8a8c`, MIT),
+  with idempotent tree-copy bootstrap, `--force` refresh, entrypoint
+  auto-upgrade registration, and host-side bootstrap/validator tests. The
+  Admin Dashboard Projects page lists it as an enableable per-project
+  capability (badge `SA`) alongside knowledge, maintenance, OpenSpec, and
+  SuperPower. The bootstrap records the security-skill routing note in the
+  project's own `AGENTS.md` (never in the shared template). Disable removes
+  the installed tree and the routing note (deleting `AGENTS.md` only when the
+  note was its sole content).
+
 
 ## [1.22.1] - 2026-10-23
 

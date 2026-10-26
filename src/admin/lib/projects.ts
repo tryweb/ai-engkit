@@ -11,7 +11,7 @@ import { checkFeature, collectProjectOverviews, listProjects } from "./projects-
 
 export type ProjectCommand = SettingsCommand;
 
-export const PROJECT_FEATURES = ["knowledge", "maintenance", "openspec", "superpowers"] as const;
+export const PROJECT_FEATURES = ["knowledge", "maintenance", "openspec", "superpowers", "security-audit"] as const;
 export type ProjectFeature = (typeof PROJECT_FEATURES)[number];
 
 export interface ProjectLibOptions {
@@ -285,7 +285,7 @@ export async function deleteProject(
   return { ok: true };
 }
 
-/** Enable one of the whitelisted skill scaffolds (knowledge, maintenance, openspec). */
+/** Enable one of the whitelisted skill scaffolds (knowledge, maintenance, openspec, superpowers, security-audit). */
 export async function enableProjectFeature(
   name: string,
   feature: string,
@@ -306,6 +306,9 @@ export async function enableProjectFeature(
       break;
     case "superpowers":
       cmd = `mkdir -p ${PROJECT_ROOT}/.opencode/skills && for d in /opt/opencode/baked-plugins/superpowers/skills/*/; do ln -sfn "$d" "${PROJECT_ROOT}/.opencode/skills/$(basename "$d")"; done && mkdir -p ${PROJECT_ROOT}/.opencode/superpowers`;
+      break;
+    case "security-audit":
+      cmd = `bash ~/.config/opencode/skills/enable-security-audit/bootstrap.sh ${PROJECT_ROOT}`;
       break;
     default:
       return { ok: false, error: `Unknown feature '${feature}'. Valid: ${PROJECT_FEATURES.join(", ")}` };
@@ -334,7 +337,19 @@ export async function disableProjectFeature(
     case "knowledge":
     case "maintenance":
     case "openspec":
+      // No-op: those scaffolds hold user-authored content (entries, reports,
+      // specs) that Disable must not destroy. security-audit is the opposite
+      // case — its tree is fully upstream-owned and reproducible — so it gets
+      // a real removal below instead of joining this group.
       return { ok: true };
+    case "security-audit":
+      cmd = `rm -rf ${PROJECT_ROOT}/.opencode/skills/security-audit && `
+        + `if test -f ${PROJECT_ROOT}/AGENTS.md && grep -q '^## Security Skill Routing' ${PROJECT_ROOT}/AGENTS.md; then `
+        + `awk '/^## Security Skill Routing/{skip=1;next} /^## /{skip=0} skip{next} {lines[++n]=$0} END{while(n>0&&lines[n]~/^[[:space:]]*$/)n--;for(i=1;i<=n;i++)print lines[i]}' ${PROJECT_ROOT}/AGENTS.md > ${PROJECT_ROOT}/AGENTS.md.tmp && `
+        + `mv ${PROJECT_ROOT}/AGENTS.md.tmp ${PROJECT_ROOT}/AGENTS.md && `
+        + `if ! test -s ${PROJECT_ROOT}/AGENTS.md; then rm -f ${PROJECT_ROOT}/AGENTS.md; fi; `
+        + `fi`;
+      break;
     default:
       return { ok: false, error: `Unknown feature '${feature}'. Valid: ${PROJECT_FEATURES.join(", ")}` };
   }

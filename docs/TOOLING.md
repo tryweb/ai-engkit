@@ -102,6 +102,9 @@ AI-EngKit also bakes in project-visible skills such as:
 - `knowledge-capture`
 - `enable-project-knowledge`
 - `enable-finalize-maintenance`
+- `enable-security-audit` — installs the vendored
+  [Cloudflare security-audit](https://github.com/cloudflare/security-audit-skill)
+  skill (pinned commit, MIT) into a project as `.opencode/skills/security-audit/`
 
 Related files:
 
