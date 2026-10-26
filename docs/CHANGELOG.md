@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+
+## [1.23.0] - 2026-10-26
+
 ### Added
 - Add `enable-security-audit` baked skill: opt-in project-local install of the
   vendored Cloudflare `security-audit` skill (pinned commit `c1c8a8c`, MIT),
@@ -12,6 +15,10 @@
   the installed tree and the routing note (deleting `AGENTS.md` only when the
   note was its sole content).
 
+### Changed
+- Upgrade GitHub CLI from 2.103.0 to 2.103.2.
+- Upgrade oh-my-openagent from 5.1.43 to 5.1.48.
+- Upgrade @fission-ai/openspec from 1.14.3 to 1.15.0.
 
 ## [1.22.1] - 2026-10-23
 
@@ -2310,7 +2317,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.22.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2499,3 +2506,4 @@
 [1.21.3]: https://github.com/tryweb/ai-engkit/compare/v1.21.2...v1.21.3
 [1.22.0]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...v1.22.0
 [1.22.1]: https://github.com/tryweb/ai-engkit/compare/v1.22.0...v1.22.1
+[1.23.0]: https://github.com/tryweb/ai-engkit/compare/v1.22.1...v1.23.0
