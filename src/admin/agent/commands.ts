@@ -17,7 +17,7 @@ import { logoutGh as realLogoutGh, startDeviceFlow as realStartDeviceFlow, type 
 import { listGlabInstances as realListGlabInstances, loginGlabWithToken as realLoginGlabWithToken, logoutGlab as realLogoutGlab, type GlabInstance } from "../lib/glab-auth";
 import { isSecretKey as realIsSecretKey, setSecretValue as realSetSecretValue, type ActivationStatus } from "../lib/secrets";
 import { collectProjectOverviews, type ProjectFeatures } from "../lib/projects-overview";
-import { collectProvidersMeta } from "../lib/provider-meta";
+import { collectProvidersMeta, readV2CredentialMap, type V2CredentialMap } from "../lib/provider-meta";
 import {
   addProviderKey as realAddProviderKey,
   deleteProviderKey as realDeleteProviderKey,
@@ -54,6 +54,11 @@ import {
   readProviderAuthSnapshot as realReadProviderAuthSnapshot,
   removeAuthKey as realRemoveAuthKey,
 } from "../lib/opencode-auth";
+import {
+  credentialActivate as realActivateV2Credential,
+  credentialRemove as realRemoveV2Credential,
+  credentialUpdate as realUpdateV2CredentialLabel,
+} from "../lib/opencode-v2";
 import {
   collectAgentModelState,
   createAgentModelsLib,
@@ -131,6 +136,11 @@ export interface CommandDeps {
   removeAuthKey: (provider: string) => Promise<void>;
   clearProviderCache: () => Promise<void>;
   readProviderAuthSnapshot: (provider: string) => Promise<string | null>;
+  /** Opencode v2 credential-store backend (v2 stacks); absent = V1 file/auth.json behavior. */
+  readV2Credentials?: () => Promise<V2CredentialMap>;
+  activateV2Credential?: (credentialId: string) => Promise<void>;
+  removeV2Credential?: (credentialId: string) => Promise<void>;
+  updateV2CredentialLabel?: (credentialId: string, label: string) => Promise<void>;
   waitForIdleSessions: () => Promise<IdleWaitOutcome>;
   gracefulRestartAiDev: () => Promise<{ success: boolean; message?: string }>;
   setSecret: (key: string, value: string) => ActivationStatus;
@@ -871,6 +881,191 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
     }
   }
 
+  type ProviderKeyCommandKind = "set-active" | "delete" | "update-note";
+
+  /**
+   * Resolve a provider-key command against the file registry first (V1,
+   * synchronous — preserves existing behavior), then the opencode v2
+   * credential store. V2-native credential ids (cred_*) live only in the
+   * v2 store; without this fallback every center key action on a v2 stack
+   * ends malformed.
+   */
+  async function beginProviderKeyCommand(
+    env: Envelope,
+    kind: ProviderKeyCommandKind,
+    payload: ProviderKeyRefPayload | ProviderKeyNotePayload,
+  ): Promise<void> {
+    const entry = deps.readProviderKeys().providers[payload.provider];
+    const key = entry?.keys.find((candidate) => candidate.id === payload.keyId);
+    if (key !== undefined) {
+      if (deps.isUpgradeRunning()) {
+        deferProviderCommand(env);
+        return;
+      }
+      if (kind === "set-active") dispatchKeySetActive(env, payload as ProviderKeyRefPayload, key, entry?.activeKeyId ?? null);
+      else if (kind === "delete") dispatchKeyDelete(env, payload as ProviderKeyRefPayload);
+      else dispatchKeyUpdateNote(env, payload as ProviderKeyNotePayload);
+      return;
+    }
+    let v2map: V2CredentialMap;
+    try {
+      v2map = await (deps.readV2Credentials ?? readV2CredentialMap)();
+    } catch {
+      sendMalformed(env);
+      return;
+    }
+    const cred = v2map.get(payload.provider)?.find((candidate) => candidate.id === payload.keyId);
+    if (cred === undefined) {
+      sendMalformed(env);
+      return;
+    }
+    if (deps.isUpgradeRunning()) {
+      deferProviderCommand(env);
+      return;
+    }
+    if (kind === "set-active") dispatchKeySetActiveV2(env, payload as ProviderKeyRefPayload);
+    else if (kind === "delete") dispatchKeyDeleteV2(env, payload as ProviderKeyRefPayload);
+    else dispatchKeyUpdateNoteV2(env, payload as ProviderKeyNotePayload);
+  }
+
+  function dispatchKeySetActiveV2(env: Envelope, payload: ProviderKeyRefPayload): void {
+    const startedAt = deps.now();
+    sender.send(buildAck(env.id, {
+      status: "success",
+      message: "setting active provider key",
+      started_at: startedAt,
+      finished_at: deps.now(),
+    }));
+
+    void finishKeySetActiveV2(env, payload, startedAt);
+  }
+
+  async function finishKeySetActiveV2(env: Envelope, payload: ProviderKeyRefPayload, startedAt: string): Promise<void> {
+    const activate = deps.activateV2Credential ?? credentialActivate;
+    let previousActiveId: string | null = null;
+    try {
+      previousActiveId = (await (deps.readV2Credentials ?? readV2CredentialMap)()).get(payload.provider)?.[0]?.id ?? null;
+    } catch {
+      previousActiveId = null;
+    }
+    if (previousActiveId === payload.keyId) {
+      sender.send(buildAck(env.id, {
+        status: "success",
+        message: `provider key ${payload.keyId} is already active`,
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+      return;
+    }
+    try {
+      await activate(payload.keyId);
+    } catch (error: unknown) {
+      if (previousActiveId !== null && previousActiveId !== payload.keyId) {
+        try {
+          await activate(previousActiveId);
+        } catch {
+          // Best effort — reported below.
+        }
+      }
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: error instanceof Error ? error.message : String(error),
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+      return;
+    }
+    const applied = await restartPerMode(payload.mode);
+    if (!applied.success) {
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: `provider key ${payload.keyId} activated but ${applied.message}`,
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+      return;
+    }
+    sender.send(buildAck(env.id, {
+      status: "success",
+      message: `provider key ${payload.keyId} is active ${applied.suffix}`,
+      started_at: startedAt,
+      finished_at: deps.now(),
+    }));
+  }
+
+  function dispatchKeyDeleteV2(env: Envelope, payload: ProviderKeyRefPayload): void {
+    const startedAt = deps.now();
+    sender.send(buildAck(env.id, {
+      status: "success",
+      message: "deleting provider key",
+      started_at: startedAt,
+      finished_at: deps.now(),
+    }));
+
+    void finishKeyDeleteV2(env, payload, startedAt);
+  }
+
+  async function finishKeyDeleteV2(env: Envelope, payload: ProviderKeyRefPayload, startedAt: string): Promise<void> {
+    try {
+      await (deps.removeV2Credential ?? credentialRemove)(payload.keyId);
+    } catch (error: unknown) {
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: error instanceof Error ? error.message : String(error),
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+      return;
+    }
+    const applied = await restartPerMode(payload.mode);
+    if (!applied.success) {
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: `provider key ${payload.keyId} deleted but ${applied.message}`,
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+      return;
+    }
+    sender.send(buildAck(env.id, {
+      status: "success",
+      message: `provider key ${payload.keyId} deleted ${applied.suffix}`,
+      started_at: startedAt,
+      finished_at: deps.now(),
+    }));
+  }
+
+  function dispatchKeyUpdateNoteV2(env: Envelope, payload: ProviderKeyNotePayload): void {
+    const startedAt = deps.now();
+    sender.send(buildAck(env.id, {
+      status: "success",
+      message: "updating provider key note",
+      started_at: startedAt,
+      finished_at: deps.now(),
+    }));
+
+    void finishKeyUpdateNoteV2(env, payload, startedAt);
+  }
+
+  async function finishKeyUpdateNoteV2(env: Envelope, payload: ProviderKeyNotePayload, startedAt: string): Promise<void> {
+    try {
+      await (deps.updateV2CredentialLabel ?? credentialUpdate)(payload.keyId, payload.note);
+      sender.send(buildAck(env.id, {
+        status: "success",
+        message: `note updated for provider key ${payload.keyId}`,
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+    } catch (error: unknown) {
+      sender.send(buildAck(env.id, {
+        status: "failure",
+        message: error instanceof Error ? error.message : String(error),
+        started_at: startedAt,
+        finished_at: deps.now(),
+      }));
+    }
+  }
+
   function dispatchKeySetActive(
     env: Envelope,
     payload: ProviderKeyRefPayload,
@@ -1560,17 +1755,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
           sendMalformed(env);
           return;
         }
-        const entry = deps.readProviderKeys().providers[payload.provider];
-        const key = entry?.keys.find((candidate) => candidate.id === payload.keyId);
-        if (key === undefined) {
-          sendMalformed(env);
-          return;
-        }
-        if (deps.isUpgradeRunning()) {
-          deferProviderCommand(env);
-          return;
-        }
-        dispatchKeySetActive(env, payload, key, entry?.activeKeyId ?? null);
+        void beginProviderKeyCommand(env, "set-active", payload);
         return;
       }
       case "providers.key.delete": {
@@ -1579,16 +1764,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
           sendMalformed(env);
           return;
         }
-        const entry = deps.readProviderKeys().providers[payload.provider];
-        if (entry === undefined || !entry.keys.some((candidate) => candidate.id === payload.keyId)) {
-          sendMalformed(env);
-          return;
-        }
-        if (deps.isUpgradeRunning()) {
-          deferProviderCommand(env);
-          return;
-        }
-        dispatchKeyDelete(env, payload);
+        void beginProviderKeyCommand(env, "delete", payload);
         return;
       }
       case "providers.key.update-note": {
@@ -1597,16 +1773,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
           sendMalformed(env);
           return;
         }
-        const entry = deps.readProviderKeys().providers[payload.provider];
-        if (entry === undefined || !entry.keys.some((candidate) => candidate.id === payload.keyId)) {
-          sendMalformed(env);
-          return;
-        }
-        if (deps.isUpgradeRunning()) {
-          deferProviderCommand(env);
-          return;
-        }
-        dispatchKeyUpdateNote(env, payload);
+        void beginProviderKeyCommand(env, "update-note", payload);
         return;
       }
       case "secrets.set": {
@@ -1899,6 +2066,10 @@ export function createRealCommandDeps(
     removeAuthKey: realRemoveAuthKey,
     clearProviderCache: realClearProviderCache,
     readProviderAuthSnapshot: realReadProviderAuthSnapshot,
+    readV2Credentials: readV2CredentialMap,
+    activateV2Credential: realActivateV2Credential,
+    removeV2Credential: realRemoveV2Credential,
+    updateV2CredentialLabel: realUpdateV2CredentialLabel,
     waitForIdleSessions: () => waitForIdleSessions(probeIdleViaOpenCodeServer),
     gracefulRestartAiDev: async () => {
       const result = await restartRealAiDev();

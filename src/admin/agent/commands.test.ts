@@ -136,6 +136,10 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
   const setActiveCalls: Array<[string, string | null]> = [];
   const deleteCalls: Array<[string, string]> = [];
   const noteUpdates: Array<[string, string, string]> = [];
+  const v2Credentials = new Map<string, Array<{ id: string; label: string }>>();
+  const v2Activations: string[] = [];
+  const v2Removals: string[] = [];
+  const v2LabelUpdates: Array<[string, string]> = [];
   const authApplies: Array<[string, string]> = [];
   const authRemovals: string[] = [];
   const idleWaits: string[] = [];
@@ -225,6 +229,16 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
         cacheClearsCount += 1;
       },
       readProviderAuthSnapshot: async () => null,
+      readV2Credentials: async () => v2Credentials,
+      activateV2Credential: async (credentialId: string) => {
+        v2Activations.push(credentialId);
+      },
+      removeV2Credential: async (credentialId: string) => {
+        v2Removals.push(credentialId);
+      },
+      updateV2CredentialLabel: async (credentialId: string, label: string) => {
+        v2LabelUpdates.push([credentialId, label]);
+      },
       waitForIdleSessions: async (): Promise<IdleWaitOutcome> => {
         idleWaits.push("idle");
         return "idle";
@@ -356,6 +370,10 @@ function createFixture(overrides: Partial<CommandDeps> = {}): Fixture {
     setActiveCalls,
     deleteCalls,
     noteUpdates,
+    v2Credentials,
+    v2Activations,
+    v2Removals,
+    v2LabelUpdates,
     authApplies,
     authRemovals,
     idleWaits,
@@ -967,6 +985,145 @@ describe("provider key commands", () => {
     expect(fixture.restartAiDevCalls).toEqual(["ai-dev"]);
   });
 
+  test("activates a v2 store credential unknown to the file registry", async () => {
+    const fixture = createFixture();
+    fixture.v2Credentials.set("opencode-go", [
+      { id: "cred-aaa", label: "work" },
+      { id: "cred-bbb", label: "home" },
+    ]);
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("set-active-v2", {
+      type: "providers.key.set-active",
+      provider: "opencode-go",
+      keyId: "cred-bbb",
+      mode: "force",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent).toHaveLength(2);
+    expect(fixture.sent[1]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      id: "set-active-v2",
+      payload: { status: "success", message: "provider key cred-bbb is active (force restart)" },
+    });
+    expect(fixture.v2Activations).toEqual(["cred-bbb"]);
+    expect(fixture.restartAiDevCalls).toEqual(["ai-dev"]);
+    expect(fixture.setActiveCalls).toEqual([]);
+    expect(fixture.authApplies).toEqual([]);
+  });
+
+  test("no-ops when the v2 credential is already active", async () => {
+    const fixture = createFixture();
+    fixture.v2Credentials.set("opencode-go", [{ id: "cred-aaa", label: "work" }]);
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("set-active-v2-again", {
+      type: "providers.key.set-active",
+      provider: "opencode-go",
+      keyId: "cred-aaa",
+      mode: "force",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent[fixture.sent.length - 1]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      payload: { status: "success", message: "provider key cred-aaa is already active" },
+    });
+    expect(fixture.v2Activations).toEqual([]);
+    expect(fixture.restartAiDevCalls).toEqual([]);
+  });
+
+  test("reports failure and rolls back when v2 activation fails", async () => {
+    const fixture = createFixture({
+      activateV2Credential: async (credentialId: string) => {
+        if (credentialId === "cred-bad") throw new Error("credential.activate failed");
+      },
+    });
+    fixture.v2Credentials.set("opencode-go", [
+      { id: "cred-ok", label: "good" },
+      { id: "cred-bad", label: "bad" },
+    ]);
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("set-active-v2-fail", {
+      type: "providers.key.set-active",
+      provider: "opencode-go",
+      keyId: "cred-bad",
+      mode: "force",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent[fixture.sent.length - 1]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      payload: { status: "failure", message: "credential.activate failed" },
+    });
+  });
+
+  test("deletes a v2 store credential unknown to the file registry", async () => {
+    const fixture = createFixture();
+    fixture.v2Credentials.set("opencode-go", [{ id: "cred-aaa", label: "work" }]);
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("delete-v2", {
+      type: "providers.key.delete",
+      provider: "opencode-go",
+      keyId: "cred-aaa",
+      mode: "force",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent[fixture.sent.length - 1]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      id: "delete-v2",
+      payload: { status: "success", message: "provider key cred-aaa deleted (force restart)" },
+    });
+    expect(fixture.v2Removals).toEqual(["cred-aaa"]);
+    expect(fixture.deleteCalls).toEqual([]);
+  });
+
+  test("updates a v2 credential label unknown to the file registry", async () => {
+    const fixture = createFixture();
+    fixture.v2Credentials.set("opencode-go", [{ id: "cred-aaa", label: "work" }]);
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("note-v2", {
+      type: "providers.key.update-note",
+      provider: "opencode-go",
+      keyId: "cred-aaa",
+      note: "new label",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent[fixture.sent.length - 1]).toMatchObject({
+      type: MESSAGE_TYPES.ack,
+      payload: { status: "success", message: "note updated for provider key cred-aaa" },
+    });
+    expect(fixture.v2LabelUpdates).toEqual([["cred-aaa", "new label"]]);
+    expect(fixture.noteUpdates).toEqual([]);
+  });
+
+  test("rejects an unknown key id that is in neither store", async () => {
+    const fixture = createFixture();
+    const dispatcher = createCommandDispatcher(fixture.sender, fixture.deps);
+
+    dispatcher.handle(commandEnvelope("unknown-v2", {
+      type: "providers.key.set-active",
+      provider: "opencode-go",
+      keyId: "cred-nope",
+      mode: "force",
+    }));
+    await flushAsyncWork();
+
+    expect(fixture.sent).toHaveLength(1);
+    expect(fixture.sent[0]).toMatchObject({
+      type: MESSAGE_TYPES.error,
+      payload: { code: ERROR_CODES.malformed_command },
+    });
+    expect(fixture.v2Activations).toEqual([]);
+    expect(fixture.restartAiDevCalls).toEqual([]);
+  });
+
   test("no-ops when the named key is already active", async () => {
     const fixture = createFixture();
     seedKey(fixture.registry, "opencode-go", "seed-1", "sk-ant-seed-one");
@@ -1192,7 +1349,7 @@ describe("provider key commands", () => {
     expect(fixture.restartAiDevCalls).toEqual([]);
   });
 
-  test("rejects set-active, delete, and update-note for unknown key ids", () => {
+  test("rejects set-active, delete, and update-note for unknown key ids", async () => {
     const unknownIdPayloads: unknown[] = [
       { type: "providers.key.set-active", provider: "opencode-go", keyId: "seed-1" },
       { type: "providers.key.delete", provider: "opencode-go", keyId: "seed-1" },
@@ -1205,6 +1362,8 @@ describe("provider key commands", () => {
       const id = `unknown-id-${index}`;
 
       dispatcher.handle(commandEnvelope(id, payload));
+      // Unknown ids fall through to the async v2-store check before rejection.
+      await flushAsyncWork();
 
       expect(fixture.sent).toHaveLength(1);
       expect(fixture.sent[0]).toMatchObject({
