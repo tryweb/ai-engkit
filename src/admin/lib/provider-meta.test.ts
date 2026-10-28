@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectProvidersMeta, type ProvidersMetaDeps } from "./provider-meta";
+import { collectProvidersMeta, type ProvidersMetaDeps, type V2CredentialMap } from "./provider-meta";
 import { maskKey } from "./provider-keys";
 
 const authStoreKeys = new Map<string, string | null>();
@@ -178,5 +178,71 @@ describe("collectProvidersMeta", () => {
     } finally {
       authStoreKeys.delete("nvidia");
     }
+  });
+
+  test("overlays v2 store credentials onto an empty registry card without writing the file", async () => {
+    const v2deps: ProvidersMetaDeps = {
+      ...stubDeps,
+      readV2Credentials: async (): Promise<V2CredentialMap> =>
+        new Map([["opencode-go", [{ id: "cred-abc123", label: "6. jonathan.iii.tw@gmail.com" }]]]),
+    };
+    await withRegistry(null, async (fixture) => {
+      const meta = await collectProvidersMeta(v2deps);
+      const go = meta.providers.find((p) => p.name === "opencode-go");
+      expect(go).toBeDefined();
+      expect(go?.hasApiKey).toBe(true);
+      expect(go?.authStoreKeyPresent).toBe(true);
+      expect(go?.registry.keyCount).toBe(1);
+      expect(go?.registry.activeKeyId).toBe("cred-abc123");
+      expect(go?.registry.keys[0]).toMatchObject({
+        id: "cred-abc123",
+        masked: "6. jonathan.iii.tw@gmail.com (c123)",
+        note: "6. jonathan.iii.tw@gmail.com",
+        active: true,
+      });
+      const persistedText = await Bun.file(fixture.registryPath).text().catch(() => "");
+      expect(persistedText).toBe("");
+    });
+  });
+
+  test("unions v2 credentials with file registry keys without duplicating ids", async () => {
+    const seed = JSON.stringify({
+      providers: {
+        "opencode-go": {
+          keys: [{ id: "k1", value: "sk-file-key-1234567890", createdAt: "2026-01-01T00:00:00.000Z" }],
+          activeKeyId: "k1",
+        },
+      },
+    });
+    const v2deps: ProvidersMetaDeps = {
+      ...stubDeps,
+      readV2Credentials: async (): Promise<V2CredentialMap> =>
+        new Map([["opencode-go", [{ id: "cred-xyz999", label: "work" }]]]),
+    };
+    await withRegistry(seed, async () => {
+      const meta = await collectProvidersMeta(v2deps);
+      const go = meta.providers.find((p) => p.name === "opencode-go");
+      expect(go?.registry.keyCount).toBe(2);
+      expect(go?.registry.activeKeyId).toBe("k1");
+      expect(go?.registry.keys.map((k) => k.id)).toEqual(["k1", "cred-xyz999"]);
+      expect(go?.registry.keys[1]?.active).toBe(false);
+      expect(JSON.stringify(meta)).not.toContain("sk-file-key-1234567890");
+    });
+  });
+
+  test("a failing v2 store keeps legacy V1 behavior", async () => {
+    const v2deps: ProvidersMetaDeps = {
+      ...stubDeps,
+      readV2Credentials: async (): Promise<V2CredentialMap> => {
+        throw new Error("v1 stack: no v2 store");
+      },
+    };
+    await withRegistry(null, async () => {
+      const meta = await collectProvidersMeta(v2deps);
+      const go = meta.providers.find((p) => p.name === "opencode-go");
+      expect(go?.registry.keyCount).toBe(0);
+      expect(go?.hasApiKey).toBe(false);
+      expect(go?.authStoreKeyPresent).toBe(false);
+    });
   });
 });

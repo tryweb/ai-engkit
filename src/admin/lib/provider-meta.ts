@@ -1,6 +1,7 @@
 import { readEnvFile } from "./env";
 import { PROVIDER_ENV_KEY, parseProviders, getProviderApiKey } from "./providers";
 import { readProviderKeys, maskKey, addProviderKey } from "./provider-keys";
+import { listIntegrations } from "./opencode-v2";
 import {
   KEY_MANAGED_PROVIDERS,
   isKeyProviderSupported,
@@ -41,12 +42,59 @@ export const OAUTH_MANAGED_PROVIDERS = ["openai"] as const;
 export interface ProvidersMetaDeps {
   readonly readAuthKey: (provider: string) => Promise<string | null>;
   readonly readOAuthPresence: (provider: string) => Promise<boolean>;
+  /**
+   * Opencode v2 credential-store overlay (provider → key-method credentials).
+   * Omitted = skip the overlay (unit tests, v1-only paths). Failures are
+   * swallowed by the collector, so v1 stacks keep legacy behavior.
+   */
+  readonly readV2Credentials?: () => Promise<V2CredentialMap>;
 }
 
 const REAL_META_DEPS: ProvidersMetaDeps = {
   readAuthKey: readProviderAuthKey,
   readOAuthPresence: readProviderOAuthPresence,
+  readV2Credentials: readV2CredentialMap,
 };
+
+/** One key-method credential from the opencode v2 store (no secret value — id/label only). */
+export interface V2ProviderCredential {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** Provider name → key-method credentials in the opencode v2 store. */
+export type V2CredentialMap = ReadonlyMap<string, readonly V2ProviderCredential[]>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Read key-method credentials per provider from the opencode v2
+ * integrations API. Throws when the v2 store is unreachable (v1 stacks,
+ * missing opencode) — callers treat that as "no overlay".
+ */
+export async function readV2CredentialMap(): Promise<V2CredentialMap> {
+  const map = new Map<string, V2ProviderCredential[]>();
+  const integrations = await listIntegrations();
+  if (!Array.isArray(integrations.data)) return map;
+  for (const integration of integrations.data) {
+    if (!isRecord(integration) || typeof integration.id !== "string") continue;
+    if (!Array.isArray(integration.connections)) continue;
+    const creds: V2ProviderCredential[] = [];
+    for (const connection of integration.connections) {
+      if (!isRecord(connection) || connection.type !== "credential") continue;
+      if (connection.method !== "key") continue;
+      if (typeof connection.id !== "string") continue;
+      creds.push({
+        id: connection.id,
+        label: typeof connection.label === "string" ? connection.label : "",
+      });
+    }
+    if (creds.length > 0) map.set(integration.id, creds);
+  }
+  return map;
+}
 
 export async function collectProvidersMeta(deps: ProvidersMetaDeps = REAL_META_DEPS): Promise<{
   invalid: boolean;
@@ -164,6 +212,46 @@ export async function collectProvidersMeta(deps: ProvidersMetaDeps = REAL_META_D
           active: k.id === fresh.activeKeyId,
         })),
       };
+    }
+  }
+
+  // Opencode v2 overlay: credentials in the v2 SQLite store are invisible to
+  // the registry file and auth.json, so union them into the response here.
+  // Response-only — never written to provider-keys.json (v2 hands out ids,
+  // not secret values). Skipped when no reader is wired or the store is
+  // unreachable, keeping legacy V1 behavior byte-for-byte.
+  if (deps.readV2Credentials) {
+    let v2map: V2CredentialMap = new Map();
+    try {
+      v2map = await deps.readV2Credentials();
+    } catch {
+      v2map = new Map();
+    }
+    if (v2map.size > 0) {
+      for (const meta of out) {
+        if (!meta.keyManagement) continue;
+        const creds = v2map.get(meta.name);
+        if (!creds || creds.length === 0) continue;
+        meta.hasApiKey = true;
+        meta.authStoreKeyPresent = true;
+        const seen = new Set(meta.registry.keys.map((k) => k.id));
+        const merged = [...meta.registry.keys];
+        for (const cred of creds) {
+          if (seen.has(cred.id)) continue;
+          seen.add(cred.id);
+          merged.push({
+            id: cred.id,
+            masked: cred.label ? `${cred.label} (${cred.id.slice(-4)})` : `cred-${cred.id.slice(-4)}`,
+            note: cred.label,
+            active: meta.registry.activeKeyId === null && cred.id === creds[0].id,
+          });
+        }
+        meta.registry = {
+          keyCount: merged.length,
+          activeKeyId: meta.registry.activeKeyId ?? merged.find((k) => k.active)?.id ?? null,
+          keys: merged,
+        };
+      }
     }
   }
 
