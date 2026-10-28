@@ -237,7 +237,23 @@ app.get("/", async (c) => {
         ? await timeout(collectProvidersMetaV2())
         : await timeout(collectProvidersMeta());
       if (!meta) return null;
-      return aggregateProviderSummary(meta);
+      if (!useV2) return aggregateProviderSummary(meta);
+      // V2 lists the whole integration catalog (236 entries); the Dashboard
+      // summarizes only user-configured providers — same definition as the
+      // "Configured" badge on /providers — so untouched catalog entries
+      // don't drown out real status as "235 need credentials".
+      return aggregateProviderSummary({
+        invalid: meta.invalid,
+        providers: meta.providers.filter(
+          (p) =>
+            p.authStoreKeyPresent ||
+            p.oauthConnected ||
+            p.hasApiKey ||
+            p.registry.keyCount > 0 ||
+            p.npm ||
+            p.baseURL,
+        ),
+      });
     } catch (error) {
       void error;
       return aggregateProviderSummary(null);
