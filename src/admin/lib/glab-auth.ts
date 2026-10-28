@@ -24,6 +24,88 @@ function redactAuthError(message: string, token?: string): string {
   return redacted.replace(/glpat-[A-Za-z0-9_-]+/g, "[REDACTED]");
 }
 
+/** Per-host `glab auth status` timeout. Healthy hosts answer in <1s;
+ * never let one hanging host stall the status/heartbeat path. */
+export const GLAB_AUTH_STATUS_TIMEOUT_MS = 5_000;
+
+const GLAB_CONFIG_PATH = "/home/devuser/.config/glab-cli/config.yml";
+
+/** Python snippet: print hosts in config.yml that actually carry a token. */
+const TOKEN_HOSTS_PYTHON = `python3 -c '
+import yaml
+with open("${GLAB_CONFIG_PATH}") as f:
+    data = yaml.safe_load(f) or {}
+hosts = data.get("hosts", {}) or {}
+for h, cfg in hosts.items():
+    token = (cfg or {}).get("token", "") or ""
+    if token:
+        print(h)
+' 2>/dev/null || true`;
+
+/**
+ * Hosts in config.yml that actually carry a token — the only ones worth
+ * probing. This filters out glab's default empty `gitlab.com` entry, which
+ * otherwise makes a bare `glab auth status` hang for ~30s
+ * (context deadline exceeded) and stalls collectStatus/heartbeat.
+ */
+export async function listTokenBearingGlabHosts(command: GlabCommand = execInAiDev): Promise<string[]> {
+  const configResult = await command(TOKEN_HOSTS_PYTHON, 15_000);
+  return configResult.stdout.trim().split("\n").filter(Boolean);
+}
+
+export interface GlabAuthStatusSummary {
+  readonly authenticated: boolean;
+  readonly output: string;
+}
+
+/**
+ * Probe `glab auth status` per token-bearing host only, never bare.
+ * Returns unauthenticated without probing when no host carries a token,
+ * so the default empty `gitlab.com` entry can never stall the caller.
+ */
+export async function getGlabAuthStatus(
+  command: GlabCommand = execInAiDev,
+  timeoutMs: number = GLAB_AUTH_STATUS_TIMEOUT_MS,
+): Promise<GlabAuthStatusSummary> {
+  try {
+    const hosts = await listTokenBearingGlabHosts(command);
+    if (hosts.length === 0) return { authenticated: false, output: "" };
+    const results = await Promise.all(
+      hosts.map((hostname) => command(`glab auth status --hostname ${JSON.stringify(hostname)} 2>&1 || true`, timeoutMs)),
+    );
+    const output = results.map((result) => result.stdout || result.stderr).join("\n");
+    return { authenticated: output.includes("Logged in"), output };
+  } catch {
+    return { authenticated: false, output: "" };
+  }
+}
+
+/**
+ * Delete host entries without tokens from config.yml (best-effort hygiene).
+ * `glab` always recreates its default empty `gitlab.com` entry and
+ * `glab auth logout --hostname` only clears credentials without removing
+ * the key, so sweep explicitly to keep future status probes fast.
+ */
+export async function pruneEmptyGlabHosts(command: GlabCommand = execInAiDev): Promise<void> {
+  try {
+    await command(
+      `python3 -c '
+import yaml
+p = "${GLAB_CONFIG_PATH}"
+with open(p) as f:
+    data = yaml.safe_load(f) or {}
+hosts = data.get("hosts", {}) or {}
+data["hosts"] = {h: cfg for h, cfg in hosts.items() if ((cfg or {}).get("token", "") or "")}
+with open(p, "w") as f:
+    yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+' 2>/dev/null || true`,
+      15_000,
+    );
+  } catch {
+    // Hygiene only — never fail the caller.
+  }
+}
+
 /** Read one host token from glab config.yml without persisting or logging it. */
 export async function readGlabToken(hostname: string, command: GlabCommand = execInAiDev): Promise<string | null> {
   const result = await command(
@@ -79,45 +161,29 @@ export async function setupGlabCredentialHelper(hostname: string, command: GlabC
 }
 
 export async function listGlabInstances(command: GlabCommand = execInAiDev): Promise<GlabInstance[]> {
-  // Read token-bearing hosts from config.yml
-  const configResult = await command(
-    `python3 -c '
-import yaml
-with open("/home/devuser/.config/glab-cli/config.yml") as f:
-    data = yaml.safe_load(f)
-hosts = data.get("hosts", {})
-for h, cfg in hosts.items():
-    token = cfg.get("token", "") or ""
-    if token:
-        print(h)
-' 2>/dev/null || true`,
-    15_000,
+  // Phase 1: token-bearing hosts from config.yml (skips glab's default
+  // empty gitlab.com entry).
+  const tokenHosts = await listTokenBearingGlabHosts(command);
+  if (tokenHosts.length === 0) return [];
+
+  // Phase 2: probe each host individually. A bare `glab auth status` would
+  // also hit the empty default host and can hang ~30s (context deadline
+  // exceeded), stalling every caller.
+  const results = await Promise.all(
+    tokenHosts.map((hostname) =>
+      command(`glab auth status --hostname ${JSON.stringify(hostname)} 2>&1 || true`, GLAB_AUTH_STATUS_TIMEOUT_MS)
+    ),
   );
 
-  const instances: GlabInstance[] = [];
-  const tokenHosts = new Set(configResult.stdout.trim().split("\n").filter(Boolean));
-
-  if (tokenHosts.size === 0) return instances;
-
-  // Fetch usernames from glab auth status for each host
-  const statusResult = await command("glab auth status 2>&1 || true", 15_000);
-  const output = statusResult.stdout || statusResult.stderr;
-  const usernameMap = new Map<string, string>();
-
-  for (const line of output.split("\n")) {
-    const m = line.match(/Logged in to (\S+) as (\S+)/);
-    if (m) usernameMap.set(m[1], m[2]);
-  }
-
-  for (const hostname of tokenHosts) {
-    instances.push({
+  return tokenHosts.map((hostname, index) => {
+    const output = results[index].stdout || results[index].stderr;
+    const m = output.match(/Logged in to (\S+) as (\S+)/);
+    return {
       hostname,
-      username: usernameMap.get(hostname) || "",
+      username: m ? m[2] : "",
       authenticated: true,
-    });
-  }
-
-  return instances;
+    };
+  });
 }
 
 export async function loginGlabWithToken(
@@ -145,6 +211,9 @@ export async function loginGlabWithToken(
     const message = error instanceof Error ? error.message : "Credential helper setup failed";
     return { ok: false, error: redactAuthError(message, token) };
   }
+  // Sweep glab's default empty gitlab.com entry (and any other token-less
+  // leftovers) so future status probes never stall on them.
+  await pruneEmptyGlabHosts(command);
   return { ok: true };
 }
 

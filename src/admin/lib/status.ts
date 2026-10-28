@@ -13,6 +13,7 @@ import {
   loadGitHostingAuthState,
   type GitHostingAuthState,
 } from "./git-hosting-auth-state";
+import { getGlabAuthStatus, type GlabAuthStatusSummary } from "./glab-auth";
 import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "./project-tool-status";
 
 export type AuthStatus = "authenticated" | "not authenticated";
@@ -67,6 +68,8 @@ export interface StatusDeps {
   dockerCommand: (subcommand: string, timeoutMs: number) => Promise<ExecResult>;
   execInAiDev: (command: string, timeoutMs: number) => Promise<ExecResult>;
   loadGitHostingAuthState: () => GitHostingAuthState;
+  /** Per-host glab probe (token-bearing hosts only); defaults to the shared helper bound to execInAiDev. */
+  getGlabAuthStatus: () => Promise<GlabAuthStatusSummary>;
   probeLeanCtxSite?: () => Promise<LeanCtxSiteStats | null>;
   probeGain?: () => Promise<GainStats | null>;
   probeValueReport?: () => Promise<ValueReportStats | null>;
@@ -82,6 +85,7 @@ const DEFAULT_DEPS: StatusDeps = {
   dockerCommand,
   execInAiDev,
   loadGitHostingAuthState,
+  getGlabAuthStatus: () => getGlabAuthStatus(execInAiDev),
 };
 
 async function getAdminVersion(): Promise<string> {
@@ -142,12 +146,12 @@ function getGitHostingAuthStatus(deps: StatusDeps): GitHostingAuthStatus {
 
 export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promise<StatusResponse> {
   const deps: StatusDeps = { ...DEFAULT_DEPS, ...overrides };
-  const [containerRunning, uptime, ghResult, glabResult, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime, gitHostingAuth] =
+  const [containerRunning, uptime, ghResult, glabAuthSummary, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime, gitHostingAuth] =
     await Promise.all([
       deps.isAiDevRunning(),
       deps.getAiDevUptime(),
       deps.execInAiDev("gh auth status 2>&1 || true", 10_000),
-      deps.execInAiDev("glab auth status 2>&1 || true", 10_000),
+      (deps.getGlabAuthStatus ?? (() => getGlabAuthStatus(deps.execInAiDev)))(),
       deps.execInAiDev("git config --global user.name 2>/dev/null || echo ''", 10_000),
       deps.execInAiDev("ls ~/workspace/ 2>/dev/null | wc -l || echo '0'", 10_000),
       deps.probeLeanCtxSite ? deps.probeLeanCtxSite() : Promise.resolve(null),
@@ -166,9 +170,7 @@ export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promis
   const ghAuth: AuthStatus = ghResult.stdout.includes("Logged in") || ghResult.stderr.includes("Logged in")
     ? "authenticated"
     : "not authenticated";
-  const glabAuth: AuthStatus = glabResult.stdout.includes("Logged in") || glabResult.stderr.includes("Logged in")
-    ? "authenticated"
-    : "not authenticated";
+  const glabAuth: AuthStatus = glabAuthSummary.authenticated ? "authenticated" : "not authenticated";
   const gitUser = gitResult.stdout.trim();
   const projectCount = parseInt(projectsResult.stdout.trim() || "0", 10);
   const adminVersionMismatch = adminDigest !== null && aiDevDigest !== null && adminDigest !== aiDevDigest;

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { collectStatus, type StatusDeps } from "./status";
 import type { ExecResult } from "./docker";
+import { getGlabAuthStatus } from "./glab-auth";
 import {
   EMPTY_GIT_HOSTING_AUTH_STATE,
   type GitHostingAuthState,
@@ -18,6 +19,7 @@ interface DepOverrides {
   gain?: GainStats | null;
   gitHostingAuth?: GitHostingAuthState;
   loadGitHostingAuthState?: () => GitHostingAuthState;
+  glabAuthenticated?: boolean;
 }
 
 /** Full fake dep set: gh/glab authenticated, git user "u", 3 projects. */
@@ -35,12 +37,17 @@ function makeDeps(overrides: DepOverrides = {}): StatusDeps {
     },
     execInAiDev: async (command: string) => {
       if (command.startsWith("gh auth")) return ok("Logged in to github.com");
-      if (command.startsWith("glab auth")) return ok("Logged in to gitlab.com");
+      if (command.includes("config.yml")) return ok("gitlab.example.com\n");
+      if (command.startsWith("glab auth status")) return ok("Logged in to gitlab.example.com as tester");
       if (command.startsWith("git config")) return ok("u");
       if (command.startsWith("ls ~/workspace/")) return ok("3");
       if (command.startsWith("cat /opt/ai-engkit/VERSION")) return ok("1.2.3");
       return ok("");
     },
+    getGlabAuthStatus: async () => ({
+      authenticated: overrides.glabAuthenticated ?? true,
+      output: "Logged in to gitlab.example.com as tester",
+    }),
     loadGitHostingAuthState: overrides.loadGitHostingAuthState ?? (() => overrides.gitHostingAuth ?? EMPTY_GIT_HOSTING_AUTH_STATE),
     probeLeanCtxSite: overrides.leanctx === undefined ? undefined : async () => overrides.leanctx ?? null,
     probeGain: overrides.gain === undefined ? undefined : async () => overrides.gain ?? null,
@@ -104,9 +111,9 @@ describe("collectStatus", () => {
   });
 
   test("reports a stopped container and unauthenticated CLIs", async () => {
-    const deps = makeDeps({ running: false, uptime: null });
+    const deps = makeDeps({ running: false, uptime: null, glabAuthenticated: false });
     deps.execInAiDev = async (command: string) => {
-      if (command.startsWith("gh auth") || command.startsWith("glab auth")) {
+      if (command.startsWith("gh auth")) {
         return { stdout: "", stderr: "not logged in", exitCode: 1 };
       }
       if (command.startsWith("git config")) return ok("");
@@ -199,5 +206,33 @@ describe("collectStatus", () => {
   test("yields null gain when no probe is wired", async () => {
     const status = await collectStatus(makeDeps());
     expect(status.gain).toBeNull();
+  });
+
+  test("probes glab per token-bearing host and never runs a bare glab auth status", async () => {
+    const seen: string[] = [];
+    const deps = makeDeps();
+    deps.getGlabAuthStatus = () =>
+      getGlabAuthStatus(async (command: string) => {
+        seen.push(command);
+        if (command.includes("config.yml")) return ok("gitlab.example.com\n");
+        return ok("Logged in to gitlab.example.com as tester");
+      });
+    const status = await collectStatus(deps);
+    expect(status.glab_auth).toBe("authenticated");
+    expect(seen.some((command) => command.includes("config.yml"))).toBe(true);
+    expect(seen.filter((command) => command.startsWith("glab auth status")).every((command) => command.includes("--hostname"))).toBe(true);
+  });
+
+  test("reports glab unauthenticated without probing when no host carries a token", async () => {
+    const seen: string[] = [];
+    const deps = makeDeps();
+    deps.getGlabAuthStatus = () =>
+      getGlabAuthStatus(async (command: string) => {
+        seen.push(command);
+        return ok("");
+      });
+    const status = await collectStatus(deps);
+    expect(status.glab_auth).toBe("not authenticated");
+    expect(seen.some((command) => command.startsWith("glab auth status"))).toBe(false);
   });
 });
