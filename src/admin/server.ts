@@ -41,6 +41,8 @@ import { readLeanCtxConfig } from "./lib/leanctx";
 import { deriveDashboardRuntimeState, readAppliedSnapshot } from "./lib/leanctx-applied-snapshot";
 import { aggregateProviderSummary, aggregateSubagentSummary, aggregateLspSummary, projectCenter } from "./lib/dashboard-aggregates";
 import { collectProvidersMeta } from "./lib/provider-meta";
+import { collectProvidersMetaV2 } from "./lib/provider-meta-v2";
+import { isOpenCodeV2 } from "./lib/opencode-v2";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
 import { createLspReconciler } from "./lib/lsp-reconciler";
 import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
@@ -223,7 +225,17 @@ app.get("/", async (c) => {
 
   const providerPromise = (async () => {
     try {
-      const meta = await timeout(collectProvidersMeta());
+      // Dashboard must match /providers: V2 credentials live in the
+      // Integrations API, invisible to the V1 OPENCODE_PROVIDER path.
+      let useV2 = false;
+      try {
+        useV2 = (await timeout(isOpenCodeV2(), 5_000)) === true;
+      } catch {
+        useV2 = false;
+      }
+      const meta = useV2
+        ? await timeout(collectProvidersMetaV2())
+        : await timeout(collectProvidersMeta());
       if (!meta) return null;
       return aggregateProviderSummary(meta);
     } catch (error) {
