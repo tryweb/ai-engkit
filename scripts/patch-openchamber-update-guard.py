@@ -300,6 +300,15 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # check_version/classify: all three anchors unique, all three classify
     # as apply). Anchor drift still fails the build closed.
     "2.5.2": PATCHES_V2,
+    # 2.5.3 keeps the v2 line's source shape: package-manager.js and routes.js
+    # are byte-identical to 2.5.2; openchamber-routes.js differs only in the
+    # detached restart spawn's env (OPENCHAMBER_UI_PASSWORD now goes through
+    # withUserEnv) and one added import, both far outside the
+    # registerOpenChamberRoutes anchor (verified against the
+    # @openchamber/web@2.5.3 tarball with the module's own
+    # check_version/classify: all three anchors unique, all three classify
+    # as apply). Anchor drift still fails the build closed.
+    "2.5.3": PATCHES_V2,
 }
 
 

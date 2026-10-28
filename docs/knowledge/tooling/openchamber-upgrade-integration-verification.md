@@ -22,7 +22,20 @@ An upgrade can build successfully while breaking one of the local contracts:
 Run this procedure for every OpenChamber upgrade:
 
 1. **Change one pin.** Update `ARG OPENCHAMBER_VERSION` in `Dockerfile`; do not
-   update unrelated dependencies in the same change.
+   update unrelated dependencies in the same change. On the V2 line the pin
+   lives in the `docker-compose.v2.dev.yml` build args, not in `Dockerfile`.
+1b. **Register the new version with the update guard.** `scripts/patch-openchamber-update-guard.py`
+   is fail-closed: `VERSION_PATCHES` lists every supported OpenChamber version
+   and the build dies at step 18/49 with
+   `unsupported pinned version 'X.Y.Z'` until the new one is added. Unpack the
+   published tarball, classify the three anchors with the module's own
+   `check_version`/`classify`, then add `"X.Y.Z": PATCHES_V2` with a comment
+   naming which guarded file drifted (if any). Unchanged files need no new
+   patch table; anchor drift must still fail the build closed.
+1c. **Check the OpenCode floor.** OpenChamber release notes state the minimum
+   supported OpenCode version (e.g. `2.5.3` → "Bundled OpenCode updated to
+   2.2.0, now the minimum supported version"). Never ship an older
+   `OPENCODE_CLI_VERSION` than that floor.
 2. **Check derived versions.** Run:
 
    ```bash
