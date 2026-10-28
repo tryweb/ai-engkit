@@ -38,28 +38,24 @@ empty defaults. The solution is a two-phase approach:
 
 - **Phase 1**: Parse `config.yml` via Python's `yaml.safe_load()` to find
   hosts that have a `token` field (real authenticated instances).
-- **Phase 2**: Run `glab auth status` only to extract usernames from lines
+- **Phase 2**: Run `glab auth status --hostname <host>` **per token-bearing
+  host** (parallel, 5s timeout each) and extract usernames from lines
   matching `Logged in to <host> as <user>`.
+
+> Never run a bare `glab auth status` on any status/heartbeat path. It
+> iterates **all** hosts including the token-less default `gitlab.com`
+> entry and can hang ~30s (`API call failed: context deadline exceeded`)
+> instead of fast-401 — observed 2026-10-28 on jonathan-198, where it
+> stalled `collectStatus` at its 10s ceiling and caused center command
+> timeouts while heartbeats still arrived. Per-host probing answers in
+> <1s for healthy hosts (verified: 483ms for 2 hosts).
 
 ```typescript
 // Phase 1: Read token-bearing hosts from config.yml
-const configResult = await execInAiDev(`python3 -c '
-import yaml
-with open("/home/devuser/.config/glab-cli/config.yml") as f:
-    data = yaml.safe_load(f)
-hosts = data.get("hosts", {})
-for h, cfg in hosts.items():
-    token = cfg.get("token", "") or ""
-    if token:
-        print(h)
-'`);
+const hosts = await listTokenBearingGlabHosts(command); // empty gitlab.com excluded
 
-// Phase 2: Fetch usernames from glab auth status
-const statusResult = await execInAiDev("glab auth status 2>&1 || true");
-for (const line of output.split("\n")) {
-    const m = line.match(/Logged in to (\S+) as (\S+)/);
-    if (m) usernameMap.set(m[1], m[2]);
-}
+// Phase 2: Probe each host individually (never bare `glab auth status`)
+const summary = await getGlabAuthStatus(command); // 5s/host, parallel
 ```
 
 This filters out the default `gitlab.com` entry automatically since it has no
@@ -119,8 +115,12 @@ if h in hosts:
 
 - **Python dependency**: The admin container must have `python3` and `pyyaml`
   installed. These are present in the ai-engkit image.
-- **Race condition**: If `glab auth status` is slow (network timeout to a
-  self-hosted instance), the status API may take longer to respond.
+- **Empty-host hygiene**: `glab` recreates its default empty `gitlab.com`
+  entry and `glab auth logout --hostname` only clears credentials without
+  removing the key. `loginGlabWithToken` now calls `pruneEmptyGlabHosts`
+  after every successful login; `getGlabAuthStatus`/`listGlabInstances`
+  additionally never probe token-less hosts, so a leftover empty entry
+  cannot stall status again.
 - **Token scope**: `glab` calls `GET /api/v4/user` with the token. If the
   token lacks `read_user` scope, the host will show with empty username and
   `glab auth status` reports a non-zero exit. The token still works for
