@@ -1,6 +1,28 @@
 ## [Unreleased]
 
 
+## [2.0.10] - 2026-10-29
+
+### Added
+- Bake the pinned Cloudflare `security-audit` skill tree (21 files) into the V2 image so the `enable-security-audit` wiring shipped in 2.0.9 resolves instead of pointing at a missing skill.
+
+### Fixed
+- Route agent provider-key commands (`set-active`, `delete`, `update-note`) through the OpenCode v2 credential store, so they no longer fail as `malformed_command` on a V2 stack.
+- Overlay OpenCode v2 store credentials into the providers meta so V2 keys report their labels and active state.
+- Restore the v2 credential fallbacks in the agent dispatcher: the bare `credentialActivate`/`credentialRemove`/`credentialUpdate` imports did not exist, failing typecheck and throwing `ReferenceError` on the default path.
+- Make the admin suite hold in both line modes, and accept an empty chain in `agent-models.set` so clearing a configured model works on V2.
+- Make the Dashboard provider summary OpenCode v2-aware and count only configured providers on V2.
+- Probe glab auth per token-bearing host and skip an empty `gitlab.com` instance.
+
+### Changed
+- Upgrade OpenCode CLI from 2.1.4 to 2.2.0 (V2 dev image).
+- Upgrade OpenChamber from 2.5.2 to 2.5.3 (V2 dev image). OpenChamber 2.5.3 requires OpenCode 2.2.0, so the pair moves together.
+- Upgrade GitLab CLI from 1.124.0 to 1.126.0.
+- Upgrade GitHub CLI from 2.103.2 to 2.103.3.
+
+### Documentation
+- Record v2dev bring-up pitfalls found during glab-fix validation.
+
 ## [2.0.9] - 2026-10-26
 
 ### Added
@@ -2397,7 +2419,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.9...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.10...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2586,3 +2608,4 @@
 [2.0.7]: https://github.com/tryweb/ai-engkit/compare/v2.0.6...v2.0.7
 [2.0.8]: https://github.com/tryweb/ai-engkit/compare/v2.0.7...v2.0.8
 [2.0.9]: https://github.com/tryweb/ai-engkit/compare/v2.0.8...v2.0.9
+[2.0.10]: https://github.com/tryweb/ai-engkit/compare/v2.0.9...v2.0.10
