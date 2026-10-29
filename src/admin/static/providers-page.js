@@ -479,8 +479,8 @@ function oauthStatus(text, provider) {
   if (el) el.textContent = text;
 }
 
-function startOAuth(name) {
-  if (isV2Mode) { return startOAuthV2(name, 'chatgpt-browser'); }
+function startOAuth(name, methodID) {
+  if (isV2Mode) { return startOAuthV2(name, methodID || 'chatgpt-headless'); }
   oauthProvider = name;
   oauthFlowId = null;
   var flow = document.getElementById('oauth-flow-' + name) || document.getElementById('oauth-flow');
@@ -611,24 +611,75 @@ function startOAuthV2(name, methodID) {
   var applyBtn = document.getElementById('oauth-apply-' + name) || document.getElementById('oauth-apply');
   if (applyBtn) applyBtn.hidden = true;
   oauthStatus('Starting OAuth…', name);
+  var requestedMethod = methodID || 'chatgpt-headless';
   fetch('/api/providers/' + name + '/oauth/v2/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ methodID: methodID || 'chatgpt-browser' })
+    body: JSON.stringify({ methodID: requestedMethod })
   })
     .then(function(r){return r.json();})
     .then(function(j){
       var codeEl2;
       var link2;
+      var para;
       if (!j.ok) { oauthStatus('Could not start: '+(j.error||'unknown')); return; }
       oauthFlowId = j.attemptID;
-      if (j.url) {
-        codeEl2 = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
-        if (codeEl2) codeEl2.textContent = j.url;
-        link2 = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
-        if (link2) { link2.href = j.url; link2.textContent = j.url; }
+      var instructions = typeof j.instructions === 'string' ? j.instructions : '';
+      // Device-code flow carries the user code inside instructions
+      // (e.g. "Enter code: NDPT-9AU4F"). Extract it for the code display.
+      var deviceCode = null;
+      var m = instructions.match(/(?:enter\s+)?code\s*:\s*([A-Za-z0-9][A-Za-z0-9-]{3,})/i);
+      if (m) deviceCode = m[1];
+      var isDeviceFlow = deviceCode !== null || /device|headless/i.test(requestedMethod) || (j.url && /\/codex\/device/i.test(j.url));
+      codeEl2 = document.getElementById('oauth-user-code-' + oauthProvider) || document.getElementById('oauth-user-code');
+      link2 = document.getElementById('oauth-verify-link-' + oauthProvider) || document.getElementById('oauth-verify-link');
+      if (link2 && link2.parentNode && link2.parentNode.tagName === 'P') para = link2.parentNode;
+      if (j.url && link2) {
+        link2.href = j.url;
+        link2.title = j.url;
+        link2.target = '_blank';
+        link2.rel = 'noopener noreferrer';
+        if (para) {
+          // Rebuild the hint line so device vs browser flows read correctly.
+          while (para.firstChild) para.removeChild(para.firstChild);
+          if (isDeviceFlow) {
+            para.appendChild(document.createTextNode('Open '));
+            para.appendChild(link2);
+            para.appendChild(document.createTextNode(' and enter the code above.'));
+            link2.textContent = 'auth.openai.com/codex/device';
+          } else {
+            para.appendChild(link2);
+            para.appendChild(document.createTextNode(' then return here — this page polls for completion.'));
+            link2.textContent = 'Open authorization page ↗';
+          }
+        } else if (isDeviceFlow) {
+          link2.textContent = 'auth.openai.com/codex/device';
+        } else {
+          link2.textContent = 'Open authorization page ↗';
+        }
+        if (codeEl2) {
+          if (isDeviceFlow) {
+            // Show the extracted device code prominently (v1-style).
+            codeEl2.textContent = deviceCode || 'Waiting for code…';
+            codeEl2.style.fontSize = '';
+            codeEl2.style.letterSpacing = '';
+          } else {
+            // Browser authorize URL is very long (PKCE + state). Never dump
+            // it into the code display — show a short placeholder instead.
+            codeEl2.textContent = '— browser sign-in, no code to enter —';
+            codeEl2.style.fontSize = '1rem';
+            codeEl2.style.letterSpacing = 'normal';
+          }
+        }
       }
-      oauthStatus(j.instructions || 'Complete authorization in your browser. Polling…');
+      // Backend instructions may embed the full authorize URL; collapse it so
+      // the status line stays readable (the clickable link above holds the URL).
+      // For device flow the code is already shown big above — keep the full
+      // instruction text so nothing is lost.
+      var statusText = instructions.replace(/https?:\/\/\S+/g, 'the authorization page').trim();
+      oauthStatus(statusText || (isDeviceFlow
+        ? 'Open the verification page and enter the code. Polling…'
+        : 'Complete authorization in your browser. Polling…'));
       clearInterval(oauthPollTimer);
       oauthPollTimer = setInterval(function(){ pollOAuthV2(); }, 3000);
     })

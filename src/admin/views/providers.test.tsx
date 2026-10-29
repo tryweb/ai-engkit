@@ -112,7 +112,7 @@ describe("ProvidersPage", () => {
   it("injects boot data and loads the external page script", () => {
     const html = render([opencodeGo]);
     expect(html).toContain("window.providersBoot");
-    expect(html).toContain('<script src="/static/providers-page.js"></script>');
+    expect(html).toContain('<script src="/static/providers-page.js?v=');
   });
 
   it("renders the OAuth panel with a connect action when disconnected", () => {

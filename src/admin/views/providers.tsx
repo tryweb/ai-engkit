@@ -1,5 +1,5 @@
 import { html, raw } from "hono/html";
-import { Layout } from "./layout";
+import { Layout, PROVIDERS_ASSET_VERSION } from "./layout";
 
 interface RegistryKeyView {
   id: string;
@@ -349,6 +349,11 @@ export function ProvidersPage({
                     ? "Models run through your OAuth subscription — no API key needed."
                     : `OAuth methods: ${oauthMethods.map((m) => m.label).join(", ")}. Connecting may replace existing credentials.`}
                 </p>
+                {p.oauthManaged && !p.oauthConnected && (
+                  <p class="text-sm text-muted" style="margin: 0 0 8px;">
+                    Only the device-code method is offered here — browser sign-in redirects to localhost inside ai-dev and cannot complete from a remotely opened admin page.
+                  </p>
+                )}
                 <div id={"oauth-flow-" + p.name} class="oauth-flow" data-oauth-flow={p.name} hidden>
                   <div class="oauth-code-display">
                     <span class="text-muted text-sm">Code</span>
@@ -512,7 +517,7 @@ export function ProvidersPage({
         }
         document.addEventListener('DOMContentLoaded', function(){ filterProviders(''); });
       </script>`}
-      <script src="/static/providers-page.js"></script>
+      <script src={`/static/providers-page.js?v=${PROVIDERS_ASSET_VERSION}`}></script>
     </Layout>
   );
 }

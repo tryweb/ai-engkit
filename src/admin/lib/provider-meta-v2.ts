@@ -4,6 +4,24 @@ import type { ProviderMeta } from "./provider-meta";
 import { listIntegrations, listV2ProvidersRaw } from "./opencode-v2";
 
 /**
+ * OAuth methods that require a localhost-callback browser flow. The authorize
+ * redirect targets 127.0.0.1/localhost inside ai-dev, so the flow can never
+ * complete from a remotely-opened admin page (the common Docker case).
+ * Currently only OpenAI's browser methods are confirmed broken (verified live:
+ * `chatgpt-token-sharing` and `chatgpt-browser` return authorize URLs with
+ * loopback redirect_uri and no user code; `chatgpt-headless` returns a short
+ * device code). Other providers' oauth methods are left untouched until
+ * verified the same way.
+ */
+const BROKEN_BROWSER_OAUTH_METHODS: Readonly<Record<string, readonly string[]>> = {
+  openai: ["chatgpt-token-sharing", "chatgpt-browser"],
+};
+
+function isBrokenBrowserOAuthMethod(integrationID: string, methodID: string): boolean {
+  return BROKEN_BROWSER_OAUTH_METHODS[integrationID]?.includes(methodID) ?? false;
+}
+
+/**
  * V2 provider metadata — credentials live in the Integrations API
  * (plus `providers` in opencode.json / `provider.list` runtime truth),
  * not in OPENCODE_PROVIDER / provider-keys.json.
@@ -36,7 +54,14 @@ export async function collectProvidersMetaV2(): Promise<{
     const oauthMethodsRaw = integration.methods.filter(
       (m) => m.type === "oauth",
     ) as Array<{ type: "oauth"; id: string; label: string }>;
-    const oauthMethods = oauthMethodsRaw.map((m) => ({ id: m.id, label: m.label }));
+    // Browser-callback OAuth methods (localhost/127.0.0.1 redirect) cannot
+    // complete when the admin page is opened remotely — the authorize redirect
+    // lands on the viewer's machine, never on ai-dev. Verified live against
+    // OpenCode 2.x: only the device-code method returns a user code.
+    // Hide the broken buttons instead of offering them.
+    const oauthMethods = oauthMethodsRaw
+      .filter((m) => !isBrokenBrowserOAuthMethod(integration.id, m.id))
+      .map((m) => ({ id: m.id, label: m.label }));
     const credConnections = integration.connections.filter(
       (c) => c.type === "credential",
     ) as Array<{ type: "credential"; id: string; label: string; method: "key" | "oauth" }>;

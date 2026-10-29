@@ -139,7 +139,7 @@ providers.post("/api/providers/wellknown", async (c) => {
 providers.post("/api/providers/:name/oauth/v2/start", async (c) => {
   const name = c.req.param("name");
   const body = await c.req.json().catch(() => ({}));
-  const methodID = typeof (body as Record<string, unknown>).methodID === "string" ? ((body as Record<string, unknown>).methodID as string) : "chatgpt-browser";
+  const methodID = typeof (body as Record<string, unknown>).methodID === "string" ? ((body as Record<string, unknown>).methodID as string) : "chatgpt-headless";
   const answer = (body as Record<string, unknown>).answer as Record<string, unknown> | undefined;
   const label = typeof (body as Record<string, unknown>).label === "string" ? ((body as Record<string, unknown>).label as string) : undefined;
   try {

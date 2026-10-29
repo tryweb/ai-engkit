@@ -32,6 +32,7 @@ function assetHash(name: string): string {
 const STYLE_ASSET_VERSION = `${ASSET_DATE}-${assetHash("style.css")}`;
 const APP_ASSET_VERSION = `${ASSET_DATE}-${assetHash("app.js")}`;
 export const AGENT_MODELS_ASSET_VERSION = `${ASSET_DATE}-${assetHash("agent-models-attention.js")}`;
+export const PROVIDERS_ASSET_VERSION = `${ASSET_DATE}-${assetHash("providers-page.js")}`;
 
 interface LayoutProps {
   title: string;
