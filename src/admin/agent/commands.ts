@@ -372,7 +372,10 @@ function parseAgentModelSet(payload: unknown): AgentModelSetPayload | null {
     if (validateFallbackModels(payload) !== null) return null;
   } else {
     if (isV2Commands()) {
-      if (validateAgentChain(chainRaw as unknown) !== null) return null;
+      // An empty chain is the "clear the configured model" command (applyAgentModel
+      // reports status "cleared"); validateAgentChain requires 1..10 entries, so
+      // only non-empty chains are validated here.
+      if (chainRaw.length > 0 && validateAgentChain(chainRaw) !== null) return null;
     } else {
       if (validateFallbackModels({ entries: chainRaw }) !== null) return null;
     }

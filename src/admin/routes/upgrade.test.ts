@@ -1,7 +1,22 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createUpgradeRoutes, type UpgradeRoutesDeps } from "./upgrade";
 import type { GhcrDiscoveryResult } from "../lib/ghcr-versions";
 import type { UpgradeEvent } from "../lib/upgrade";
+
+// These describes cover the V1 line contract (formal v1.x.y selection,
+// official-target pinning, AI_ENGKIT_VERSION persistence). The route keeps
+// only the running line's major (see isNativeV2Enabled), and the dev stack
+// exports OMO_ENABLED=0, so pin the marker instead of inheriting the host env.
+// V2 filtering and the rolling channel are covered by "major isolation" and
+// "v2-dev rolling channel", which set the marker per test.
+const PREV_OMO_ENABLED = process.env.OMO_ENABLED;
+beforeAll(() => {
+  process.env.OMO_ENABLED = "1";
+});
+afterAll(() => {
+  if (PREV_OMO_ENABLED === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = PREV_OMO_ENABLED;
+});
 
 function depsWith(overrides: Partial<UpgradeRoutesDeps> = {}): { deps: UpgradeRoutesDeps; state: { version: string; env: Record<string, string>; discoveryResult: GhcrDiscoveryResult; discoveryError: Error | null; upgradeState: string; writeCalls: Array<Record<string, string>>; deleteCalls: string[]; runCalls: number } } {
   const state = {
