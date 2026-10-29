@@ -1,6 +1,28 @@
 ## [Unreleased]
 
 
+## [1.23.1] - 2026-10-29
+
+### Added
+- Bump glab 1.125.0 → 1.126.0, OMO 5.1.48 → 5.1.51
+- Bump glab 1.124.0 → 1.125.0, gh 2.103.2 → 2.103.3
+- Add supply chain guidance
+- Add native and protocol guidance
+- Add deployment and isolation guidance
+- Add client and agent guidance
+- Add coverage ledger validator
+- Add findings schema validator
+- Define hunting and validation workflows
+- Add core audit skill
+
+### Fixed
+- Probe glab auth per token-bearing host, skip empty gitlab.com
+
+### Changed
+- Upgrade GitHub CLI from 2.103.2 to 2.103.3.
+- Upgrade GitLab CLI from 1.124.0 to 1.126.0.
+- Upgrade oh-my-openagent from 5.1.48 to 5.1.51.
+
 ## [1.23.0] - 2026-10-26
 
 ### Added
@@ -2317,7 +2339,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2507,3 +2529,4 @@
 [1.22.0]: https://github.com/tryweb/ai-engkit/compare/v1.21.3...v1.22.0
 [1.22.1]: https://github.com/tryweb/ai-engkit/compare/v1.22.0...v1.22.1
 [1.23.0]: https://github.com/tryweb/ai-engkit/compare/v1.22.1...v1.23.0
+[1.23.1]: https://github.com/tryweb/ai-engkit/compare/v1.23.0...v1.23.1
