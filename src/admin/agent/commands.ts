@@ -941,7 +941,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
   }
 
   async function finishKeySetActiveV2(env: Envelope, payload: ProviderKeyRefPayload, startedAt: string): Promise<void> {
-    const activate = deps.activateV2Credential ?? credentialActivate;
+    const activate = deps.activateV2Credential ?? realActivateV2Credential;
     let previousActiveId: string | null = null;
     try {
       previousActiveId = (await (deps.readV2Credentials ?? readV2CredentialMap)()).get(payload.provider)?.[0]?.id ?? null;
@@ -1007,7 +1007,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
 
   async function finishKeyDeleteV2(env: Envelope, payload: ProviderKeyRefPayload, startedAt: string): Promise<void> {
     try {
-      await (deps.removeV2Credential ?? credentialRemove)(payload.keyId);
+      await (deps.removeV2Credential ?? realRemoveV2Credential)(payload.keyId);
     } catch (error: unknown) {
       sender.send(buildAck(env.id, {
         status: "failure",
@@ -1049,7 +1049,7 @@ export function createCommandDispatcher(sender: CommandSender, deps: CommandDeps
 
   async function finishKeyUpdateNoteV2(env: Envelope, payload: ProviderKeyNotePayload, startedAt: string): Promise<void> {
     try {
-      await (deps.updateV2CredentialLabel ?? credentialUpdate)(payload.keyId, payload.note);
+      await (deps.updateV2CredentialLabel ?? realUpdateV2CredentialLabel)(payload.keyId, payload.note);
       sender.send(buildAck(env.id, {
         status: "success",
         message: `note updated for provider key ${payload.keyId}`,

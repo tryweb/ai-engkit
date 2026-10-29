@@ -36,6 +36,10 @@ interface Fixture {
   setActiveCalls: Array<[string, string | null]>;
   deleteCalls: Array<[string, string]>;
   noteUpdates: Array<[string, string, string]>;
+  v2Credentials: Map<string, Array<{ id: string; label: string }>>;
+  v2Activations: string[];
+  v2Removals: string[];
+  v2LabelUpdates: Array<[string, string]>;
   authApplies: Array<[string, string]>;
   authRemovals: string[];
   idleWaits: string[];
