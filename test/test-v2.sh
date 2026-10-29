@@ -83,7 +83,16 @@ cell1() {
     base="http://localhost:${CHAMBER_V2DEV_PORT}"
   else
     local gw
-    gw="$(docker network inspect v2_default --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)" || gw=""
+    # Derive the gateway from ai-dev's own network attachment: the compose
+    # project name (v2dev here, v2 for prod) decides the network name, so a
+    # hardcoded name drifts. Fall back to the known project networks.
+    gw="$(docker inspect ai-engkit-v2dev --format '{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}}{{end}}' 2>/dev/null | head -1)" || gw=""
+    if [ -z "$gw" ]; then
+      for net in v2dev_default v2_default; do
+        gw="$(docker network inspect "$net" --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)" || gw=""
+        [ -n "$gw" ] && break
+      done
+    fi
     if [ -n "$gw" ] && curl -sf -m 8 -o /dev/null "http://${gw}:${CHAMBER_V2DEV_PORT}/"; then
       base="http://${gw}:${CHAMBER_V2DEV_PORT}"
     fi
