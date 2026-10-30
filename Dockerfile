@@ -151,6 +151,10 @@ COPY --chmod=0644 docker/lean-ctx/config.default.toml /etc/lean-ctx/config.defau
 ENV BASH_ENV="/home/${USERNAME}/.config/lean-ctx/env.sh"
 ENV CLAUDE_ENV_FILE="/home/${USERNAME}/.config/lean-ctx/env.sh"
 ENV LEANCTX_VERSION=${LEANCTX_VERSION}
+# Cockpit auto-installs at the next agent session and binds 127.0.0.1 on a
+# free port. Deterministic containers opt out: manual `lean-ctx cockpit`
+# still works on demand (port-forward to reach it under DooD).
+ENV LEAN_CTX_NO_COCKPIT=1
 
 # ── Global npm 套件（opencode / openchamber / openspec）
 # 清除 bun 緩存，確保插件正確安裝（避免版本跳轉時的緩存損壞問題）
