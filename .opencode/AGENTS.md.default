@@ -151,7 +151,7 @@ incident (the opt-in contract below is verified through the current 3.12.0 pin):
 
 Use normal `ctx_read` and `ctx_shell` calls for non-authoritative exploration;
 the old requirement to use narrow windows or raw hatches for every whole-file
-read no longer applies. The baked `compression_level = "off"` and repository
+read no longer applies. The baked `compression_level = "lite"` and repository
 `disable-routing` decision remain separate conservative policies. Do not infer
 triage state from the compression level or re-enable routing without a new
 isolated passing G0-G4 evaluation and an explicit repository guidance decision.
