@@ -139,7 +139,7 @@ input was a plain JSON string while the filter assumed an object/array.
 AI-EngKit pins lean-ctx with `ARG LEANCTX_VERSION` in the `Dockerfile` and exports
 the effective value as the `LEANCTX_VERSION` environment variable; the installed
 binary reports it as `lean-ctx --version`. Release 3.9.20 closed the 3.9.19 triage
-incident:
+incident (the opt-in contract below is verified through the current 3.12.0 pin):
 
 - Output filtering is opt-in; `decision_loop.max_filter_level` defaults to `0`.
 - `ctx_read` is exempt from triage, and documented lossless modes (`raw`,

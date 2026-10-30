@@ -129,6 +129,26 @@ report so the user can see what was stored.
 
 ---
 
+## Step 4b — Optional Bulk Import (lean-ctx ≥ 3.12)
+
+When `lean-ctx import --help` lists the `docs` and `git` sources, prefer them
+over hand-writing `knowledge remember` calls — every imported fact carries its
+file/section anchor and passes the same secret and personal-data screening.
+
+```bash
+lean-ctx import docs --dry-run   # AGENTS.md, CLAUDE.md, .cursorrules, docs/ by default
+lean-ctx import git --dry-run    # decisions, fixes, dead ends from history (reads no diffs/authors)
+```
+
+Rules: always preview with `--dry-run` first and show the user what would be
+imported. Run the real import only after the user confirms. Skip this step when
+the `import` subcommand is unavailable (lean-ctx < 3.12) — Step 4 manual
+seeding remains the fallback. Never pass `knowledge export-agents-md --write`
+without explicit user confirmation; the default print-to-stdout form is the
+preview (`--file <path>` scopes it to one file).
+
+---
+
 ## Step 5 — Report Results
 
 Relay both the bootstrap script's output and the ctx_knowledge seeding result

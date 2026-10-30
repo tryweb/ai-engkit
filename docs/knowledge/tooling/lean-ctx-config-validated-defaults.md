@@ -2,7 +2,7 @@
 
 ## Context
 
-AI-EngKit pins lean-ctx v3.9.20 and exposes selected settings through the Admin editor. GitHub issue #68 requested reconciling AI-EngKit's baseline with the runtime schema after stress testing.
+AI-EngKit pinned lean-ctx v3.9.20 at the time of that reconciliation (current pin: v3.12.0, see `Dockerfile`) and exposes selected settings through the Admin editor. GitHub issue #68 requested reconciling AI-EngKit's baseline with the runtime schema after stress testing.
 
 ## Problem
 

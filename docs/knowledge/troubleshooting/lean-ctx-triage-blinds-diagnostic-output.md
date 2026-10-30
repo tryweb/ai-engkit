@@ -167,7 +167,7 @@ lean-ctx raw "od -c file.tsx"              # CLI form
 
 ## Related Files
 - `Dockerfile` (~line 148, `compression_level` in baked `config.toml`)
-- `.opencode/AGENTS.md.default` (`### lean-ctx v3.9.20 Output Triage` guidance)
+- `.opencode/AGENTS.md.default` (`### lean-ctx Output Triage` guidance)
 - `/home/devuser/.config/lean-ctx/config.toml` (runtime, in container)
 - `/home/devuser/.config/lean-ctx/env.sh` (BASH_ENV-loaded hook)
 - `docs/knowledge/tooling/lean-ctx-optimization.md` (companion: allowlist tuning)

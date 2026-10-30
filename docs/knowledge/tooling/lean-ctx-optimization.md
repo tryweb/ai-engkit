@@ -4,7 +4,7 @@
 
 ai-engkit 在容器映像建置時安裝 lean-ctx(`Dockerfile` L134)並在 entrypoint 註冊 MCP 伺服器(`entrypoint.d/02-init-config.sh` L152-154)。`docker-compose.yml` 透過 `lean-ctx-data`、`lean-ctx-state` 兩個 named volume 持久化資料,並依 XDG Base Directory 規範分目錄。
 
-> **Current state (lean-ctx 3.9.20):** 下列 Solution A、B、C 已套用到 repo。映像會產生 `config.toml`,entrypoint 會安裝 shell hook 與 OpenCode integration,測試則驗證 MCP 連線及 non-interactive shell 環境。原 Problem 內容保留為設計沿革。
+> **Current state (lean-ctx 3.12.0):** 下列 Solution A、B、C 已套用到 repo。映像會產生 `config.toml`,entrypoint 會安裝 shell hook 與 OpenCode integration,測試則驗證 MCP 連線及 non-interactive shell 環境。原 Problem 內容保留為設計沿革。
 >
 > **Configuration history:** v1.15.2 曾把 `compression_level` 從 `"standard"` 降為 `"lite"`;3.9.19 triage 事故後曾暫時改為 `"off"`。3.9.20 修復該事故後，現行 repository baseline 已恢復為 `"lite"`，但 routing 仍須新的 G0-G4 評估與明確決策才能重新啟用。v3.9.20 schema 驗證亦確認 `cognitive_mode` 已是 inert key，因此 baseline 不再設定它，並明確啟用 `secret_detection.enabled` 與 `secret_detection.redact`。
 
