@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   dockerCommand,
@@ -25,6 +26,7 @@ import {
 export const DEFAULT_DB_PATH = "/home/devuser/.local/share/opencode/opencode.db";
 export const DEFAULT_BACKUP_DIR = "/opt/ai-engkit/backups/db-maintenance";
 export const BACKUP_CONTAINER_ROOT = "/opt/ai-engkit/backups";
+const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 // 1.5 GiB critical floor — matches production kill-switch observed in drill
 export const DEFAULT_CRITICAL_FLOOR_BYTES = Math.floor(1.5 * 1024 * 1024 * 1024);
 // Pre-start headroom multiplier: VACUUM needs ~1x live DB in WAL mode + backup headroom
@@ -445,6 +447,7 @@ export interface DbMaintenanceDeps {
   pollIntervalMs?: number;
   createBackup?: (backupPath: string) => Promise<ExecResult>;
   verifyBackup?: (backupPath: string) => Promise<ExecResult>;
+  pruneBackups?: (backupDir: string, currentBackupPath: string, nowMs: number) => Promise<void>;
   runSql?: (sql: string) => Promise<ExecResult>;
   // In-window SQL path (ai-dev stopped): runMaintenance binds its local
   // runner from here, never from runSql above.
@@ -456,6 +459,23 @@ export interface DbMaintenanceDeps {
   // Explicit manual runs may proceed while the policy is disabled — the
   // scheduled path is still gated by evaluateMaintenanceScheduler.
   allowDisabledPolicy?: boolean;
+}
+
+async function pruneExpiredBackups(backupDir: string, currentBackupPath: string, nowMs: number): Promise<void> {
+  const cutoff = nowMs - BACKUP_RETENTION_MS;
+  const entries = await readdir(backupDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const backupPath = join(backupDir, entry.name);
+    if (backupPath === currentBackupPath) continue;
+    const match = /^maintenance-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/.exec(entry.name);
+    if (!match) continue;
+    const timestamp = Date.parse(`${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`);
+    if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().replace(/[:.]/g, "-") !== entry.name.slice("maintenance-".length)) {
+      continue;
+    }
+    if (timestamp < cutoff) await rm(backupPath, { recursive: true });
+  }
 }
 
 /**
@@ -517,6 +537,7 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
   const verifyBackup =
     deps.verifyBackup ??
     ((p: string) => defaultVerifyBackup(p, { resolveHostBackupPathFn: getHostBackupPath }));
+  const pruneBackups = deps.pruneBackups ?? pruneExpiredBackups;
   // In-window SQL must NOT use the live runner: ai-dev is stopped from quiesce
   // on, so docker exec is unreachable. Bind the local to the volume runner;
   // getDeleteCounts keeps the live default via its own deps (pre-stop reads).
@@ -589,6 +610,13 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
     }
 
     emit("backup", "success", `Backup verified at ${backupPath}`);
+
+    try {
+      await pruneBackups(backupDir, backupPath, nowMs());
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return failStep("backup", `Backup retention cleanup failed: ${detail} — refusing to delete`);
+    }
 
     // --- Idle-session wait: never stop ai-dev while sessions are running ---
     // Unlike restart's force fallback, maintenance fails closed here: deleting
