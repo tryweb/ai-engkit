@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [1.23.3] - 2026-10-31
+
+### Added
+- Retain database maintenance backups for three days
+
 ## [1.23.2] - 2026-10-31
 
 ### Added
