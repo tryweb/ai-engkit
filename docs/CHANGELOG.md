@@ -1,6 +1,23 @@
 ## [Unreleased]
 
 
+## [2.0.12] - 2026-10-31
+
+### Added
+- Bump OpenCode CLI 2.2.0 → 2.2.5, openspec 1.15.0 → 1.16.0
+- Lean-ctx 3.12 follow-ups for project knowledge + doc pins
+- Opt out of lean-ctx cockpit auto-install
+- Bump LEANCTX_VERSION 3.11.4 → 3.12.0
+
+### Documentation
+- Fix baked compression_level value in triage guidance (off → lite)
+
+### Changed
+- Derive OpenChamber gateway from ai-dev network attachment
+- Upgrade OpenCode CLI from 2.2.0 to 2.2.5.
+- Upgrade lean-ctx from 3.11.4 to 3.12.0.
+- Upgrade openspec from 1.15.0 to 1.16.0.
+
 ## [2.0.11] - 2026-10-29
 
 ### Fixed
@@ -2424,7 +2441,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.11...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2615,3 +2632,4 @@
 [2.0.9]: https://github.com/tryweb/ai-engkit/compare/v2.0.8...v2.0.9
 [2.0.10]: https://github.com/tryweb/ai-engkit/compare/v2.0.9...v2.0.10
 [2.0.11]: https://github.com/tryweb/ai-engkit/compare/v2.0.10...v2.0.11
+[2.0.12]: https://github.com/tryweb/ai-engkit/compare/v2.0.11...v2.0.12
