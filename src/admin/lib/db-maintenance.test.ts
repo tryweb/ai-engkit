@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
@@ -160,7 +160,7 @@ function makeSqlRunner(db: Database): (sql: string) => Promise<ExecResult> {
 function baseDeps(overrides: Partial<DbMaintenanceDeps> = {}): DbMaintenanceDeps {
   return {
     dbPath: "/fake/opencode.db",
-    backupDir: "/tmp/fake-backup",
+    backupDir: testTempDir,
     readRetentionPolicy: () => ({ enabled: true, cutoffDays: 30, dailyRunAt: "03:00" }),
     getDbFileSize: async () => 10 * 1024 * 1024, // 10 MB
     getFreeSpace: async () => 100 * 1024 * 1024, // 100 MB free
@@ -257,9 +257,13 @@ describe("db-maintenance state machine and concurrent lock", () => {
 describe("compressed backup with gzip integrity gating", () => {
   test("corrupt/interrupted backup fails before any delete", async () => {
     let deleteCalled = false;
+    let pruneCalled = false;
     const deps = baseDeps({
       createBackup: async () => okExec(),
       verifyBackup: async () => failExec("gzip: unexpected end of file", 1),
+      pruneBackups: async () => {
+        pruneCalled = true;
+      },
       runSql: async (sql: string) => {
         if (sql.includes("DELETE FROM")) deleteCalled = true;
         return okExec("ok");
@@ -269,6 +273,7 @@ describe("compressed backup with gzip integrity gating", () => {
     const ok = await runMaintenance(deps);
     expect(ok).toBe(false);
     expect(deleteCalled).toBe(false);
+    expect(pruneCalled).toBe(false);
     expect(getMaintenanceState()).toBe("failed");
     const ev = getMaintenanceEventLog();
     const backupFail = ev.find((e) => e.step === "backup" && e.status === "failure");
@@ -289,6 +294,112 @@ describe("compressed backup with gzip integrity gating", () => {
     expect(ok).toBe(false);
     expect(deleteCalled).toBe(false);
     expect(getMaintenanceState()).toBe("failed");
+  });
+
+  test("prunes only strictly older valid maintenance directories after verification and before SQL deletion", async () => {
+    const now = Date.parse("2025-04-04T12:00:00.000Z");
+    const expired = join(testTempDir, "maintenance-2025-04-01T11-59-59-999Z");
+    const cutoff = join(testTempDir, "maintenance-2025-04-01T12-00-00-000Z");
+    const recent = join(testTempDir, "maintenance-2025-04-01T12-00-00-001Z");
+    const malformed = join(testTempDir, "maintenance-2025-02-30T12-00-00-000Z");
+    const unrelated = join(testTempDir, "other-backup");
+    const regularFile = join(testTempDir, "maintenance-2025-03-01T00-00-00-000Z");
+    for (const path of [expired, cutoff, recent, malformed, unrelated]) mkdirSync(path);
+    writeFileSync(regularFile, "leave intact");
+    const linkedTarget = join(testTempDir, "linked-target");
+    mkdirSync(linkedTarget);
+    const linkPath = join(testTempDir, "maintenance-2025-03-02T00-00-00-000Z");
+    symlinkSync(linkedTarget, linkPath);
+
+    const steps: string[] = [];
+    let createdBackupPath = "";
+    const deps = baseDeps({
+      nowMs: () => now,
+      createBackup: async (backupPath) => {
+        createdBackupPath = backupPath;
+        steps.push("create");
+        mkdirSync(backupPath);
+        return okExec();
+      },
+      verifyBackup: async () => {
+        steps.push("verify");
+        return okExec();
+      },
+      runSqlOnVolume: async (sql) => {
+        if (sql.includes("DELETE FROM")) steps.push("delete");
+        return okExec(sql.includes("quick_check") ? "ok" : "0");
+      },
+    });
+
+    const ok = await runMaintenance(deps);
+
+    expect(ok).toBe(true);
+    expect(existsSync(createdBackupPath)).toBe(true);
+    expect(existsSync(expired)).toBe(false);
+    expect(existsSync(cutoff)).toBe(true);
+    expect(existsSync(recent)).toBe(true);
+    expect(existsSync(malformed)).toBe(true);
+    expect(existsSync(unrelated)).toBe(true);
+    expect(existsSync(regularFile)).toBe(true);
+    expect(existsSync(linkPath)).toBe(true);
+    expect(existsSync(linkedTarget)).toBe(true);
+    expect(steps.indexOf("verify")).toBeLessThan(steps.indexOf("delete"));
+    expect(steps.indexOf("create")).toBeLessThan(steps.indexOf("verify"));
+  });
+
+  test("cleanup failure preserves verified backup and prevents destructive SQL", async () => {
+    let createdBackupPath = "";
+    let deleteCalled = false;
+    const deps = baseDeps({
+      createBackup: async (backupPath) => {
+        createdBackupPath = backupPath;
+        mkdirSync(backupPath);
+        return okExec();
+      },
+      pruneBackups: async () => {
+        throw new Error("backup directory unavailable");
+      },
+      runSqlOnVolume: async (sql) => {
+        if (sql.includes("DELETE FROM")) deleteCalled = true;
+        return okExec();
+      },
+    });
+
+    const ok = await runMaintenance(deps);
+
+    expect(ok).toBe(false);
+    expect(existsSync(createdBackupPath)).toBe(true);
+    expect(deleteCalled).toBe(false);
+    expect(getMaintenanceState()).toBe("failed");
+    expect(getMaintenanceEventLog().some((event) => event.message.includes("Backup retention cleanup failed"))).toBe(true);
+  });
+
+  test("runs retention cleanup after verification and before destructive SQL", async () => {
+    const steps: string[] = [];
+    const deps = baseDeps({
+      createBackup: async () => {
+        steps.push("create");
+        return okExec();
+      },
+      verifyBackup: async () => {
+        steps.push("verify");
+        return okExec();
+      },
+      pruneBackups: async () => {
+        steps.push("prune");
+      },
+      runSqlOnVolume: async (sql) => {
+        if (sql.includes("DELETE FROM")) steps.push("delete");
+        return okExec(sql.includes("quick_check") ? "ok" : "0");
+      },
+    });
+
+    const ok = await runMaintenance(deps);
+
+    expect(ok).toBe(true);
+    expect(steps.indexOf("create")).toBeLessThan(steps.indexOf("verify"));
+    expect(steps.indexOf("verify")).toBeLessThan(steps.indexOf("prune"));
+    expect(steps.indexOf("prune")).toBeLessThan(steps.indexOf("delete"));
   });
 });
 
