@@ -136,7 +136,10 @@ input was a plain JSON string while the filter assumed an object/array.
 
 ### lean-ctx v3.9.20 Output Triage
 
-AI-EngKit pins lean-ctx 3.9.20, which closes the 3.9.19 triage incident:
+AI-EngKit pins lean-ctx with `ARG LEANCTX_VERSION` in the `Dockerfile` and exports
+the effective value as the `LEANCTX_VERSION` environment variable; the installed
+binary reports it as `lean-ctx --version`. Release 3.9.20 closed the 3.9.19 triage
+incident (the opt-in contract below is verified through the current 3.12.0 pin):
 
 - Output filtering is opt-in; `decision_loop.max_filter_level` defaults to `0`.
 - `ctx_read` is exempt from triage, and documented lossless modes (`raw`,
@@ -148,7 +151,7 @@ AI-EngKit pins lean-ctx 3.9.20, which closes the 3.9.19 triage incident:
 
 Use normal `ctx_read` and `ctx_shell` calls for non-authoritative exploration;
 the old requirement to use narrow windows or raw hatches for every whole-file
-read no longer applies. The baked `compression_level = "off"` and repository
+read no longer applies. The baked `compression_level = "lite"` and repository
 `disable-routing` decision remain separate conservative policies. Do not infer
 triage state from the compression level or re-enable routing without a new
 isolated passing G0-G4 evaluation and an explicit repository guidance decision.
