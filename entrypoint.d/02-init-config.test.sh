@@ -25,10 +25,10 @@ run_ensure() {
   local ensure_source="$root/ensure.sh"
   sed -n '/^leanctx_runtime_config_is_malformed()/,/^ensure_leanctx_config$/p' "$ENTRYPOINT_FILE" | sed '$d' > "$ensure_source"
   printf '%s\n' 'ensure_leanctx_config' >> "$ensure_source"
-  # lean-ctx resolves config through XDG_CONFIG_HOME; symlink the fixture in so
-  # `lean-ctx config validate` reads it, not the host's real lean-ctx config.
+  # lean-ctx resolves config through XDG_CONFIG_HOME; copy the fixture there so
+  # validation reads isolated contents from a regular config file.
   mkdir -p "$root/xdg/lean-ctx"
-  ln -sf "$root/config.toml" "$root/xdg/lean-ctx/config.toml"
+  cp "$root/config.toml" "$root/xdg/lean-ctx/config.toml"
   XDG_CONFIG_HOME="$root/xdg" LEANCTX_BASELINE_CONFIG="$root/default.toml" LEANCTX_RUNTIME_CONFIG="$root/config.toml" bash "$ensure_source"
 }
 
