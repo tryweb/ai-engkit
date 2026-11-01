@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 
+## [1.23.4] - 2026-11-01
+
+### Added
+- Disable automatic LeanCTX Cockpit installation in the image while retaining manual launch
+- Add LeanCTX 3.12 bulk import guidance to the project-knowledge skill
+
+### Fixed
+- Use a regular XDG config fixture in entrypoint tests to avoid false malformed-config recovery
+
+### Documentation
+- Align baked `compression_level` guidance with the `lite` baseline
+
 ## [1.23.3] - 2026-10-31
 
 ### Added
@@ -2354,7 +2366,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.4...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2522,14 +2534,6 @@
 [1.18.3]: https://github.com/tryweb/ai-engkit/compare/v1.18.2...v1.18.3
 [1.18.4]: https://github.com/tryweb/ai-engkit/compare/v1.18.3...v1.18.4
 [1.18.5]: https://github.com/tryweb/ai-engkit/compare/v1.18.4...v1.18.5
-[1.18.6]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...v1.18.6
-[1.18.7]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...v1.18.7
-[1.18.8]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...v1.18.8
-[1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
-[1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
-[1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
-[1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
-[1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
@@ -2547,3 +2551,4 @@
 [1.23.1]: https://github.com/tryweb/ai-engkit/compare/v1.23.0...v1.23.1
 [1.23.2]: https://github.com/tryweb/ai-engkit/compare/v1.23.1...v1.23.2
 [1.23.3]: https://github.com/tryweb/ai-engkit/compare/v1.23.2...v1.23.3
+[1.23.4]: https://github.com/tryweb/ai-engkit/compare/v1.23.3...v1.23.4
