@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 
+## [2.0.13] - 2026-11-01
+
+### Added
+- Retain maintenance backups for three days
+
+### Documentation
+- Port git-hosting-auth stale-checked-timestamp runbook to v2
+
 ## [2.0.12] - 2026-10-31
 
 ### Added
@@ -2441,7 +2449,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2633,3 +2641,4 @@
 [2.0.10]: https://github.com/tryweb/ai-engkit/compare/v2.0.9...v2.0.10
 [2.0.11]: https://github.com/tryweb/ai-engkit/compare/v2.0.10...v2.0.11
 [2.0.12]: https://github.com/tryweb/ai-engkit/compare/v2.0.11...v2.0.12
+[2.0.13]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...v2.0.13
