@@ -58,16 +58,24 @@ async function getOwnContainerName(): Promise<string> {
 }
 
 /**
+ * Derive the dev container name from an admin container name.
+ * Convention: the "-admin" infix is dropped, keeping any suffix:
+ * ai-engkit-admin → ai-engkit, ai-engkit-admin-dev → ai-engkit-dev,
+ * ai-engkit-admin-v2 → ai-engkit-v2, ai-engkit-admin-v2dev → ai-engkit-v2dev.
+ * Exported for tests; getSiblingDevContainerName() resolves the live name.
+ */
+export function deriveSiblingDevContainerName(self: string): string {
+  const match = /^(.*)-admin(-.*)?$/.exec(self);
+  if (match) return match[1] + (match[2] ?? "");
+  return self;
+}
+
+/**
  * Derive the dev container name from this admin container's name.
- * Convention: ai-engkit-admin → ai-engkit, ai-engkit-admin-dev → ai-engkit-dev
  */
 export async function getSiblingDevContainerName(): Promise<string> {
   const self = await getOwnContainerName();
-  // Strip "-admin-dev" or "-admin" suffix to get the dev container name
-  // ai-engkit-admin-dev → ai-engkit-dev,  ai-engkit-admin → ai-engkit
-  if (self.endsWith("-admin-dev")) return self.slice(0, -"-admin-dev".length) + "-dev";
-  if (self.endsWith("-admin")) return self.slice(0, -"-admin".length);
-  return self;
+  return deriveSiblingDevContainerName(self);
 }
 
 export interface ExecResult {
@@ -120,6 +128,11 @@ export async function getAiDevContainerRef(): Promise<string> {
   if (byService) return byService;
 
   const devName = await getSiblingDevContainerName();
+  // Never resolve to ourselves: when the derivation yields the admin's own
+  // name (unknown suffix) the running-ps lookup below would match this very
+  // container, and callers would inspect/exec into admin instead of ai-dev.
+  // An empty ref fails every caller closed (inspect/exec exit non-zero).
+  if (devName === (await getOwnContainerName())) return "";
   const result = await runCommand(
     ["docker", "ps", "--filter", "status=running", "--filter", `name=^/${devName}$`, "--format", "{{.ID}}"],
     10_000,

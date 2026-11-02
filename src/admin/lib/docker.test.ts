@@ -2,7 +2,22 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { composeCommand, dockerCommand, getComposeProject, isValidComposeProjectName } from "./docker";
+import { composeCommand, deriveSiblingDevContainerName, dockerCommand, getComposeProject, isValidComposeProjectName } from "./docker";
+
+describe("deriveSiblingDevContainerName", () => {
+  test("drops the -admin infix and keeps any suffix", () => {
+    expect(deriveSiblingDevContainerName("ai-engkit-admin")).toBe("ai-engkit");
+    expect(deriveSiblingDevContainerName("ai-engkit-admin-dev")).toBe("ai-engkit-dev");
+    expect(deriveSiblingDevContainerName("ai-engkit-admin-v2")).toBe("ai-engkit-v2");
+    expect(deriveSiblingDevContainerName("ai-engkit-admin-v2dev")).toBe("ai-engkit-v2dev");
+  });
+
+  test("leaves non-admin names untouched", () => {
+    expect(deriveSiblingDevContainerName("ai-engkit")).toBe("ai-engkit");
+    expect(deriveSiblingDevContainerName("ai-engkit-v2")).toBe("ai-engkit-v2");
+    expect(deriveSiblingDevContainerName("custom")).toBe("custom");
+  });
+});
 
 describe("isValidComposeProjectName", () => {
   test("accepts lowercase names used in production", () => {
