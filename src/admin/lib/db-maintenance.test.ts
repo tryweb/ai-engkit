@@ -94,6 +94,82 @@ function createFixtureDb(dir: string, nowMs: number): { dbPath: string; db: Data
   return { dbPath, db };
 }
 
+function createFixtureDbV2(dir: string, nowMs: number): { dbPath: string; db: Database } {
+  const dbPath = join(dir, "opencode.db");
+  const db = new Database(dbPath, { create: true });
+  // Minimal opencode 2.x-like schema: session_v2(id PK, time_updated INTEGER)
+  // with message/part/inbox children ON DELETE CASCADE, plus the shared
+  // aggregate-keyed event_sequence/event bus tables.
+  db.exec(`PRAGMA journal_mode=WAL;`);
+  db.exec(`
+    CREATE TABLE session_v2 (
+      id TEXT PRIMARY KEY,
+      time_updated INTEGER NOT NULL
+    );
+    CREATE TABLE event_sequence (
+      aggregate_id TEXT PRIMARY KEY,
+      dummy TEXT
+    );
+    CREATE TABLE event (
+      id TEXT PRIMARY KEY,
+      aggregate_id TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
+      data TEXT
+    );
+    CREATE TABLE session_message (
+      id TEXT PRIMARY KEY,
+      session_id TEXT REFERENCES session_v2(id) ON DELETE CASCADE
+    );
+    CREATE TABLE session_part (
+      id TEXT PRIMARY KEY,
+      message_id TEXT REFERENCES session_message(id) ON DELETE CASCADE,
+      session_id TEXT REFERENCES session_v2(id) ON DELETE CASCADE
+    );
+    CREATE TABLE session_inbox (
+      id TEXT PRIMARY KEY,
+      session_id TEXT REFERENCES session_v2(id) ON DELETE CASCADE
+    );
+  `);
+
+  const old = nowMs - 40 * 24 * 60 * 60 * 1000; // 40 days ago
+  const recent = nowMs - 5 * 24 * 60 * 60 * 1000; // 5 days ago
+
+  const insertSession = db.prepare("INSERT INTO session_v2 (id, time_updated) VALUES (?, ?)");
+  const insertSeq = db.prepare("INSERT INTO event_sequence (aggregate_id, dummy) VALUES (?, ?)");
+  const insertEvent = db.prepare("INSERT INTO event (id, aggregate_id, data) VALUES (?, ?, ?)");
+  const insertMsg = db.prepare("INSERT INTO session_message (id, session_id) VALUES (?, ?)");
+  const insertPart = db.prepare(
+    "INSERT INTO session_part (id, message_id, session_id) VALUES (?, ?, ?)",
+  );
+  const insertInbox = db.prepare("INSERT INTO session_inbox (id, session_id) VALUES (?, ?)");
+
+  // 3 sessions: 2 old (deleted with cutoff 30d), 1 recent; plus one
+  // project-scoped bus aggregate that must survive (not a session id).
+  insertSession.run("ses-old-1", old);
+  insertSession.run("ses-old-2", old);
+  insertSession.run("ses-new-1", recent);
+
+  for (const sid of ["ses-old-1", "ses-old-2", "ses-new-1"]) {
+    insertSeq.run(sid, "x");
+  }
+  insertSeq.run("proj-aaa", "x");
+
+  let eIdx = 0;
+  for (const sid of ["ses-old-1", "ses-old-2"]) {
+    for (let i = 0; i < 2; i++) insertEvent.run(`e-${eIdx++}`, sid, "{}");
+  }
+  insertEvent.run(`e-${eIdx++}`, "ses-new-1", "{}");
+  insertEvent.run(`e-${eIdx++}`, "proj-aaa", "{}");
+
+  insertMsg.run("m-old-1", "ses-old-1");
+  insertMsg.run("m-new-1", "ses-new-1");
+  insertPart.run("p-old-1", "m-old-1", "ses-old-1");
+  insertPart.run("p-new-1", "m-new-1", "ses-new-1");
+  insertInbox.run("i-old-1", "ses-old-1");
+  insertInbox.run("i-new-1", "ses-new-1");
+
+  return { dbPath, db };
+}
+
 function makeSqlRunner(db: Database): (sql: string) => Promise<ExecResult> {
   return async (sql: string): Promise<ExecResult> => {
     // Handle PRAGMA checks and multi-statement SQL
@@ -609,7 +685,60 @@ describe("FK-correct delete with cascade deltas on fixture DB", () => {
     expect(counts.sessions).toBe(2);
     expect(counts.eventSequences).toBe(2);
   });
-
+  test("prefers session_v2 when both session tables exist", async () => {
+    db.exec("CREATE TABLE session_v2 (id TEXT PRIMARY KEY, time_updated INTEGER NOT NULL);");
+    db.exec("INSERT INTO session_v2 (id, time_updated) VALUES ('ses-old-9', 1);");
+    const seen: string[] = [];
+    const counts = await getDeleteCounts({ enabled: true, cutoffDays: 30, dailyRunAt: "03:00" }, {
+      runSql: async (sql: string) => {
+        seen.push(sql);
+        return makeSqlRunner(db)(sql);
+      },
+      nowMs: () => nowMs,
+    });
+    expect(seen.some((s) => s.includes("FROM session_v2 WHERE time_updated"))).toBe(true);
+    expect(counts.sessions).toBe(1);
+  });
+  test("unknown schema fails the delete step closed", async () => {
+    const emptyDir = mkdtempSync(join(tmpdir(), "db-maint-empty-"));
+    const emptyPath = join(emptyDir, "opencode.db");
+    const emptyDb = new Database(emptyPath, { create: true });
+    // Convert runner throws (missing tables) into failed results, like production runners do.
+    const safeRunner = (sql: string): Promise<ExecResult> =>
+      makeSqlRunner(emptyDb)(sql).catch((error: unknown) => failExec(String(error)));
+    try {
+      let attemptedDelete = false;
+      const deps = baseDeps({
+        dbPath: emptyPath,
+        runSqlOnVolume: async (sql: string) => {
+          if (sql.includes("DELETE FROM")) attemptedDelete = true;
+          return safeRunner(sql);
+        },
+        nowMs: () => nowMs,
+        getDbFileSize: async () => 1024 * 1024,
+        getFreeSpace: async () => 100 * 1024 * 1024,
+      });
+      const ok = await runMaintenance(deps);
+      expect(ok).toBe(false);
+      expect(attemptedDelete).toBe(true);
+      expect(getMaintenanceState()).toBe("failed");
+      expect(
+        getMaintenanceEventLog().some((e) => e.message.includes("no such table")),
+      ).toBe(true);
+      const counts = await getDeleteCounts(
+        { enabled: true, cutoffDays: 30, dailyRunAt: "03:00" },
+        { runSql: safeRunner, nowMs: () => nowMs },
+      );
+      expect(counts).toEqual({ sessions: 0, eventSequences: 0 });
+    } finally {
+      try {
+        emptyDb.close();
+      } catch {}
+      try {
+        rmSync(emptyDir, { recursive: true, force: true });
+      } catch {}
+    }
+  });
   test("quick_check verification reads handle unrecovered WAL artifact", async () => {
     // Simulate readonly open of WAL DB failing with CANTOPEN by making quick_check return error first,
     // but our runner uses rw mount while stopped so it should still succeed.
@@ -628,6 +757,82 @@ describe("FK-correct delete with cascade deltas on fixture DB", () => {
     expect(ok).toBe(false);
     expect(getMaintenanceState()).toBe("failed");
     expect(getMaintenanceEventLog().some((e) => e.step === "verify" && e.status === "failure")).toBe(true);
+  });
+});
+
+describe("v2 session schema (session_v2) delete with cascade deltas", () => {
+  let dir: string;
+  let db: Database;
+  let dbPath: string;
+  const nowMs = Date.now();
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "db-maint-v2-"));
+    const fixture = createFixtureDbV2(dir, nowMs);
+    dbPath = fixture.dbPath;
+    db = fixture.db;
+  });
+
+  afterEach(() => {
+    try {
+      db.close();
+    } catch {}
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  test("full maintenance deletes expired session_v2 rows with FK cascades", async () => {
+    const runSql = makeSqlRunner(db);
+    const sqlLog: string[] = [];
+    const trackingRunner = async (sql: string): Promise<ExecResult> => {
+      sqlLog.push(sql);
+      return runSql(sql);
+    };
+
+    const deps = baseDeps({
+      dbPath,
+      runSqlOnVolume: trackingRunner,
+      nowMs: () => nowMs,
+      getDbFileSize: async () => 1024 * 1024,
+      getFreeSpace: async () => 100 * 1024 * 1024,
+    });
+
+    const ok = await runMaintenance(deps);
+    expect(ok).toBe(true);
+    expect(getMaintenanceState()).toBe("done");
+
+    // v2 table targeted, event_sequence first; v1 table never touched
+    const seqIdx = sqlLog.findIndex((s) => s.includes("DELETE FROM event_sequence"));
+    const sessIdx = sqlLog.findIndex((s) => s.includes("DELETE FROM session_v2 WHERE time_updated"));
+    expect(seqIdx).toBeGreaterThan(-1);
+    expect(sessIdx).toBeGreaterThan(-1);
+    expect(seqIdx).toBeLessThan(sessIdx);
+    expect(sqlLog.some((s) => s.includes("DELETE FROM session WHERE time_updated"))).toBe(false);
+
+    // 2 old sessions gone, recent survives
+    expect((db.query("SELECT COUNT(*) as c FROM session_v2").get() as { c: number }).c).toBe(1);
+    expect(
+      (db.query("SELECT COUNT(*) as c FROM session_v2 WHERE id = 'ses-new-1'").get() as { c: number })
+        .c,
+    ).toBe(1);
+    // session bus aggregates pruned, project aggregate survives
+    expect((db.query("SELECT COUNT(*) as c FROM event_sequence").get() as { c: number }).c).toBe(2);
+    // events cascade from pruned sequences (4 old gone, new + project survive)
+    expect((db.query("SELECT COUNT(*) as c FROM event").get() as { c: number }).c).toBe(2);
+    // message/part/inbox cascade from deleted sessions
+    expect((db.query("SELECT COUNT(*) as c FROM session_message").get() as { c: number }).c).toBe(1);
+    expect((db.query("SELECT COUNT(*) as c FROM session_part").get() as { c: number }).c).toBe(1);
+    expect((db.query("SELECT COUNT(*) as c FROM session_inbox").get() as { c: number }).c).toBe(1);
+  });
+
+  test("getDeleteCounts targets session_v2 on v2 schema", async () => {
+    const counts = await getDeleteCounts({ enabled: true, cutoffDays: 30, dailyRunAt: "03:00" }, {
+      runSql: makeSqlRunner(db),
+      nowMs: () => nowMs,
+    });
+    expect(counts.sessions).toBe(2);
+    expect(counts.eventSequences).toBe(2);
   });
 });
 

@@ -487,6 +487,38 @@ export function cutoffEpochMs(policy: RetentionPolicy, nowMs: number = Date.now(
 }
 
 /**
+ * Session table layout by OpenCode major version: v1 uses `session`
+ * (with message/part children), v2 uses `session_v2` (with
+ * session_message/session_part/session_inbox children, all ON DELETE
+ * CASCADE). Both carry time_updated in milliseconds since epoch, and both
+ * share the aggregate-keyed event_sequence/event bus tables. Prefer v2 when
+ * detected (a migrated DB may retain the stale v1 table).
+ *
+ * Detection is existence-based (sqlite_master), so it works on empty
+ * databases too. When detection itself is inconclusive (runner error or
+ * unparseable output), fall back to the v1 table: the subsequent SQL fails
+ * closed with sqlite's own "no such table" error if the table is absent, so
+ * this default can never delete the wrong rows.
+ */
+export type SessionSchema = "v1" | "v2";
+
+async function detectSessionSchema(runSql: (sql: string) => Promise<ExecResult>): Promise<SessionSchema> {
+  const hasTable = async (table: string): Promise<boolean> => {
+    const res = await runSql(
+      `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='${table}';`,
+    );
+    if (res.exitCode !== 0) return false;
+    // Volume-runner stdout is prefixed with apk install logs; the query
+    // result is always the last line.
+    const last = res.stdout.trim().split("\n").pop() ?? "";
+    const n = parseInt(last, 10);
+    return Number.isFinite(n) && n > 0;
+  };
+  if (await hasTable("session_v2")) return "v2";
+  return "v1";
+}
+
+/**
  * Query live to-delete counts without mutating. Uses the injected runSql.
  * Returns session and event_sequence counts that would be deleted.
  */
@@ -496,9 +528,11 @@ export async function getDeleteCounts(
 ): Promise<{ sessions: number; eventSequences: number }> {
   const runSql = deps.runSql ?? ((sql: string) => defaultRunSql(sql, DEFAULT_DB_PATH));
   const cutoff = cutoffEpochMs(policy, (deps.nowMs ?? Date.now)());
-  const sessionRes = await runSql(`SELECT COUNT(*) FROM session WHERE time_updated < ${cutoff};`);
+  const schema = await detectSessionSchema(runSql);
+  const table = schema === "v2" ? "session_v2" : "session";
+  const sessionRes = await runSql(`SELECT COUNT(*) FROM ${table} WHERE time_updated < ${cutoff};`);
   const seqRes = await runSql(
-    `SELECT COUNT(*) FROM event_sequence WHERE aggregate_id IN (SELECT id FROM session WHERE time_updated < ${cutoff});`,
+    `SELECT COUNT(*) FROM event_sequence WHERE aggregate_id IN (SELECT id FROM ${table} WHERE time_updated < ${cutoff});`,
   );
   const parseCount = (raw: string): number => {
     const n = parseInt(raw.trim().split("\n")[0] ?? "0", 10);
@@ -658,6 +692,12 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
     emit("delete", "running", "Deleting expired sessions (FK-correct order)...");
     const cutoff = cutoffEpochMs(policy, nowMs());
 
+    // Schema varies by OpenCode major (session vs session_v2); detect live.
+    // An inconclusive detection falls back to v1, which still fails closed
+    // via sqlite's own "no such table" error when the table is absent.
+    const schema = await detectSessionSchema(runSql);
+    const sessionTable = schema === "v2" ? "session_v2" : "session";
+
     // Assert foreign_keys enforcement and perform deletes
     // 1. Ensure FK enforcement is on (PRAGMA foreign_keys=ON is per-connection)
     const fkOn = await runSql("PRAGMA foreign_keys=ON; PRAGMA foreign_keys;");
@@ -668,8 +708,9 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
     }
 
     // 2. FK-correct order: event_sequence first (cascades to event), then session
+    // (v2 cascades session_v2 deletes to session_message/part/inbox via FK).
     const deleteSeq = await runSql(
-      `PRAGMA foreign_keys=ON; DELETE FROM event_sequence WHERE aggregate_id IN (SELECT id FROM session WHERE time_updated < ${cutoff}); SELECT changes();`,
+      `PRAGMA foreign_keys=ON; DELETE FROM event_sequence WHERE aggregate_id IN (SELECT id FROM ${sessionTable} WHERE time_updated < ${cutoff}); SELECT changes();`,
     );
     if (deleteSeq.exitCode !== 0) {
       const detail = deleteSeq.stderr || deleteSeq.stdout || `exit code ${deleteSeq.exitCode}`;
@@ -679,7 +720,7 @@ export async function runMaintenance(deps: DbMaintenanceDeps = {}): Promise<bool
     }
 
     const deleteSess = await runSql(
-      `PRAGMA foreign_keys=ON; DELETE FROM session WHERE time_updated < ${cutoff}; SELECT changes();`,
+      `PRAGMA foreign_keys=ON; DELETE FROM ${sessionTable} WHERE time_updated < ${cutoff}; SELECT changes();`,
     );
     if (deleteSess.exitCode !== 0) {
       const detail = deleteSess.stderr || deleteSess.stdout || `exit code ${deleteSess.exitCode}`;
