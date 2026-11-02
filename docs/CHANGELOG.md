@@ -1,6 +1,17 @@
 ## [Unreleased]
 
 
+## [2.0.14] - 2026-11-02
+
+### Added
+- Bump Playwright MCP 0.0.83 → 0.0.84
+
+### Fixed
+- Probe v2 sessions via /api/session/active with v1 fallback
+
+### Changed
+- Upgrade @playwright/mcp from 0.0.83 to 0.0.84.
+
 ## [2.0.13] - 2026-11-01
 
 ### Added
@@ -2449,7 +2460,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.14...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2642,3 +2653,4 @@
 [2.0.11]: https://github.com/tryweb/ai-engkit/compare/v2.0.10...v2.0.11
 [2.0.12]: https://github.com/tryweb/ai-engkit/compare/v2.0.11...v2.0.12
 [2.0.13]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...v2.0.13
+[2.0.14]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...v2.0.14
