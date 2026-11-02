@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 
+## [2.0.16] - 2026-11-02
+
+### Fixed
+- Detect v1/v2 session schema before maintenance delete
+
+### Changed
+- Ignore local-only compose overlays (docker-compose.*.local.yml)
+
 ## [2.0.15] - 2026-11-02
 
 ### Fixed
@@ -2465,7 +2473,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.15...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2660,3 +2668,4 @@
 [2.0.13]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...v2.0.13
 [2.0.14]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...v2.0.14
 [2.0.15]: https://github.com/tryweb/ai-engkit/compare/v2.0.14...v2.0.15
+[2.0.16]: https://github.com/tryweb/ai-engkit/compare/v2.0.15...v2.0.16
