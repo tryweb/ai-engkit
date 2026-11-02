@@ -10,6 +10,7 @@ import { collectStatus } from "../lib/status";
 import type { GitLabRotationResult } from "../lib/gitlab-token-rotation";
 import type { CommandDeps, CommandSender, IdleWaitOutcome } from "./commands";
 import { createCommandDispatcher, createRealCommandDeps, waitForIdleSessions } from "./commands";
+import { OPENCODE_SESSION_PROBE_SCRIPT } from "./commands";
 import type { StatusReport } from "./heartbeat";
 import { ERROR_CODES, MESSAGE_TYPES, type Envelope, type QueryName } from "./protocol";
 
@@ -1477,6 +1478,35 @@ describe("provider key commands", () => {
       payload: { code: ERROR_CODES.malformed_command, message: "Malformed command payload" },
     });
     expect(dispatcher.pendingCount()).toBe(0);
+  });
+});
+
+describe("session idle probe script", () => {
+  test("prefers the v2 active endpoint before the v1 status map", async () => {
+    const v2Index = OPENCODE_SESSION_PROBE_SCRIPT.indexOf("/api/session/active");
+    const v1Index = OPENCODE_SESSION_PROBE_SCRIPT.indexOf("/session/status");
+    expect(v2Index).toBeGreaterThanOrEqual(0);
+    expect(v1Index).toBeGreaterThanOrEqual(0);
+    expect(v2Index).toBeLessThan(v1Index);
+  });
+
+  test("fails closed unless the v2 response has an object data map", async () => {
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain('(.data | type) == "object"');
+    // curl -f trips on HTTP errors (401/404); bad shapes exit 2, never idle.
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("curl -fsS");
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("[ -n \"$BUSYCOUNT\" ] || exit 2");
+  });
+
+  test("keeps the v1 busy/retry map fallback and rejects error envelopes", async () => {
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain('select(.type == "busy" or .type == "retry")');
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("._tag == null");
+  });
+
+  test("preserves the exit-code contract (0 idle, 1 busy, 2 unavailable)", async () => {
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("[ -n \"$PORT\" ] || exit 0");
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("[ \"$BUSYCOUNT\" = \"0\" ] || exit 1");
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("exit 0");
+    expect(OPENCODE_SESSION_PROBE_SCRIPT).toContain("exit 2");
   });
 });
 

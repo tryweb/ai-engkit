@@ -575,14 +575,19 @@ async function readProjectOverviews(): Promise<ProjectReadResult> {
  * yet), false (at least one session is busy), or null (the opencode server
  * API is unreachable).
  *
- * Reads the server's /session/status map (authenticated with
- * OPENCODE_SERVER_PASSWORD when set), the same source the server's own
- * message-queue consumer uses: the map lists only busy/retry sessions, so an
- * empty map means nothing is running. Verified against the running container
- * (per-id /state returns the web UI fallback, and /session returns empty for
- * zero sessions, so neither is a reliable busy signal).
+ * Tries the v2 API first (opencode 2.x, web runtime): GET /api/session/active
+ * returns {"data":{<id>:{"type":"running"},...}} listing only executing
+ * sessions, so an empty data object means nothing is running. Falls back to
+ * the v1 /session/status busy/retry map (same source the v1 server's own
+ * message-queue consumer uses). Verified against the running container: on
+ * opencode 2.x the bare /session/status path returns the web UI fallback
+ * page, and /api/session/status does not exist, so neither is a reliable
+ * busy signal there.
+ *
+ * A wrong or stale password fails closed (HTTP 401 trips curl -f), as does
+ * any response that is not the expected shape.
  */
-const OPENCODE_SESSION_PROBE_SCRIPT = `
+export const OPENCODE_SESSION_PROBE_SCRIPT = `
 PORT=$(cat "$HOME/.config/openchamber/managed-opencode/"*.json 2>/dev/null | grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]*' | tail -1 | grep -o '[0-9]*$')
 if [ -z "$PORT" ]; then
   PORT=$(pgrep -af 'opencode serve' 2>/dev/null | grep -o '\-\-port[[:space:]][0-9]*' | tail -1 | awk '{print $2}')
@@ -593,7 +598,30 @@ fi
 # by waitForIdleSessions re-probing every interval.)
 # Authenticated requests when the managed server requires a password
 # (OPENCODE_SERVER_PASSWORD is set in ai-dev); plain requests otherwise.
-# A wrong or stale password fails closed via curl exit 2 below.
+# A wrong or stale password fails closed via curl -f below.
+if [ -n "\${OPENCODE_SERVER_PASSWORD:-}" ]; then
+  AUTH="Basic $(printf '%s' "opencode:\${OPENCODE_SERVER_PASSWORD}" | base64)"
+else
+  AUTH=""
+fi
+api_get() {
+  if [ -n "$AUTH" ]; then
+    curl -fsS -m 5 -H "Authorization: $AUTH" "http://127.0.0.1:\${PORT}$1" 2>/dev/null
+  else
+    curl -fsS -m 5 "http://127.0.0.1:\${PORT}$1" 2>/dev/null
+  fi
+}
+# v2 API first: only executing sessions are listed, so an empty data object
+# means idle. An HTTP failure (e.g. 404 on v1 servers) falls through to the
+# v1 branch; a 200 response with the wrong shape fails closed.
+V2ACTIVE=$(api_get "/api/session/active") && {
+  BUSYCOUNT=$(printf '%s' "$V2ACTIVE" | jq -r 'if (.data | type) == "object" then (.data | length) else empty end' 2>/dev/null)
+  [ -n "$BUSYCOUNT" ] || exit 2
+  [ "$BUSYCOUNT" = "0" ] || exit 1
+  exit 0
+}
+# v1 API fallback: the /session/status map lists only busy/retry sessions.
+# Reject error envelopes (._tag) so a JSON error can never read as idle.
 oc_session_get() {
   if [ -n "\${OPENCODE_SERVER_PASSWORD:-}" ]; then
     curl -fsS -m 5 -u "opencode:\${OPENCODE_SERVER_PASSWORD}" "http://127.0.0.1:\${PORT}/session$1" 2>/dev/null
@@ -601,11 +629,9 @@ oc_session_get() {
     curl -fsS -m 5 "http://127.0.0.1:\${PORT}/session$1" 2>/dev/null
   fi
 }
-# The status map lists only busy/retry sessions (this matches the server's own
-# consumer); an empty map means nothing is running. A malformed response fails
-# closed via the jq fallback below.
 STATUS=$(oc_session_get "/status") || exit 2
-BUSYCOUNT=$(echo "$STATUS" | jq -r '[to_entries[] | .value | select(.type == "busy" or .type == "retry")] | length' 2>/dev/null) || exit 2
+BUSYCOUNT=$(echo "$STATUS" | jq -r 'if (type == "object" and ._tag == null) then ([to_entries[] | .value | select(.type == "busy" or .type == "retry")] | length) else empty end' 2>/dev/null) || exit 2
+[ -n "$BUSYCOUNT" ] || exit 2
 [ "$BUSYCOUNT" = "0" ] || exit 1
 exit 0
 `;
