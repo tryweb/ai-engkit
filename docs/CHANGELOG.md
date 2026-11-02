@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [2.0.15] - 2026-11-02
+
+### Fixed
+- Derive v2 sibling dev container names and never resolve ai-dev to self
+
 ## [2.0.14] - 2026-11-02
 
 ### Added
@@ -2460,7 +2465,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.14...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.15...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2654,3 +2659,4 @@
 [2.0.12]: https://github.com/tryweb/ai-engkit/compare/v2.0.11...v2.0.12
 [2.0.13]: https://github.com/tryweb/ai-engkit/compare/v2.0.12...v2.0.13
 [2.0.14]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...v2.0.14
+[2.0.15]: https://github.com/tryweb/ai-engkit/compare/v2.0.14...v2.0.15
