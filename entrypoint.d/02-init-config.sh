@@ -430,6 +430,25 @@ fi
 merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
 fi
 
+# --- Native agents (NATIVE_AGENTS=1 only) ---
+# OMO line gets agents from the oh-my-openagent plugin; the native line is
+# plugin-free, so deploy the baked agent definitions into the user config.
+# Deployed on every boot so image upgrades take effect on recreate.
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  NATIVE_AGENTS_SRC="/opt/opencode/native-agents"
+  NATIVE_AGENTS_DEST="$OPCODE_CONFIG_DIR/agent"
+  if [ -d "$NATIVE_AGENTS_SRC" ]; then
+    mkdir -p "$NATIVE_AGENTS_DEST"
+    for agent_file in "$NATIVE_AGENTS_SRC"/*.md; do
+      [ -f "$agent_file" ] || continue
+      cp -p "$agent_file" "$NATIVE_AGENTS_DEST/$(basename "$agent_file")"
+    done
+    echo "Native agents deployed to $NATIVE_AGENTS_DEST"
+  else
+    echo "Warning: native agents source missing ($NATIVE_AGENTS_SRC), skipping" >&2
+  fi
+fi
+
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true
