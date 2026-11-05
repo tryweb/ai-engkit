@@ -9,6 +9,81 @@ beforeEach(() => {
   rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
 });
 
+function nativeRoutingHandlers() {
+  return [
+    { match: /jq -c '\.'/, stdout: '{"version":1,"chains":{}}' },
+    {
+      match: /\/provider\b/,
+      stdout: JSON.stringify({
+        connected: ["opencode"],
+        all: [{ id: "opencode", models: { "big-pickle": {}, "backup-model": {} } }],
+      }),
+    },
+    {
+      match: /\/agent\b/,
+      stdout: JSON.stringify([
+        { name: "plan", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } },
+      ]),
+    },
+    { match: /routing\.json\.snapshot/, stdout: "/tmp/routing.json.snapshot-test" },
+    { match: /--argjson chain/, stdout: "" },
+  ];
+}
+
+describe("native routing PUT compatibility", () => {
+  test("accepts a two-entry chain and preserves the primary ApplyResult", async () => {
+    const { deps, calls, cleanup } = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes: [{ agent: "plan", chain: [
+        { model: "opencode/big-pickle" },
+        { model: "opencode/backup-model" },
+      ] }] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ results: { plan: { ok: true, status: "verified" } } });
+    expect(calls.some((call) => call.includes(".chains[$agent] = {chain: $chain}"))).toBe(true);
+    expect(calls.some((call) => call.includes(".native-agent-overrides.tmp"))).toBe(false);
+    cleanup();
+  });
+
+  test("accepts legacy entries as the native chain alias", async () => {
+    const { deps, calls, cleanup } = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models/plan", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries: [{ model: "opencode/big-pickle" }] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, status: "verified" });
+    expect(calls.some((call) => call.includes("--argjson chain"))).toBe(true);
+    cleanup();
+  });
+
+  test("rejects ambiguous aliases and chains longer than ten before execution", async () => {
+    const { deps, calls, cleanup } = stubDeps([], { routingEnabled: true });
+    const app = createAgentModelsRoutes(deps);
+    const both = await app.request("http://localhost/api/agent-models/plan", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chain: [], entries: [] }),
+    });
+    const tooLong = await app.request("http://localhost/api/agent-models/plan", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chain: Array.from({ length: 11 }, (_, index) => ({ model: `p/m${index}` })) }),
+    });
+
+    expect(both.status).toBe(400);
+    expect(tooLong.status).toBe(400);
+    expect(calls).toEqual([]);
+    cleanup();
+  });
+});
+
 describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
   test("clears an existing configured model", async () => {
     const { deps, cleanup } = stubDeps([

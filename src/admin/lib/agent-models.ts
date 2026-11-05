@@ -1,13 +1,19 @@
 import {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   displayNameToKey,
+  isRecord,
   parseAgentModelsConfig,
+  parseRoutingChain,
+  parseRoutingConfig,
   validateFallbackModels,
 } from "./agent-model-config";
 import { createAgentModelLiveClient } from "./agent-model-live";
 import {
   CONFIGURABLE_NATIVE_AGENTS,
+  CONFIGURABLE_OMO_AGENTS,
   OMO_CONFIG,
+  ROUTING_CONFIG,
   VARIANTS,
   type AgentModelConfig,
   type AgentModelChange,
@@ -25,9 +31,15 @@ import { parseModelReference, probeModel } from "./model-probe";
 
 export {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   CONFIGURABLE_NATIVE_AGENTS,
+  CONFIGURABLE_OMO_AGENTS,
   displayNameToKey,
+  isRecord,
   OMO_CONFIG,
+  parseRoutingChain,
+  parseRoutingConfig,
+  ROUTING_CONFIG,
   validateFallbackModels,
   VARIANTS,
 };
@@ -49,8 +61,17 @@ export const REAL_DEPS: AgentModelsDeps = {
 
 export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   const live = createAgentModelLiveClient(deps);
+  const usesRoutingConfig = deps.readEnv()["OMO_ENABLED"] === "0";
 
   async function readAgentModelsConfig(): Promise<Record<string, AgentModelConfig>> {
+    if (usesRoutingConfig) {
+      const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
+      const result = await deps.exec(
+        `if [ -f ${routing} ]; then jq -c '.' ${routing} 2>/dev/null; else printf '%s' '{"version":1,"chains":{}}'; fi`,
+        10_000,
+      );
+      return result.exitCode === 0 ? parseRoutingConfig(result.stdout) : {};
+    }
     const result = await deps.exec(`jq -c '.agents // {}' ${OMO_CONFIG} 2>/dev/null || echo '{}'`, 10_000);
     return result.exitCode === 0 ? parseAgentModelsConfig(result.stdout) : {};
   }
@@ -59,7 +80,8 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     agent: string,
     entries: readonly FallbackModelEntry[],
   ): Promise<{ readonly ok: boolean; readonly error?: string }> {
-    const result = await deps.exec(buildJqWriteCommand(agent, entries), 30_000);
+    const command = usesRoutingConfig ? buildRoutingWriteCommand(agent, entries) : buildJqWriteCommand(agent, entries);
+    const result = await deps.exec(command, 30_000);
     if (result.exitCode !== 0) {
       return { ok: false, error: result.stderr || result.stdout || "jq write failed" };
     }
@@ -67,6 +89,15 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   async function snapshotAgentModelsConfig(): Promise<string | null> {
+    if (usesRoutingConfig) {
+      const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
+      const result = await deps.exec(
+        `snapshot=$(mktemp /tmp/routing.json.snapshot.XXXXXX) && if [ -f ${routing} ]; then cp ${routing} "$snapshot"; else printf '%s' '__ROUTING_CONFIG_MISSING__' > "$snapshot"; fi && printf '%s' "$snapshot"`,
+        10_000,
+      );
+      if (result.exitCode !== 0 || !result.stdout.trim()) return null;
+      return result.stdout.trim();
+    }
     const result = await deps.exec(
       `snapshot=$(mktemp /tmp/omo.jsonc.snapshot.XXXXXX) && cat ${OMO_CONFIG} > "$snapshot" 2>/dev/null && printf '%s' "$snapshot"`,
       10_000,
@@ -76,6 +107,15 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   async function restoreAgentModelsConfig(snapshotFile: string): Promise<{ readonly ok: boolean; readonly error?: string }> {
+    if (usesRoutingConfig) {
+      const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
+      const result = await deps.exec(
+        `if [ "$(cat '${snapshotFile}')" = '__ROUTING_CONFIG_MISSING__' ]; then rm -f ${routing}; else tmp=$(mktemp "${routing}.restore.XXXXXX") && cp '${snapshotFile}' "$tmp" && chmod 600 "$tmp" && mv "$tmp" ${routing}; fi; code=$?; rm -f '${snapshotFile}'; exit "$code"`,
+        15_000,
+      );
+      if (result.exitCode !== 0) return { ok: false, error: result.stderr || result.stdout || "restore failed" };
+      return { ok: true };
+    }
     const result = await deps.exec(
       `cat '${snapshotFile}' > ${OMO_CONFIG}.tmp && mv ${OMO_CONFIG}.tmp ${OMO_CONFIG} && rm -f '${snapshotFile}'`,
       15_000,
@@ -240,7 +280,9 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         return results;
       }
 
-      const write = await deps.exec(changes.map(({ agent, entries }) => buildJqWriteCommand(agent, entries)).join(" && "), 30_000);
+      const write = await deps.exec(changes.map(({ agent, entries }) =>
+        usesRoutingConfig ? buildRoutingWriteCommand(agent, entries) : buildJqWriteCommand(agent, entries),
+      ).join(" && "), 30_000);
       if (timedOut) {
         for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
         return results;
@@ -255,7 +297,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         return results;
       }
 
-      const nativeSync = await syncNativeAgentOverrides();
+      const nativeSync = usesRoutingConfig ? { ok: true as const } : await syncNativeAgentOverrides();
       if (timedOut) {
         for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
         return results;
@@ -369,6 +411,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   return {
+    usesRoutingConfig,
     readAgentModelsConfig,
     writeAgentFallbackModels,
     snapshotAgentModelsConfig,
@@ -424,9 +467,14 @@ export async function collectAgentModelState(
   // general); internal mechanism agents (compaction, summary, title, build)
   // stay out because changing their model can break opencode internals.
   const configurableKeys = new Set<string>();
+  const configurableAgents: readonly string[] = lib.usesRoutingConfig
+    ? CONFIGURABLE_NATIVE_AGENTS
+    : CONFIGURABLE_OMO_AGENTS;
   for (const displayName of subagentNames) {
     const key = displayNameToKey(displayName, knownKeys) ?? displayName.toLowerCase();
-    if (knownKeys.has(key) || (CONFIGURABLE_NATIVE_AGENTS as readonly string[]).includes(key)) {
+    if (lib.usesRoutingConfig
+      ? configurableAgents.includes(key)
+      : knownKeys.has(key) || configurableAgents.includes(key)) {
       configurableKeys.add(key);
     }
   }
@@ -466,9 +514,11 @@ export async function collectAgentModelState(
 
   const agents: AgentModelEntry[] = names.map((name) => {
     const entry = config[name];
-    const configured = entry?.model
-      ? [{ model: entry.model, ...(entry.variant ? { variant: entry.variant } : {}) }]
-      : [];
+    const configured = lib.usesRoutingConfig
+      ? entry?.models ?? []
+      : entry?.model
+        ? [{ model: entry.model, ...(entry.variant ? { variant: entry.variant } : {}) }]
+        : [];
     const resolved = resolvedByKey.get(name) ?? null;
     const requestVerified = requestVerifiedByKey.get(name) ?? null;
     const providerConnected = resolved !== null && providerSnapshot.connectedProviders.includes(resolved.providerID);
