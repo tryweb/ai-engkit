@@ -1,5 +1,14 @@
 # OpenCode V2 Migration Watch
 
+## Release and migration revalidation — 2026-11-05
+
+- V2 is released and actively updated: [v2.2.5](https://github.com/anomalyco/opencode/releases/tag/v2.2.5) was published on 2026-10-30. A release is not, by itself, evidence of an LTS commitment or suitability for every workflow.
+- V1 was still receiving releases: [v1.19.5](https://github.com/anomalyco/opencode/releases/tag/v1.19.5) was published on 2026-10-28. No V1 end-of-support date or duration of future maintenance was found in the sources reviewed; neither continued indefinite support nor imminent retirement should be assumed.
+- The current [migration guide](https://opencode.ai/v2/docs/migrate-v1) identifies three intentional breaking areas: plugins, server API/clients, and terminal-client configuration. Supported V1 configuration and file definitions are intended to remain compatible, but some legacy fields are ignored with warnings. V1 plugin implementations require a port; see the [plugin migration guide](https://opencode.ai/v2/docs/build/plugins/migrate-v1).
+- V2 accepts `lsp` configuration but does not run language servers or provide LSP diagnostics. Replace dependent workflows with project lint, typecheck, or compiler commands. V2 also allows `external_directory` by default; explicitly add `{ "action": "external_directory", "resource": "*", "effect": "ask" }` to `permissions` if V1's confirmation behavior is required.
+- Both versions use the `opencode` command and are not installed side by side by default. Back up configuration and session data, isolate trial profiles, and verify models, credentials, permissions, MCP servers, and ported plugins before switching. Native V2-only configuration should not be fed back to V1.
+- Evidence: official release pages and migration guides linked above, reviewed 2026-11-05. Documentation-only research; no installation, migration, build, or runtime test was performed. Earlier dated project inventories and decisions below are historical snapshots, not a claim about the current checkout or upstream state.
+
 ## Context
 
 - AI-EngKit pins OpenCode V1 (`Dockerfile: ARG OPENCODE_VERSION=1.18.32`, installed via `bun install -g opencode-ai@${OPENCODE_VERSION}`) with `oh-my-openagent@4.19.4` as the only `plugin[]` entry, plus `OPENCHAMBER_VERSION=1.24.2` (`bun install -g @openchamber/web@${OPENCHAMBER_VERSION}`).
