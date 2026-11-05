@@ -653,7 +653,13 @@ sync_ai_engkit_agents_md() {
 
 sync_ai_engkit_agents_md "$AI_ENGKIT_AGENTS_DEFAULT" "$USER_AGENTS_MD"
 
-# --- OpenChamber default settings (seed + backfill defaultModel, update notifications off) ---
-ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle"
+# --- OpenChamber default settings (seed + backfill defaultAgent/defaultModel, update notifications off) ---
+# Native line defaults new sessions to Sisyphus (exact /agent name); the OMO
+# line passes no agent so its default-agent behavior is unchanged.
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle" "sisyphus"
+else
+  ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle"
+fi
 
 echo "Default configs initialized"
