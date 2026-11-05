@@ -282,6 +282,15 @@ if [ -z "${OMO_ENABLED:-}" ] && [ "${NATIVE_AGENTS:-0}" = "1" ]; then
   OMO_ENABLED=0
 fi
 
+# Marker file fallback for the Admin UI toggle: explicit NATIVE_AGENTS env
+# always wins; when it is unset, a marker written by Admin
+# ($HOME/.config/opencode/.native-agents, on the opencode-config volume so
+# it survives container restarts) selects the native line. Removing the
+# marker selects the OMO line. No .env or image change is required.
+if [ -z "${NATIVE_AGENTS:-}" ] && [ -f "$HOME/.config/opencode/.native-agents" ]; then
+  NATIVE_AGENTS=1
+fi
+
 # --- lean-ctx XDG migration (v3.8.5+) ---
 # Detect legacy single-dir layout (~/.config/lean-ctx with data files)
 # and migrate to XDG split (config→XDG_CONFIG_HOME, data→XDG_DATA_HOME, …).
