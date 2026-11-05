@@ -274,6 +274,14 @@ normalize_omo_plugin_versions() {
   (IFS=,; printf '%s\n' "${normalized[*]}")
 }
 
+# --- line selection: native vs OMO ---
+# NATIVE_AGENTS=1 is the v1 PoC flag; OMO_ENABLED=0 is the v2-line flag.
+# Normalize here so every downstream gate sees one line: an explicit
+# OMO_ENABLED always wins, otherwise NATIVE_AGENTS=1 implies OMO_ENABLED=0.
+if [ -z "${OMO_ENABLED:-}" ] && [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  OMO_ENABLED=0
+fi
+
 # --- lean-ctx XDG migration (v3.8.5+) ---
 # Detect legacy single-dir layout (~/.config/lean-ctx with data files)
 # and migrate to XDG split (config→XDG_CONFIG_HOME, data→XDG_DATA_HOME, …).
@@ -308,8 +316,15 @@ build_opencode_permission_policy() {
 OPENCODE_PERMISSION="$(build_opencode_permission_policy)"
 
 # Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency
-PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
-PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  PLUGINS=""
+  PLUGIN_JSON="[]"
+  OPENCODE_PERMISSION="null"
+  echo "Native agents enabled (NATIVE_AGENTS=1): writing plugin-free opencode.json"
+else
+  PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
+  PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
+fi
 # Catalog of admin-controlled LSP servers (id -> command/extensions),
 # mirroring src/admin/lib/lsp-catalog.ts. Version pinning is applied via
 # BUN_PACKAGES in 01-install-packages.sh, not in this lsp block.
@@ -368,7 +383,7 @@ OPCODE_CONFIG=$(jq -n \
         enabled: true
       }
     }
-  }')
+  } | if .permission == null then del(.permission) else . end')
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
@@ -387,15 +402,18 @@ if [ -n "${OPENCODE_PROVIDER:-}" ]; then
 fi
 
 # --- OMO unified configuration ---
+if [ "${NATIVE_AGENTS:-0}" != "1" ]; then
 DEFAULT_OMO_CONFIG="/etc/opencode/omo.jsonc.default"
 OMO_CONFIG_DIR="$HOME/.omo"
 OMO_CONFIG_FILE="$OMO_CONFIG_DIR/omo.jsonc"
 
 # Kept in a non-.sh file so the entrypoint runner does not execute it separately.
 source "$(dirname "$0")/lib-omo-model-defaults.bash"
-source "$(dirname "$0")/lib-openchamber-settings.bash"
 source "$(dirname "$0")/lib-native-agent-overrides.bash"
+fi
+source "$(dirname "$0")/lib-openchamber-settings.bash"
 
+if [ "${NATIVE_AGENTS:-0}" != "1" ]; then
 archive_legacy_omo_configs() {
   local legacy_name legacy_file backup_file
   for legacy_name in oh-my-openagent.json oh-my-openagent.jsonc oh-my-opencode.json oh-my-opencode.jsonc; do
@@ -417,6 +435,32 @@ initialize_omo_permissions "$OMO_CONFIG_FILE" "$DEFAULT_OMO_CONFIG"
 if ! normalize_omo_config "$OMO_CONFIG_FILE"; then
   echo "Warning: OMO config normalization was not applied; review the reported path" >&2
 fi
+merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+fi
+
+# --- Native agents (NATIVE_AGENTS=1 only) ---
+# OMO line gets agents from the oh-my-openagent plugin; the native line is
+# plugin-free, so deploy the baked agent definitions into the user config.
+# Deployed on every boot so image upgrades take effect on recreate.
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  NATIVE_AGENTS_SRC="/opt/opencode/native-agents"
+  NATIVE_AGENTS_DEST="$OPCODE_CONFIG_DIR/agent"
+  if [ -d "$NATIVE_AGENTS_SRC" ]; then
+    mkdir -p "$NATIVE_AGENTS_DEST"
+    for agent_file in "$NATIVE_AGENTS_SRC"/*.md; do
+      [ -f "$agent_file" ] || continue
+      cp -p "$agent_file" "$NATIVE_AGENTS_DEST/$(basename "$agent_file")"
+    done
+    echo "Native agents deployed to $NATIVE_AGENTS_DEST"
+  else
+    echo "Warning: native agents source missing ($NATIVE_AGENTS_SRC), skipping" >&2
+  fi
+fi
+
+if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh ]; then
+  bash /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh || true
+fi
+
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true
@@ -427,12 +471,10 @@ if command -v lean-ctx &>/dev/null; then
   fi
 fi
 
-merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
-
 merge_project_lsp_config
 
 OPENCODE_CACHE_PKG="$HOME/.cache/opencode/packages"
-if [ -f "$OPENCODE_CACHE_PKG/package.json" ]; then
+if [ "${NATIVE_AGENTS:-0}" != "1" ] && [ -f "$OPENCODE_CACHE_PKG/package.json" ]; then
   CACHED_PKGS=$(jq -r '.dependencies | keys | join(",")' "$OPENCODE_CACHE_PKG/package.json" 2>/dev/null || echo "")
   EXPECTED_PKGS=$(expected_plugin_names "$PLUGINS")
   CACHED_SORTED=$(expected_plugin_names "$CACHED_PKGS")
@@ -623,7 +665,13 @@ sync_ai_engkit_agents_md() {
 
 sync_ai_engkit_agents_md "$AI_ENGKIT_AGENTS_DEFAULT" "$USER_AGENTS_MD"
 
-# --- OpenChamber default settings (seed + backfill defaultModel, update notifications off) ---
-ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle"
+# --- OpenChamber default settings (seed + backfill defaultAgent/defaultModel, update notifications off) ---
+# Native line defaults new sessions to Sisyphus (exact /agent name); the OMO
+# line passes no agent so its default-agent behavior is unchanged.
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle" "sisyphus"
+else
+  ensure_openchamber_default_settings "$OPENCHAMBER_DATA_DIR/settings.json" "opencode/big-pickle"
+fi
 
 echo "Default configs initialized"

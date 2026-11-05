@@ -1,8 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentModelsRoutes } from "./agent-models";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
+import { CONFIGURABLE_NATIVE_AGENTS } from "../lib/agent-model-types";
 
 describe("createAgentModelsRoutes — GET /api/agent-models", () => {
+  test("keeps the GET response shape and exposes a native chain in configured", async () => {
+    const routing = JSON.stringify({
+      version: 1,
+      chains: {
+        plan: { chain: [{ model: "opencode-go/kimi-k3" }, { model: "opencode/big-pickle" }] },
+      },
+    });
+    const handlers = [
+      { match: /jq -c '\.'/, stdout: routing },
+      ...listHandlers(),
+      {
+        match: /\/agent\b/,
+        stdout: JSON.stringify([
+          { name: "plan", mode: "subagent", model: { modelID: "kimi-k3", providerID: "opencode-go" } },
+        ]),
+      },
+    ];
+    const { deps, cleanup } = stubDeps(handlers, { routingEnabled: true });
+
+    const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models");
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(Object.keys(data).sort()).toEqual(["agents", "catalog", "catalogAvailable", "hasPassword", "providers"]);
+    expect(data.agents[0].configured).toEqual([
+      { model: "opencode-go/kimi-k3" },
+      { model: "opencode/big-pickle" },
+    ]);
+    expect(CONFIGURABLE_NATIVE_AGENTS).toHaveLength(12);
+    expect(CONFIGURABLE_NATIVE_AGENTS).toContain("multimodal-looker");
+    expect(CONFIGURABLE_NATIVE_AGENTS).toContain("sisyphus-junior");
+    cleanup();
+  });
+
   test("returns configured live subagents and excludes primary agents", async () => {
     const { deps, cleanup } = stubDeps(listHandlers());
     const res = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models");

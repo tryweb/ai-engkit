@@ -8,8 +8,26 @@ export interface ExecHandler {
   readonly exitCode?: number;
 }
 
-export function stubDeps(handlers: readonly ExecHandler[], password: string | null = "testpass") {
+type StubOptions = {
+  readonly password?: string | null;
+  readonly routingEnabled?: boolean;
+};
+
+export function stubDeps(
+  handlers: readonly ExecHandler[],
+  passwordOrOptions: string | null | StubOptions = "testpass",
+) {
   const calls: string[] = [];
+  let password: string | null;
+  let routingEnabled = false;
+  if (typeof passwordOrOptions === "string") {
+    password = passwordOrOptions;
+  } else if (passwordOrOptions === null) {
+    password = null;
+  } else {
+    password = passwordOrOptions.password ?? "testpass";
+    routingEnabled = passwordOrOptions.routingEnabled === true;
+  }
   const deps: AgentModelsDeps = {
     exec: async (command: string, _timeoutMs?: number): Promise<ExecResult> => {
       calls.push(command);
@@ -62,7 +80,10 @@ export function stubDeps(handlers: readonly ExecHandler[], password: string | nu
       return { stdout: "", stderr: "", exitCode: 1 };
     },
     restart: async () => ({ ok: true }),
-    readEnv: (): Record<string, string> => password === null ? {} : { OPENCODE_SERVER_PASSWORD: password },
+    readEnv: (): Record<string, string> => ({
+      ...(password === null ? {} : { OPENCODE_SERVER_PASSWORD: password }),
+      ...(routingEnabled ? { OMO_ENABLED: "0" } : {}),
+    }),
   };
   return {
     deps,

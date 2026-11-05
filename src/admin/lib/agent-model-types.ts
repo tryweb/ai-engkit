@@ -5,6 +5,8 @@ export interface FallbackModelEntry {
   readonly variant?: string;
 }
 
+export type ChainEntry = FallbackModelEntry;
+
 export interface AgentModelChange {
   readonly agent: string;
   readonly entries: readonly FallbackModelEntry[];
@@ -70,8 +72,23 @@ export interface AgentModelsDeps {
 }
 
 export const OMO_CONFIG = "~/.omo/omo.jsonc";
+export const ROUTING_CONFIG = "~/.config/opencode/routing.json";
 export const MANAGED_OPENCODE_DIR = "~/.config/openchamber/managed-opencode";
-export const CONFIGURABLE_NATIVE_AGENTS = ["general", "plan"] as const;
+export const CONFIGURABLE_OMO_AGENTS = ["general", "plan"] as const;
+export const CONFIGURABLE_NATIVE_AGENTS = [
+  "plan",
+  "prometheus",
+  "explore",
+  "oracle",
+  "librarian",
+  "multimodal-looker",
+  "metis",
+  "momus",
+  "sisyphus",
+  "hephaestus",
+  "atlas",
+  "sisyphus-junior",
+] as const;
 export const VARIANTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 export type VerificationMode = "readiness" | "inference";

@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildJqWriteCommand,
+  buildRoutingWriteCommand,
   displayNameToKey,
   OMO_CONFIG,
+  parseRoutingChain,
+  parseRoutingConfig,
   validateFallbackModels,
 } from "./agent-models";
 
@@ -97,6 +100,60 @@ describe("buildJqWriteCommand", () => {
     expect(command).not.toContain(".agents[$agent].permission");
     expect(command).not.toContain("$schema");
     expect(command).not.toContain(".agents[$agent].other");
+  });
+});
+
+describe("routing chains", () => {
+  test("accepts a clear and chains from one through ten entries", () => {
+    const chain = Array.from({ length: 10 }, (_, index) => ({ model: `provider/model-${index}` }));
+    expect(parseRoutingChain([]).ok).toBe(true);
+    expect(parseRoutingChain(chain).ok).toBe(true);
+    expect(parseRoutingChain(chain.slice(0, 1), false).ok).toBe(true);
+    expect(parseRoutingChain([], false)).toMatchObject({ ok: false, error: "configured chain must contain 1 to 10 entries" });
+    expect(parseRoutingChain([...chain, { model: "provider/too-many" }])).toMatchObject({ ok: false, error: "chain must contain at most 10 entries" });
+  });
+
+  test("parses native chains into the existing configured model shape", () => {
+    const config = parseRoutingConfig(JSON.stringify({
+      version: 1,
+      chains: {
+        "multimodal-looker": { chain: [{ model: "provider/primary", variant: "high" }, { model: "provider/fallback" }] },
+      },
+    }));
+
+    expect(config["multimodal-looker"]?.models).toEqual([
+      { model: "provider/primary", variant: "high" },
+      { model: "provider/fallback" },
+    ]);
+    expect(config["multimodal-looker"]?.model).toBe("provider/primary");
+    expect(config["multimodal-looker"]?.invalid).toBe(false);
+  });
+
+  test("marks only malformed routing agent chains invalid", () => {
+    const config = parseRoutingConfig(JSON.stringify({
+      version: 1,
+      chains: {
+        plan: { chain: [{ model: "not-a-reference" }] },
+        oracle: { chain: [{ model: "provider/valid" }] },
+      },
+    }));
+
+    expect(config.plan?.invalid).toBe(true);
+    expect(config.oracle?.invalid).toBe(false);
+  });
+
+  test("builds a bracket-keyed native write command for hyphenated agents", () => {
+    const command = buildRoutingWriteCommand("sisyphus-junior", [
+      { model: "provider/primary", variant: "max" },
+      { model: "provider/fallback" },
+    ]);
+
+    expect(command).toContain("--arg agent 'sisyphus-junior'");
+    expect(command).toContain("--argjson chain");
+    expect(command).toContain(".chains[$agent] = {chain: $chain}");
+    expect(command).toContain("mktemp");
+    expect(command).toContain("chmod 600");
+    expect(command).toContain("mv \"$tmp\" \"$routing\"");
   });
 });
 

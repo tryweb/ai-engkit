@@ -7,7 +7,7 @@ import { fetchModelMetadata } from "./model-metadata";
 import { capabilityScore, compareReferences, suggestForMode, type PolicyCapabilityCatalog, type SuggestionMode } from "./agent-model-suggestion-policy";
 import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type ProbeResult } from "./model-probe";
 import {
-  CONFIGURABLE_NATIVE_AGENTS,
+  CONFIGURABLE_OMO_AGENTS,
   MANAGED_OPENCODE_DIR,
   type AgentModelsDeps,
   type AgentModelChange,
@@ -168,7 +168,7 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     const configurable = new Set<string>();
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
-      if (knownKeys.has(key) || (CONFIGURABLE_NATIVE_AGENTS as readonly string[]).includes(key)) configurable.add(key);
+      if (knownKeys.has(key) || (CONFIGURABLE_OMO_AGENTS as readonly string[]).includes(key)) configurable.add(key);
     }
     const mapped = new Map<string, ResolvedModel>();
     for (const [name, model] of resolvedMap ?? []) {
@@ -179,6 +179,7 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
   }
 
   async function runOnce(): Promise<ReconcileSummary> {
+    if (lib.usesRoutingConfig) return { changed: 0, applied: 0, failed: 0, agents: [], results: [] };
     const password = lib.getServerPassword();
     if (password === null) return { changed: 0, applied: 0, failed: 0, agents: [], results: [] };
     const config = await lib.readAgentModelsConfig();

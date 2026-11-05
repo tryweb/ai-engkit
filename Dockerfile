@@ -395,6 +395,13 @@ COPY --chmod=0755 scripts/agent-model-health.sh /opt/ai-engkit/scripts/agent-mod
 COPY .opencode/baked-skills /opt/opencode/baked-skills
 RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 
+# 原生 agents（NATIVE_AGENTS=1 時由 entrypoint 部署到 ~/.config/opencode/agent）。
+# Bake 進 image 是因為 opencode-config 是 named volume，repo 工作樹不會出現在容器內。
+COPY .opencode/agents /opt/opencode/native-agents
+RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/native-agents
+
+COPY --chmod=0755 scripts/migrate-omo-to-routing-v1.sh /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh
+
 # ── ai-admin dashboard ─────────────────────────────────
 COPY src/admin/ /opt/admin/
 RUN bun install --cwd /opt/admin --no-cache 2>/dev/null || true

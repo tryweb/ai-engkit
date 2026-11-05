@@ -80,6 +80,20 @@ function probedModelIds(calls: readonly string[]): string[] {
 
 
 describe("agent model reconciler", () => {
+  test("does not run OMO reconciliation when native routing is enabled", async () => {
+    const ctx = fixture("{}", "{}", "[]");
+    const deps: AgentModelsDeps = {
+      ...ctx.deps,
+      readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass", OMO_ENABLED: "0" }),
+    };
+
+    const summary = await createAgentModelReconciler(deps).reconcileAll();
+
+    expect(summary).toEqual({ changed: 0, applied: 0, failed: 0, agents: [], results: [] });
+    expect(ctx.calls).toEqual([]);
+    ctx.cleanup();
+  });
+
   test("keeps a healthy primary and does not write", async () => {
     const ctx = fixture(
       JSON.stringify({ general: { model: "p/keep" } }),
