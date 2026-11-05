@@ -457,6 +457,10 @@ if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
   fi
 fi
 
+if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh ]; then
+  bash /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh || true
+fi
+
 if command -v lean-ctx &>/dev/null; then
   if ! grep -qF 'lean-ctx shell hook' "$HOME/.bashrc" 2>/dev/null; then
     lean-ctx setup --non-interactive --yes >/dev/null 2>&1 || true

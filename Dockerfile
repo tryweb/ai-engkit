@@ -400,6 +400,8 @@ RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 COPY .opencode/agents /opt/opencode/native-agents
 RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/native-agents
 
+COPY --chmod=0755 scripts/migrate-omo-to-routing-v1.sh /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh
+
 # ── ai-admin dashboard ─────────────────────────────────
 COPY src/admin/ /opt/admin/
 RUN bun install --cwd /opt/admin --no-cache 2>/dev/null || true
