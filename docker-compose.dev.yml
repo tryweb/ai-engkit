@@ -84,6 +84,9 @@ services:
       - ADMIN_PORT=8080
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-testadmin123}
       - AGENT_MODELS_DEBUG=1
+      # PoC native line: Admin uses routing.json backend (mirrors ai-dev
+      # NATIVE_AGENTS=1 implying OMO_ENABLED=0). Prod compose untouched.
+      - OMO_ENABLED=0
     restart: unless-stopped
 
 volumes:

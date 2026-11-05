@@ -274,6 +274,14 @@ normalize_omo_plugin_versions() {
   (IFS=,; printf '%s\n' "${normalized[*]}")
 }
 
+# --- line selection: native vs OMO ---
+# NATIVE_AGENTS=1 is the v1 PoC flag; OMO_ENABLED=0 is the v2-line flag.
+# Normalize here so every downstream gate sees one line: an explicit
+# OMO_ENABLED always wins, otherwise NATIVE_AGENTS=1 implies OMO_ENABLED=0.
+if [ -z "${OMO_ENABLED:-}" ] && [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  OMO_ENABLED=0
+fi
+
 # --- lean-ctx XDG migration (v3.8.5+) ---
 # Detect legacy single-dir layout (~/.config/lean-ctx with data files)
 # and migrate to XDG split (config→XDG_CONFIG_HOME, data→XDG_DATA_HOME, …).
