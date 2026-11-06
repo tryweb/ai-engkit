@@ -30,6 +30,8 @@ cell1() {
 
   docker exec ai-engkit-v2dev opencode --version 2>&1 | grep -q '2\.2\.5'
   echo "PASS: opencode 2.2.5 in V2 container"
+  docker exec ai-engkit-v2dev test ! -e /home/devuser/.bun/install/global/node_modules/7zip-bin/win
+  echo "PASS: Windows-only 7-Zip executables excluded from Linux image"
 
   [ "$(docker exec ai-engkit-v2dev jq -c '.plugin' /home/devuser/.config/opencode/opencode.json)" = "[]" ]
   echo "PASS: opencode.json plugin-free"

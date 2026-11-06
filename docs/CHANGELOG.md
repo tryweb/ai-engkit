@@ -3,6 +3,7 @@
 ## [2.0.17] - 2026-11-06
 
 ### Changed
+- Remove unused Windows 7-Zip executables from the Linux image to prevent bundled vulnerable binaries from being scanned.
 - Upgrade Docker Engine from 29.9.2 to 29.9.3.
 - Upgrade Docker Compose from 5.6.1 to 5.7.0.
 - Upgrade Docker Buildx from 0.38.1 to 0.38.2.

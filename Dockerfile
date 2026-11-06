@@ -173,6 +173,10 @@ RUN rm -rf ~/.bun/install/cache && \
     bun install -g @openchamber/web@${OPENCHAMBER_VERSION} --trust && \
     bun install -g @fission-ai/openspec@${OPENSPEC_VERSION} --trust && \
     bun install -g @code-yeongyu/comment-checker --trust && \
+    # OpenChamber's 7zip-bin is only used by its Windows model extractor;
+    # discard bundled PE executables from this Linux image (Grype scans them).
+    rm -rf ~/.bun/install/global/node_modules/7zip-bin/win && \
+    test ! -e ~/.bun/install/global/node_modules/7zip-bin/win && \
     # Remove cross-platform opencode binaries shipped as optional dependencies.
     # The container runs linux/amd64 with glibc; baseline/musl stubs are never used.
     rm -rf ~/.bun/install/global/node_modules/opencode-linux-x64-* && \
