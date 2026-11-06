@@ -106,7 +106,7 @@ async function invokeRoute(app, routePath, method = 'post', request = {}) {
         json: async () => ({ latestVersion: '1.25.0', updateAvailable: true }),
       };
     }
-    if (url.includes('registry.npmjs.org/@openchamber/web')) {
+    if (decodeURIComponent(url).includes('registry.npmjs.org/@openchamber/web')) {
       return { ok: true, json: async () => ({ 'dist-tags': { latest: '1.25.0' } }) };
     }
     throw new Error(`unexpected update-check request: ${url}`);
@@ -182,9 +182,9 @@ async function invokeRoute(app, routePath, method = 'post', request = {}) {
   const guardBlock = src.slice(guard, original);
   assert(guardBlock.includes('res.status(409).json('), '1.3 upgrade guard returns HTTP 409 JSON');
   assert(guardBlock.includes('success: false'), '1.3 upgrade refusal is not a success');
-  // The forward to /global/upgrade must only exist in the now-unreachable handler.
-  const forward = src.indexOf("buildOpenCodeUrl('/global/upgrade'");
-  assert(forward > original, '1.3 /global/upgrade forward is after the guard (unreachable)',
+  // v1 forwards to /global/upgrade; v2 invokes upgradeOpenCodeCli instead.
+  const forward = Math.max(src.indexOf("buildOpenCodeUrl('/global/upgrade'"), src.indexOf('upgradeOpenCodeCli()'));
+  assert(forward > original, '1.3 upgrade action is after the guard (unreachable)',
     `forward=${forward} original=${original}`);
 }
 

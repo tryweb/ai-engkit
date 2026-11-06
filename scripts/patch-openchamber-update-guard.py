@@ -309,6 +309,10 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # check_version/classify: all three anchors unique, all three classify
     # as apply). Anchor drift still fails the build closed.
     "2.5.3": PATCHES_V2,
+    # 2.6.1 adds stable/canary update checks, but retains the same install,
+    # CLI executeUpdate, and managed OpenCode upgrade seams. Verified against
+    # the published tarball; the existing anchors remain unique.
+    "2.6.1": PATCHES_V2,
 }
 
 

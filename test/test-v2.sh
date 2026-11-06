@@ -78,25 +78,28 @@ cell1() {
 
   # Reachable base: localhost works from a host shell; from inside a sibling
   # container (DooD) use the compose bridge gateway instead
-  local base=""
-  if curl -sf -m 8 -o /dev/null "http://localhost:${CHAMBER_V2DEV_PORT}/"; then
-    base="http://localhost:${CHAMBER_V2DEV_PORT}"
-  else
-    local gw
-    # Derive the gateway from ai-dev's own network attachment: the compose
-    # project name (v2dev here, v2 for prod) decides the network name, so a
-    # hardcoded name drifts. Fall back to the known project networks.
-    gw="$(docker inspect ai-engkit-v2dev --format '{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}}{{end}}' 2>/dev/null | head -1)" || gw=""
-    if [ -z "$gw" ]; then
-      for net in v2dev_default v2_default; do
-        gw="$(docker network inspect "$net" --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)" || gw=""
-        [ -n "$gw" ] && break
-      done
-    fi
-    if [ -n "$gw" ] && curl -sf -m 8 -o /dev/null "http://${gw}:${CHAMBER_V2DEV_PORT}/"; then
-      base="http://${gw}:${CHAMBER_V2DEV_PORT}"
-    fi
+  local base="" gw
+  # Derive the gateway from ai-dev's own network attachment: the compose
+  # project name (v2dev here, v2 for prod) decides the network name, so a
+  # hardcoded name drifts. Fall back to the known project networks.
+  gw="$(docker inspect ai-engkit-v2dev --format '{{range $k, $v := .NetworkSettings.Networks}}{{$v.Gateway}}{{end}}' 2>/dev/null | head -1)" || gw=""
+  if [ -z "$gw" ]; then
+    for net in v2dev_default v2_default; do
+      gw="$(docker network inspect "$net" --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null)" || gw=""
+      [ -n "$gw" ] && break
+    done
   fi
+  # Containers can be running before OpenChamber finishes starting.
+  for _ in $(seq 1 30); do
+    if curl -sf -m 2 -o /dev/null "http://localhost:${CHAMBER_V2DEV_PORT}/"; then
+      base="http://localhost:${CHAMBER_V2DEV_PORT}"
+      break
+    elif [ -n "$gw" ] && curl -sf -m 2 -o /dev/null "http://${gw}:${CHAMBER_V2DEV_PORT}/"; then
+      base="http://${gw}:${CHAMBER_V2DEV_PORT}"
+      break
+    fi
+    sleep 1
+  done
   if [ -n "$base" ]; then
     echo "PASS: OpenChamber responds at $base"
   else

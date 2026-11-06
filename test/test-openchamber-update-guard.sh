@@ -63,6 +63,19 @@ run_patch() { # $1 = package dir, $2 = expected version (stdout+stderr captured 
   OPENCHAMBER_PACKAGE_DIR="$1" OPENCHAMBER_EXPECTED_VERSION="$2" python3 "$PATCHER"
 }
 
+if python3 - "$PATCHER" <<'PY'
+import runpy, sys
+patcher = runpy.run_path(sys.argv[1])
+assert patcher['patches_for_version']('2.6.1') is patcher['PATCHES_V2']
+try:
+    patcher['patches_for_version']('2.6.2')
+except patcher['PatchError']:
+    pass
+else:
+    raise AssertionError('unknown version accepted')
+PY
+then pass "2.6.1-explicit-version-selection"; else fail "2.6.1-explicit-version-selection"; fi
+
 echo "== 1.1-1.3 happy path: guards applied and enforced =="
 
 PKG1="$(new_pkg)"
@@ -183,6 +196,22 @@ else
   fail "partial-state-diagnostic ($out6)"
 fi
 assert_eq "partial-state-no-writes" "$SNAP5" "$(snapshot "$PKG5")"
+
+# Optionally exercise the published 2.6.1 package, extracted separately so the
+# default regression suite stays offline. Never modify the supplied directory.
+if [ -n "${OPENCHAMBER_261_PACKAGE_DIR:-}" ]; then
+  echo "== 2.6.1 published package =="
+  PKG6="$(mktemp -d "$WORK/pkg.XXXXXX")"
+  cp -R "$OPENCHAMBER_261_PACKAGE_DIR/." "$PKG6/" || exit 2
+  out7="$(run_patch "$PKG6" "2.6.1" 2>&1)"; rc7=$?
+  assert_eq "2.6.1-patcher-succeeds" "0" "$rc7"
+  [ "$rc7" -ne 0 ] && echo "$out7" | sed 's/^/    | /'
+  if bun "$HARNESS" "$PKG6"; then pass "2.6.1-dynamic-guard-harness"; else fail "2.6.1-dynamic-guard-harness"; fi
+  SNAP6="$(snapshot "$PKG6")"
+  out8="$(run_patch "$PKG6" "2.6.1" 2>&1)"; rc8=$?
+  assert_eq "2.6.1-second-run-succeeds" "0" "$rc8"
+  assert_eq "2.6.1-second-run-byte-identical" "$SNAP6" "$(snapshot "$PKG6")"
+fi
 
 echo ""
 echo "passed: $PASS    failed: $FAIL"
