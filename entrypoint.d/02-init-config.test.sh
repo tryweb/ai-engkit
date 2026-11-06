@@ -404,6 +404,14 @@ run_undeploy() {
   bash "$undeploy_source"
 }
 
+run_prune_ghosts() {
+  local root="$1"
+  local prune_source="$root/prune.sh"
+  extract_function "prune_legacy_omo_ghosts" "$ENTRYPOINT_FILE" > "$prune_source"
+  printf '%s\n' "prune_legacy_omo_ghosts \"$root/cfg\"" >> "$prune_source"
+  bash "$prune_source"
+}
+
 assert_deploy_installs_and_records_manifest() {
   local root
   root="$(mktemp -d)"
@@ -518,6 +526,71 @@ assert_deploy_then_undeploy_roundtrip() {
   rm -rf "$root"
 }
 
+assert_prune_removes_legacy_ghost_files() {
+  local root zw
+  root="$(mktemp -d)"
+  zw="$(printf '\u200b')"
+  mkdir -p "$root/cfg/agents"
+  printf '%s\n' '# stale ghost' > "$root/cfg/agents/Atlas - Plan Executor.md"
+  printf '%s\n' '# stale ghost with sort prefix' > "$root/cfg/agents/${zw}Sisyphus - Ultraworker.md"
+  printf '%s\n' '# user custom agent, must survive' > "$root/cfg/agents/my-helper.md"
+  printf '%s\n' '# ordinary name without separator, must survive' > "$root/cfg/agents/Sisyphus-Junior.md"
+  run_prune_ghosts "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/cfg/agents/Atlas - Plan Executor.md"
+  test ! -e "$root/cfg/agents/${zw}Sisyphus - Ultraworker.md"
+  grep -Fq '# user custom agent, must survive' "$root/cfg/agents/my-helper.md"
+  grep -Fq '# ordinary name without separator, must survive' "$root/cfg/agents/Sisyphus-Junior.md"
+  grep -Fq 'legacy OMO ghost file' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_prune_strips_config_json_ghost_keys() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/cfg"
+  printf '%s\n' '{"agent":{"Sisyphus - ultraworker":{"permission":{}},"general":{"model":"opencode/big-pickle"},"plan":{}}}' > "$root/cfg/config.json"
+  run_prune_ghosts "$root" > "$root/stdout" 2> "$root/stderr"
+  ! jq -e '.agent | has("Sisyphus - ultraworker")' "$root/cfg/config.json" >/dev/null
+  test "$(jq -c '.agent.general.model' "$root/cfg/config.json")" = '"opencode/big-pickle"'
+  jq -e '.agent | has("plan")' "$root/cfg/config.json" >/dev/null
+  grep -Fq 'legacy OMO ghost keys' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_prune_is_noop_without_legacy_paths() {
+  local root status=0
+  root="$(mktemp -d)"
+  mkdir -p "$root/cfg"
+  run_prune_ghosts "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  test ! -e "$root/stderr" || test ! -s "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_prune_leaves_clean_config_json_alone() {
+  local root before after
+  root="$(mktemp -d)"
+  mkdir -p "$root/cfg"
+  printf '%s\n' '{"agent":{"general":{"model":"opencode/big-pickle"}}}' > "$root/cfg/config.json"
+  before="$(sha256sum "$root/cfg/config.json" | cut -d' ' -f1)"
+  run_prune_ghosts "$root" > "$root/stdout" 2> "$root/stderr"
+  after="$(sha256sum "$root/cfg/config.json" | cut -d' ' -f1)"
+  test "$before" = "$after"
+  ! grep -Fq 'legacy OMO ghost keys' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_prune_survives_malformed_config_json() {
+  local root status=0
+  root="$(mktemp -d)"
+  mkdir -p "$root/cfg"
+  printf '%s\n' '{"agent": {"broken": ' > "$root/cfg/config.json"
+  run_prune_ghosts "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  grep -Fq '"broken":' "$root/cfg/config.json"
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -550,6 +623,11 @@ assert_deploy_skips_missing_source
 assert_undeploy_removes_manifest_files_only
 assert_undeploy_without_manifest_is_noop
 assert_deploy_then_undeploy_roundtrip
+assert_prune_removes_legacy_ghost_files
+assert_prune_strips_config_json_ghost_keys
+assert_prune_is_noop_without_legacy_paths
+assert_prune_leaves_clean_config_json_alone
+assert_prune_survives_malformed_config_json
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
 printf '%s\n' 'Native agents deploy tests passed'

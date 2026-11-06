@@ -528,8 +528,41 @@ undeploy_native_agents() {
   rmdir "$dest_dir" 2>/dev/null || true
 }
 # END FUNCTION: undeploy_native_agents
+# BEGIN FUNCTION: prune_legacy_omo_ghosts
+prune_legacy_omo_ghosts() {
+  local config_dir="$1"
+  local legacy_dir="${config_dir}/agents"
+  local legacy_config="${config_dir}/config.json"
+  local ghost tmp
+  # Legacy OMO materialized display-name agents ("X - Y", sometimes with
+  # zero-width sort prefixes) in two places ai-engkit never manages:
+  # agents/*.md (plural dir, predates the native agent/ deployment) and
+  # config.json's agent object (leftover full config). On the plugin-free
+  # native line both resurface as duplicate primary agents in the picker,
+  # so remove exactly the " - " signature here. Anything without " - "
+  # (user custom agents, general/plan pins) is never touched.
+  if [ -d "$legacy_dir" ]; then
+    for ghost in "${legacy_dir}/"*" - "*.md; do
+      [ -e "$ghost" ] || continue
+      rm -f "$ghost"
+      echo "Native agents removed legacy OMO ghost file: $(basename "$ghost")" >&2
+    done
+  fi
+  if [ -f "$legacy_config" ] && jq -e '.agent | type == "object"' "$legacy_config" >/dev/null 2>&1; then
+    if jq -e '.agent | keys | map(select(contains(" - "))) | length > 0' "$legacy_config" >/dev/null 2>&1; then
+      tmp="$(mktemp "${legacy_config}.tmp.XXXXXX")" || return 0
+      if jq '.agent |= with_entries(select(.key | contains(" - ") | not))' "$legacy_config" > "$tmp" 2>/dev/null && mv "$tmp" "$legacy_config"; then
+        echo "Native agents removed legacy OMO ghost keys from config.json" >&2
+      else
+        rm -f "$tmp"
+      fi
+    fi
+  fi
+}
+# END FUNCTION: prune_legacy_omo_ghosts
 if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
   deploy_native_agents "/opt/opencode/native-agents" "$OPCODE_CONFIG_DIR/agent"
+  prune_legacy_omo_ghosts "$OPCODE_CONFIG_DIR"
 else
   # Leaving the native line must not leave its deployed files behind: with
   # the plugin back in charge they would register as duplicate plain-name
