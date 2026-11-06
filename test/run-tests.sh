@@ -467,6 +467,12 @@ else
   fail "playwright MCP server not configured in opencode.json"
 fi
 
+if docker exec "$CONTAINER" sh -c 'jq -e ".mcp.context7.type == \"remote\" and .mcp.context7.url == \"https://mcp.context7.com/mcp\" and .mcp.context7.enabled == true" /home/devuser/.config/opencode/opencode.json 2>/dev/null >/dev/null'; then
+  pass "Context7 remote MCP server configured in opencode.json"
+else
+  fail "Context7 remote MCP server not configured in opencode.json"
+fi
+
 # The MCP command is invoked via the pw-mcp wrapper, which internally calls
 # `bunx -y "@playwright/mcp@<version>"`. Verify the wrapper itself is installed
 # and on PATH so the MCP can resolve to it.

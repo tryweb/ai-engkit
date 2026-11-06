@@ -382,6 +382,11 @@ OPCODE_CONFIG=$(jq -n \
         command: ["codegraph", "serve", "--mcp"],
         enabled: true
       },
+      context7: {
+        type: "remote",
+        url: "https://mcp.context7.com/mcp",
+        enabled: true
+      },
       playwright: {
         type: "local",
         command: ["pw-mcp"],

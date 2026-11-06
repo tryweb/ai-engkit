@@ -7,7 +7,7 @@ This document summarizes the tools that ship with AI-EngKit and where to extend 
 AI-EngKit combines four layers of tooling in one container:
 
 1. **AI workspace** — OpenCode, OpenChamber, OpenSpec, plugins, and baked skills
-2. **MCP integrations** — CodeGraph, lean-ctx, and Playwright
+2. **MCP integrations** — CodeGraph, Context7, lean-ctx, and Playwright
 3. **Developer CLI stack** — git, `gh`, `glab`, Docker CLI, Compose, Buildx, bun, Python, and shell tools
 4. **Runtime extension points** — extra apt, Homebrew, and bun packages installed at container startup
 
@@ -18,6 +18,7 @@ AI-EngKit preconfigures these MCP servers for OpenCode:
 | Tool | Purpose | Notes |
 |------|---------|-------|
 | **CodeGraph** | Code graph, symbol relationships, dependency analysis | Installed as `@colbymchenry/codegraph` |
+| **Context7** | Up-to-date, version-specific library documentation | Remote `https://mcp.context7.com/mcp`; OAuth is available when required, no API key is needed for the default setup |
 | **lean-ctx** | Context-aware read/search/shell workflows | Includes persistent state and knowledge volumes |
 | **Playwright** | Browser automation and UI testing | Playwright-bundled Chromium; `pw-mcp` wrapper resolves the executable path and launches `@playwright/mcp` with `--executable-path --no-sandbox --headless` |
 
