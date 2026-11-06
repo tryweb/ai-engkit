@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+## [2.0.17] - 2026-11-06
+
+### Changed
+- Upgrade Docker Engine from 29.9.2 to 29.9.3.
+- Upgrade Docker Compose from 5.6.1 to 5.7.0.
+- Upgrade Docker Buildx from 0.38.1 to 0.38.2.
+- Upgrade OpenChamber from 2.5.3 to 2.6.1.
+- Upgrade GitLab CLI from 1.126.0 to 1.128.0.
+- Upgrade Playwright from 1.64.1 to 1.65.0.
+- Upgrade lean-ctx from 3.12.0 to 3.12.2.
+- Extend the OpenChamber update guard to 2.6.1 and wait for OpenChamber readiness in V2 cell1.
+
+### Documentation
+- Update the OpenCode migration assessment.
 
 ## [2.0.16] - 2026-11-02
 
@@ -2473,7 +2487,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...HEAD
+[2.0.17]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...v2.0.17
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
