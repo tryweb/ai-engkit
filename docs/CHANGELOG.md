@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [1.24.2] - 2026-11-06
+
+### Fixed
+- Prune legacy OMO ghosts from agents dir and config.json on native line
+
 ## [1.24.1] - 2026-11-06
 
 ### Fixed
@@ -2407,7 +2412,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.2...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2604,3 +2609,4 @@
 [1.23.5]: https://github.com/tryweb/ai-engkit/compare/v1.23.4...v1.23.5
 [1.24.0]: https://github.com/tryweb/ai-engkit/compare/v1.23.5...v1.24.0
 [1.24.1]: https://github.com/tryweb/ai-engkit/compare/v1.24.0...v1.24.1
+[1.24.2]: https://github.com/tryweb/ai-engkit/compare/v1.24.1...v1.24.2
