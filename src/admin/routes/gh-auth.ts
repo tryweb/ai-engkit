@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
 import { getGhStatusDetails, startDeviceFlow, logoutGh } from "../lib/gh-auth";
+import { updateGitHubAuthState } from "../lib/git-hosting-auth-state";
 
 const ghAuth = new Hono();
 
@@ -37,6 +38,11 @@ async function getGhUserInfo(): Promise<GhUserInfo | null> {
 
 ghAuth.get("/api/auth/gh/status", async (c) => {
   const details = await getGhStatusDetails();
+  try {
+    await updateGitHubAuthState(details);
+  } catch {
+    console.error("GitHub auth status persistence failed");
+  }
   return c.json({
     status: details.validity === "valid" ? "authenticated" : "not authenticated",
     ...details,
@@ -57,6 +63,11 @@ ghAuth.post("/api/auth/gh/start", async (c) => {
 
 ghAuth.post("/api/auth/gh/logout", async (c) => {
   await logoutGh();
+  try {
+    await updateGitHubAuthState(await getGhStatusDetails());
+  } catch {
+    console.error("GitHub auth status persistence failed");
+  }
   return c.json({ ok: true });
 });
 

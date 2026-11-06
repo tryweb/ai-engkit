@@ -6,6 +6,7 @@ import {
   EMPTY_GIT_HOSTING_AUTH_STATE,
   loadGitHostingAuthState,
   saveGitHostingAuthState,
+  updateGitHubAuthState,
   withGitHostingAuthStateLock,
   type GitHostingAuthState,
 } from "./git-hosting-auth-state";
@@ -105,6 +106,43 @@ describe("git hosting auth state", () => {
 
     expect(existsSync(path)).toBe(true);
     expect(readFileSync(path, "utf8")).toContain("gitlab.example.com");
+  });
+
+  test("updates GitHub health immediately without losing GitLab state", async () => {
+    useTempStatePath();
+    saveGitHostingAuthState(fixture());
+
+    const updated = await updateGitHubAuthState({
+      validity: "valid",
+      expiry: "unknown",
+      expiry_unknown: true,
+      reauthorization_guidance: null,
+    }, Date.parse("2026-11-07T12:00:00.000Z"));
+
+    expect(updated.github).toEqual({
+      validity: "valid",
+      expiry: "unknown",
+      expiry_known: false,
+      expiry_unknown: true,
+      checked_at: "2026-11-07T12:00:00.000Z",
+    });
+    expect(updated.gitlab).toEqual(fixture().gitlab);
+    expect(loadGitHostingAuthState()).toEqual(updated);
+  });
+
+  test("persists invalid and unreachable live checks", async () => {
+    useTempStatePath();
+    for (const validity of ["invalid-revoked-expired", "unreachable"] as const) {
+      const updated = await updateGitHubAuthState({
+        validity,
+        expiry: "unknown",
+        expiry_unknown: true,
+        reauthorization_guidance: validity === "unreachable" ? null : "Reauthorize GitHub with the Connect GitHub device flow.",
+      });
+      expect(updated.github.validity).toBe(validity);
+      expect(updated.github.expiry_unknown).toBe(true);
+      expect(loadGitHostingAuthState().github).toEqual(updated.github);
+    }
   });
 
   test("serializes concurrent state updates through the shared lock", async () => {

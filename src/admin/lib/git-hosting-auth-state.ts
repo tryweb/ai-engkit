@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
-import type { GhExpiry, GhValidity } from "./gh-auth";
+import type { GhExpiry, GhStatusDetails, GhValidity } from "./gh-auth";
 import {
   GITLAB_TOKEN_ROTATION_ERROR_CODES,
   type GitLabTokenRotationErrorCode,
@@ -65,6 +65,7 @@ export async function withGitHostingAuthStateLock<T>(operation: () => T | Promis
 }
 
 const ERROR_CODES = new Set<string>(GITLAB_TOKEN_ROTATION_ERROR_CODES);
+const GITHUB_AUTH_STATE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function statePath(): string {
   return process.env.GIT_HOSTING_AUTH_STATE_PATH || GIT_HOSTING_AUTH_STATE_DEFAULT_PATH;
@@ -150,4 +151,28 @@ export function saveGitHostingAuthState(state: GitHostingAuthState): void {
   writeFileSync(tmp, `${JSON.stringify(redactedState(state), null, 2)}\n`, { mode: 0o600 });
   renameSync(tmp, path);
   chmodSync(path, 0o600);
+}
+
+export async function updateGitHubAuthState(details: GhStatusDetails, now = Date.now()): Promise<GitHostingAuthState> {
+  return withGitHostingAuthStateLock(() => {
+    const current = loadGitHostingAuthState();
+    const github: GitHubAuthSummary = {
+      validity: details.validity,
+      expiry: details.expiry,
+      expiry_known: !details.expiry_unknown,
+      expiry_unknown: details.expiry_unknown,
+      checked_at: new Date(now).toISOString(),
+    };
+    const previousCheckedAt = Date.parse(current.github.checked_at);
+    const unchanged = current.github.validity === github.validity &&
+      current.github.expiry === github.expiry &&
+      current.github.expiry_known === github.expiry_known &&
+      current.github.expiry_unknown === github.expiry_unknown;
+    if (unchanged && Number.isFinite(previousCheckedAt) && now - previousCheckedAt < GITHUB_AUTH_STATE_REFRESH_INTERVAL_MS) {
+      return current;
+    }
+    const updated = { ...current, github };
+    saveGitHostingAuthState(updated);
+    return updated;
+  });
 }
