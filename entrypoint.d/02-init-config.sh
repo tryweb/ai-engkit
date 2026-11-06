@@ -280,8 +280,7 @@ normalize_omo_plugin_versions() {
 # ($HOME/.config/opencode/.native-agents, on the opencode-config volume so
 # it survives container restarts) selects the native line. Removing the
 # marker selects the OMO line. No .env or image change is required.
-# This runs first so the OMO_ENABLED derivation below sees the effective
-# line; otherwise a marker-only boot would skip the migrate block.
+# This runs first so the OMO_ENABLED derivation below sees the effective line.
 if [ -z "${NATIVE_AGENTS:-}" ] && [ -f "$HOME/.config/opencode/.native-agents" ]; then
   NATIVE_AGENTS=1
 fi
@@ -446,7 +445,9 @@ initialize_omo_permissions "$OMO_CONFIG_FILE" "$DEFAULT_OMO_CONFIG"
 if ! normalize_omo_config "$OMO_CONFIG_FILE"; then
   echo "Warning: OMO config normalization was not applied; review the reported path" >&2
 fi
-merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+if [ "${OMO_ENABLED:-1}" != "0" ]; then
+  merge_native_agent_overrides "$OPCODE_CONFIG_FILE" "$OMO_CONFIG_FILE"
+fi
 fi
 
 # --- Native agents (NATIVE_AGENTS=1 only) ---
@@ -560,7 +561,9 @@ prune_legacy_omo_ghosts() {
   fi
 }
 # END FUNCTION: prune_legacy_omo_ghosts
-if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+if [ "${NATIVE_AGENTS:-0}" = "1" ] || [ "${OMO_ENABLED:-1}" = "0" ]; then
+  source "$(dirname "$0")/lib-native-routing-heads.bash"
+  sync_native_routing_heads "$OPCODE_CONFIG_FILE" "$OPCODE_CONFIG_DIR/routing.json"
   deploy_native_agents "/opt/opencode/native-agents" "$OPCODE_CONFIG_DIR/agent"
   prune_legacy_omo_ghosts "$OPCODE_CONFIG_DIR"
 else
@@ -569,10 +572,6 @@ else
   # primary agents next to the plugin's "X - Y" display names. Only files
   # this deployment recorded in its manifest are removed.
   undeploy_native_agents "$OPCODE_CONFIG_DIR/agent"
-fi
-
-if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh ]; then
-  bash /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh || true
 fi
 
 if command -v lean-ctx &>/dev/null; then

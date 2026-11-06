@@ -1,5 +1,10 @@
 # Native Agent Bridge Reconcile Race (OMO → opencode.json Stale After Startup Reconcile)
 
+> **Historical OMO-era note:** This document describes the former OMO-backed native
+> bridge and is retained as incident history. The native path no longer migrates
+> or syncs from `omo.jsonc`; native startup seeds agent heads from `routing.json`,
+> and automatic model reconciliation is disabled in native mode.
+
 ## Context
 
 `ai-dev` startup has two phases that must agree on native agent models (`general`, `plan`):

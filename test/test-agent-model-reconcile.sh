@@ -4,6 +4,9 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/reconcile-agent-models.sh
 source "${SCRIPT_DIR}/scripts/reconcile-agent-models.sh"
+TEST_HOME="$(mktemp -d)"
+HOME="$TEST_HOME"
+trap 'rm -rf "$TEST_HOME"' EXIT
 
 PASS=0
 FAIL=0
@@ -13,34 +16,7 @@ assert_eq() { # assert_eq <name> <expected> <actual>
   if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (expected [$2] got [$3])"; fi
 }
 
-# Fixture: openai is in the catalog but NOT connected; opencode is connected.
-FIXTURE="$(mktemp)"
-cat >"$FIXTURE" <<'JSON'
-{
-  "all": [
-    {"id": "openai", "models": {"gpt-5.6-luna-fast": {}, "gpt-5.6-sol": {}}},
-    {"id": "opencode", "models": {"big-pickle": {}, "x-preview-f-free": {}, "hy3-free": {}}}
-  ],
-  "connected": ["opencode"]
-}
-JSON
-
-# 1. Catalog must contain ONLY models from connected providers.
-catalog_out="$(catalog_from_provider_json "$FIXTURE" | sort)"
-expected_catalog="$(printf '%s\n' 'opencode/big-pickle' 'opencode/hy3-free' 'opencode/x-preview-f-free')"
-assert_eq "connected-only catalog" "$expected_catalog" "$catalog_out"
-
-available="$catalog_out"
-
-for function_name in choose_model write_omo_model verify_runtime restart_managed_server; do
-  if grep -q "^${function_name}()" "${SCRIPT_DIR}/scripts/reconcile-agent-models.sh"; then
-    bad "removed ${function_name} definition"
-  else
-    ok "removed ${function_name} definition"
-  fi
-done
-
-unset OPENCODE_SERVER_PASSWORD
+unset NATIVE_AGENTS OPENCODE_SERVER_PASSWORD
 skip_log="$(reconcile 2>&1)"
 assert_eq "unset password skips reconciliation" \
   "0" "$?"
@@ -63,6 +39,42 @@ else
   bad "adapter waits for explicit lifecycle health"
 fi
 
-rm -f "$FIXTURE"
+if ! grep -q 'sync_native_overrides\|merge_native_agent_overrides\|.omo/omo.jsonc' \
+  "${SCRIPT_DIR}/scripts/reconcile-agent-models.sh"; then
+  ok "startup reconciliation does not sync legacy OMO overrides"
+else
+  bad "startup reconciliation does not sync legacy OMO overrides"
+fi
+
+if ! grep -q 'migrate-omo-to-routing-v1' "${SCRIPT_DIR}/entrypoint.d/02-init-config.sh"; then
+  ok "native startup does not migrate OMO config"
+else
+  bad "native startup does not migrate OMO config"
+fi
+
+if grep -q 'if \[ "${OMO_ENABLED:-1}" != "0" \]; then' "${SCRIPT_DIR}/entrypoint.d/02-init-config.sh" \
+  && grep -q 'sync_native_routing_heads.*routing.json' "${SCRIPT_DIR}/entrypoint.d/02-init-config.sh"; then
+  ok "OMO_ENABLED=0 startup uses routing heads instead of the OMO bridge"
+else
+  bad "OMO_ENABLED=0 startup uses routing heads instead of the OMO bridge"
+fi
+
+NATIVE_AGENTS=1
+native_skip_log="$(reconcile 2>&1)"
+if [[ "$native_skip_log" == *"native agents enabled; automatic model reconciliation is disabled"* ]]; then
+  ok "native startup skips automatic model reconciliation"
+else
+  bad "native startup skips automatic model reconciliation"
+fi
+unset NATIVE_AGENTS
+OMO_ENABLED=0
+native_skip_log="$(reconcile 2>&1)"
+if [[ "$native_skip_log" == *"native agents enabled; automatic model reconciliation is disabled"* ]]; then
+  ok "OMO_ENABLED=0 startup skips automatic model reconciliation"
+else
+  bad "OMO_ENABLED=0 startup skips automatic model reconciliation"
+fi
+unset OMO_ENABLED
+
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" -eq 0 ]

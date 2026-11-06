@@ -33,21 +33,16 @@ Every chain has 1..10 entries. Each entry requires `model` in
 
 The defaults are a 60-second cooldown, at most 3 fallback attempts, and no
 fallback notification. Agent-level overrides use `cooldownSeconds`,
-`maxFallbackAttempts`, and `notifyOnFallback`. V1 currently migrates only the
-head model and variant from OMO; it does not infer fallback entries.
+`maxFallbackAttempts`, and `notifyOnFallback`.
 
-## OMO Migration (runs at every native-line boot)
+## Native startup synchronization
 
-`entrypoint.d` invokes `scripts/migrate-omo-to-routing-v1.sh` on the native
-line. It reads `~/.omo/omo.jsonc`, writes `routing.json`, and seeds each
-migrated agent's head into `opencode.json` under `agent.<name>.model` and,
-when present, `agent.<name>.variant`. It does not remove or modify the OMO
-source file.
+Native startup does not use, migrate, or synchronize model values from
+`~/.omo/omo.jsonc`. `routing.json` is the sole source for native routing
+chains. After regenerating `opencode.json`, entrypoint seeds each non-empty chain's head into
+`agent.<name>.model` and, when present, `agent.<name>.variant` so OpenCode's
+native `/agent` assignments match the routing configuration after a restart.
 
-Routing chains are built from OMO only once: if a routing file already has
-one or more chains, they are kept as-is. Native agent heads are re-seeded
-from the effective routing chains on every boot, because `opencode.json` is
-regenerated from scratch and would otherwise lose them on any container
-recreate. A missing or invalid OMO input (with no routing yet) is a
-successful soft-skip. OMO `models` and `fallback_models` values are ignored
-with a warning; only scalar `model` and `variant` are migrated.
+If `routing.json` is absent, startup leaves the generated agent assignments
+unchanged. Native startup reconciliation does not auto-select or replace
+models; model changes are made through the native Agent Models apply flow.

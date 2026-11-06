@@ -33,6 +33,9 @@ services:
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      # Keep the dev runtime aligned with ai-admin's native routing backend.
+      NATIVE_AGENTS: ${NATIVE_AGENTS:-1}
+      OMO_ENABLED: ${OMO_ENABLED:-0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
