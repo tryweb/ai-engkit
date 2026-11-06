@@ -536,7 +536,9 @@ jobs:
               image: ai-engkit:updated
               container_name: ci-test
               environment:
-                - OPENCODE_PLUGINS=oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git
+                NATIVE_AGENTS: "0"
+                OMO_ENABLED: "1"
+                OPENCODE_PLUGINS: "oh-my-openagent,superpowers@git+https://github.com/obra/superpowers.git"
               volumes:
                 - workspace-dev:/home/devuser/workspace
                 - opencode-data-dev:/home/devuser/.local/share/opencode
@@ -547,6 +549,8 @@ jobs:
                 - /var/run/docker.sock:/var/run/docker.sock
             ai-admin:
               image: ai-engkit:updated
+              environment:
+                OMO_ENABLED: "1"
           EOF
           docker compose -p dev -f docker-compose.dev.yml -f docker-compose.override.yml up -d
           echo "Waiting for services to start..."
