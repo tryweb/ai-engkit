@@ -1,7 +1,6 @@
 ---
 description: Planning agent for codebase analysis and implementation planning without direct edits
 mode: primary
-model: opencode-go/kimi-k3
 permission:
   edit: deny
   bash: deny

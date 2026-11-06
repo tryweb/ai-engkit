@@ -43,6 +43,9 @@ export function stubDeps(
       if (command.includes(".native-agent-overrides.tmp")) {
         return { stdout: "", stderr: "", exitCode: 0 };
       }
+      if (command.includes(".routing-heads.tmp")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
       if (command.includes("/provider")) {
         return {
           stdout: JSON.stringify({

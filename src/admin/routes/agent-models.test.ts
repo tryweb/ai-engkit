@@ -46,6 +46,7 @@ describe("native routing PUT compatibility", () => {
     expect(await response.json()).toMatchObject({ results: { plan: { ok: true, status: "verified" } } });
     expect(calls.some((call) => call.includes(".chains[$agent] = {chain: $chain}"))).toBe(true);
     expect(calls.some((call) => call.includes(".native-agent-overrides.tmp"))).toBe(false);
+    expect(calls.some((call) => call.includes(".routing-heads.tmp"))).toBe(true);
     cleanup();
   });
 

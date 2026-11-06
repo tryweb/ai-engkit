@@ -1,7 +1,6 @@
 ---
 description: Prometheus planning and deep-research agent for structured analysis and plan synthesis
 mode: subagent
-model: opencode-go/kimi-k3
 permission:
   edit: deny
   bash: deny
