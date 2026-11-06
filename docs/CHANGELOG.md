@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 
+## [1.24.1] - 2026-11-06
+
+### Fixed
+- Remove deployed native agents when leaving native line
+- Prune stale native agents and OMO display-name ghosts on deploy
+
 ## [1.24.0] - 2026-11-06
 
 ### Added
@@ -2401,7 +2407,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2597,3 +2603,4 @@
 [1.23.4]: https://github.com/tryweb/ai-engkit/compare/v1.23.3...v1.23.4
 [1.23.5]: https://github.com/tryweb/ai-engkit/compare/v1.23.4...v1.23.5
 [1.24.0]: https://github.com/tryweb/ai-engkit/compare/v1.23.5...v1.24.0
+[1.24.1]: https://github.com/tryweb/ai-engkit/compare/v1.24.0...v1.24.1
