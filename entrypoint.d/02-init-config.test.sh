@@ -396,6 +396,14 @@ run_deploy() {
   bash "$deploy_source"
 }
 
+run_undeploy() {
+  local root="$1"
+  local undeploy_source="$root/undeploy.sh"
+  extract_function "undeploy_native_agents" "$ENTRYPOINT_FILE" > "$undeploy_source"
+  printf '%s\n' "undeploy_native_agents \"$root/dest\"" >> "$undeploy_source"
+  bash "$undeploy_source"
+}
+
 assert_deploy_installs_and_records_manifest() {
   local root
   root="$(mktemp -d)"
@@ -471,6 +479,45 @@ assert_deploy_skips_missing_source() {
   rm -rf "$root"
 }
 
+assert_undeploy_removes_manifest_files_only() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/dest"
+  printf '%s\n' '# Atlas' > "$root/dest/atlas.md"
+  printf '%s\n' '# user custom agent, must survive' > "$root/dest/my-helper.md"
+  printf '%s\n' 'atlas.md' '../escape.md' '' > "$root/dest/.ai-engkit-native-manifest"
+  run_undeploy "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/dest/atlas.md"
+  test ! -e "$root/dest/.ai-engkit-native-manifest"
+  grep -Fq '# user custom agent, must survive' "$root/dest/my-helper.md"
+  rm -rf "$root"
+}
+
+assert_undeploy_without_manifest_is_noop() {
+  local root status=0
+  root="$(mktemp -d)"
+  mkdir -p "$root/dest"
+  printf '%s\n' '# user custom agent, must survive' > "$root/dest/my-helper.md"
+  run_undeploy "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  grep -Fq '# user custom agent, must survive' "$root/dest/my-helper.md"
+  rm -rf "$root"
+}
+
+assert_deploy_then_undeploy_roundtrip() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/src"
+  printf '%s\n' '# Atlas' > "$root/src/atlas.md"
+  run_deploy "$root" > /dev/null 2>&1
+  test -f "$root/dest/atlas.md"
+  run_undeploy "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/dest/atlas.md"
+  test ! -e "$root/dest/.ai-engkit-native-manifest"
+  test ! -e "$root/dest"
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -500,6 +547,9 @@ assert_deploy_removes_omo_display_name_ghosts
 assert_deploy_prunes_dropped_agent_via_manifest
 assert_deploy_is_idempotent
 assert_deploy_skips_missing_source
+assert_undeploy_removes_manifest_files_only
+assert_undeploy_without_manifest_is_noop
+assert_deploy_then_undeploy_roundtrip
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
 printf '%s\n' 'Native agents deploy tests passed'

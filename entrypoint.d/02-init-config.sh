@@ -508,8 +508,34 @@ deploy_native_agents() {
   echo "Native agents deployed to $dest_dir"
 }
 # END FUNCTION: deploy_native_agents
+# BEGIN FUNCTION: undeploy_native_agents
+undeploy_native_agents() {
+  local dest_dir="$1"
+  local manifest_file="${dest_dir}/.ai-engkit-native-manifest"
+  local base
+  [ -f "$manifest_file" ] || return 0
+  while IFS= read -r base || [ -n "$base" ]; do
+    [ -n "$base" ] || continue
+    case "$base" in
+      *"/"*) continue ;;
+    esac
+    if [ -f "${dest_dir}/${base}" ]; then
+      rm -f "${dest_dir}/${base}"
+      echo "Native agents removed (OMO line): $base" >&2
+    fi
+  done < "$manifest_file"
+  rm -f "$manifest_file"
+  rmdir "$dest_dir" 2>/dev/null || true
+}
+# END FUNCTION: undeploy_native_agents
 if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
   deploy_native_agents "/opt/opencode/native-agents" "$OPCODE_CONFIG_DIR/agent"
+else
+  # Leaving the native line must not leave its deployed files behind: with
+  # the plugin back in charge they would register as duplicate plain-name
+  # primary agents next to the plugin's "X - Y" display names. Only files
+  # this deployment recorded in its manifest are removed.
+  undeploy_native_agents "$OPCODE_CONFIG_DIR/agent"
 fi
 
 if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh ]; then
