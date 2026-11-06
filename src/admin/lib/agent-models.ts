@@ -246,17 +246,19 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     // Native line: the runtime resolves agent models from opencode.json heads,
   // so a routing write must also patch the applied agents' heads or /agent
   // keeps reporting n/a until the next container boot (migrate runs only at
-  // boot). Single atomic jq over all changes: all heads or none.
+  // boot). Single atomic jq over all changes: all heads or none. Values ride
+  // in via --argjson (never inline literals) so agent/model strings cannot
+  // break shell quoting.
   async function syncRoutingHeads(changes: readonly AgentModelChange[]): Promise<{ readonly ok: boolean; readonly error?: string }> {
     const op = "$HOME/.config/opencode/opencode.json";
-    const parts = changes.map(({ agent, entries }) => {
-      const q = (v: string): string => "'" + v.replaceAll("'", "'\"'\"'") + "'";
-      const [primary] = entries;
-      if (primary === undefined) return `.agent[${q(agent)}] |= (del(.model) | del(.variant))`;
-      const variant = primary.variant !== undefined ? ` | .agent[${q(agent)}].variant = ${q(primary.variant)}` : ` | del(.agent[${q(agent)}].variant)`;
-      return `.agent[${q(agent)}].model = ${q(primary.model)}${variant}`;
-    });
-    const cmd = `tmp="${op}.routing-heads.tmp"; if [ ! -f "${op}" ]; then printf '%s\n' 'opencode.json missing' >&2; exit 1; fi; if jq '${parts.join(" | ")}' "${op}" > "$tmp" 2>/dev/null && mv "$tmp" "${op}"; then exit 0; else code=$?; rm -f "$tmp"; exit "$code"; fi`;
+    const shellQuote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+    const spec = JSON.stringify(changes.map(({ agent, entries }) => ({
+      agent,
+      model: entries[0]?.model ?? null,
+      variant: entries[0]?.variant ?? null,
+    })));
+    const update = "reduce $spec[] as $s (.; if $s.model == null then .agent[$s.agent] |= (del(.model) | del(.variant)) else .agent[$s.agent].model = $s.model | if $s.variant == null then del(.agent[$s.agent].variant) else .agent[$s.agent].variant = $s.variant end end)";
+    const cmd = `tmp="${op}.routing-heads.tmp"; if [ ! -f "${op}" ]; then printf '%s\n' 'opencode.json missing' >&2; exit 1; fi; if jq --argjson spec ${shellQuote(spec)} '${update}' "${op}" > "$tmp" 2>/dev/null && mv "$tmp" "${op}"; then exit 0; else code=$?; rm -f "$tmp"; exit "$code"; fi`;
     try {
       const result = await deps.exec(cmd, 10_000);
       return result.exitCode === 0
