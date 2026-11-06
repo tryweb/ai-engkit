@@ -36,17 +36,18 @@ fallback notification. Agent-level overrides use `cooldownSeconds`,
 `maxFallbackAttempts`, and `notifyOnFallback`. V1 currently migrates only the
 head model and variant from OMO; it does not infer fallback entries.
 
-## One-time OMO Migration
+## OMO Migration (runs at every native-line boot)
 
-Run `scripts/migrate-omo-to-routing-v1.sh` in the target user's environment.
-It reads `~/.omo/omo.jsonc`, writes `routing.json`, and seeds each migrated
-agent's head into `opencode.json` under `agent.<name>.model` and, when present,
-`agent.<name>.variant`. It does not remove or modify the OMO source file.
+`entrypoint.d` invokes `scripts/migrate-omo-to-routing-v1.sh` on the native
+line. It reads `~/.omo/omo.jsonc`, writes `routing.json`, and seeds each
+migrated agent's head into `opencode.json` under `agent.<name>.model` and,
+when present, `agent.<name>.variant`. It does not remove or modify the OMO
+source file.
 
-If a routing file already has one or more chains, migration exits successfully
-without changing either destination. A missing or invalid OMO input is a
+Routing chains are built from OMO only once: if a routing file already has
+one or more chains, they are kept as-is. Native agent heads are re-seeded
+from the effective routing chains on every boot, because `opencode.json` is
+regenerated from scratch and would otherwise lose them on any container
+recreate. A missing or invalid OMO input (with no routing yet) is a
 successful soft-skip. OMO `models` and `fallback_models` values are ignored
 with a warning; only scalar `model` and `variant` are migrated.
-
-This deliberately remains a standalone PoC. It is not wired into
-`entrypoint.d`, and does not include the V2 plugin's server integration.

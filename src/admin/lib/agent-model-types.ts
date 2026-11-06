@@ -76,6 +76,7 @@ export const ROUTING_CONFIG = "~/.config/opencode/routing.json";
 export const MANAGED_OPENCODE_DIR = "~/.config/openchamber/managed-opencode";
 export const CONFIGURABLE_OMO_AGENTS = ["general", "plan"] as const;
 export const CONFIGURABLE_NATIVE_AGENTS = [
+  "general",
   "plan",
   "prometheus",
   "explore",

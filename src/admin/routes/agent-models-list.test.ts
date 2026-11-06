@@ -32,7 +32,8 @@ describe("createAgentModelsRoutes — GET /api/agent-models", () => {
       { model: "opencode-go/kimi-k3" },
       { model: "opencode/big-pickle" },
     ]);
-    expect(CONFIGURABLE_NATIVE_AGENTS).toHaveLength(12);
+    expect(CONFIGURABLE_NATIVE_AGENTS).toHaveLength(13);
+    expect(CONFIGURABLE_NATIVE_AGENTS).toContain("general");
     expect(CONFIGURABLE_NATIVE_AGENTS).toContain("multimodal-looker");
     expect(CONFIGURABLE_NATIVE_AGENTS).toContain("sisyphus-junior");
     cleanup();

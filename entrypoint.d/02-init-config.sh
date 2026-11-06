@@ -275,6 +275,17 @@ normalize_omo_plugin_versions() {
 }
 
 # --- line selection: native vs OMO ---
+# Marker file fallback for the Admin UI toggle: explicit NATIVE_AGENTS env
+# always wins; when it is unset, a marker written by Admin
+# ($HOME/.config/opencode/.native-agents, on the opencode-config volume so
+# it survives container restarts) selects the native line. Removing the
+# marker selects the OMO line. No .env or image change is required.
+# This runs first so the OMO_ENABLED derivation below sees the effective
+# line; otherwise a marker-only boot would skip the migrate block.
+if [ -z "${NATIVE_AGENTS:-}" ] && [ -f "$HOME/.config/opencode/.native-agents" ]; then
+  NATIVE_AGENTS=1
+fi
+
 # NATIVE_AGENTS=1 is the v1 PoC flag; OMO_ENABLED=0 is the v2-line flag.
 # Normalize here so every downstream gate sees one line: an explicit
 # OMO_ENABLED always wins, otherwise NATIVE_AGENTS=1 implies OMO_ENABLED=0.
