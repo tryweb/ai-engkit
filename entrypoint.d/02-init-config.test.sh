@@ -388,6 +388,89 @@ assert_normal_sync_is_atomic_and_idempotent() {
   rm -rf "$root"
 }
 
+run_deploy() {
+  local root="$1"
+  local deploy_source="$root/deploy.sh"
+  extract_function "deploy_native_agents" "$ENTRYPOINT_FILE" > "$deploy_source"
+  printf '%s\n' "deploy_native_agents \"$root/src\" \"$root/dest\"" >> "$deploy_source"
+  bash "$deploy_source"
+}
+
+assert_deploy_installs_and_records_manifest() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/src"
+  printf '%s\n' '---' 'description: Atlas agent' 'mode: primary' '---' '# Atlas' > "$root/src/atlas.md"
+  printf '%s\n' '---' 'description: Sisyphus agent' 'mode: primary' '---' '# Sisyphus' > "$root/src/sisyphus.md"
+  run_deploy "$root" > "$root/stdout" 2> "$root/stderr"
+  cmp -s "$root/src/atlas.md" "$root/dest/atlas.md"
+  cmp -s "$root/src/sisyphus.md" "$root/dest/sisyphus.md"
+  grep -Fxq 'atlas.md' "$root/dest/.ai-engkit-native-manifest"
+  grep -Fxq 'sisyphus.md' "$root/dest/.ai-engkit-native-manifest"
+  grep -Fq 'Native agents deployed to' "$root/stdout"
+  rm -rf "$root"
+}
+
+assert_deploy_removes_omo_display_name_ghosts() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/src" "$root/dest"
+  printf '%s\n' '# Atlas' > "$root/src/atlas.md"
+  printf '%s\n' '# stale ghost' > "$root/dest/Atlas - Plan Executor.md"
+  printf '%s\n' '# stale ghost' > "$root/dest/Sisyphus - ultraworker.md"
+  printf '%s\n' '# user custom agent, must survive' > "$root/dest/my-helper.md"
+  run_deploy "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/dest/Atlas - Plan Executor.md"
+  test ! -e "$root/dest/Sisyphus - Ultraworker.md"
+  test ! -e "$root/dest/Sisyphus - ultraworker.md"
+  grep -Fq '# user custom agent, must survive' "$root/dest/my-helper.md"
+  cmp -s "$root/src/atlas.md" "$root/dest/atlas.md"
+  grep -Fq 'stale OMO display-name file' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_deploy_prunes_dropped_agent_via_manifest() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/src" "$root/dest"
+  printf '%s\n' '# Atlas' > "$root/src/atlas.md"
+  printf '%s\n' '# old agent from previous image' > "$root/dest/athena.md"
+  printf '%s\n' 'athena.md' 'atlas.md' > "$root/dest/.ai-engkit-native-manifest"
+  printf '%s\n' '# user custom agent, must survive' > "$root/dest/my-helper.md"
+  run_deploy "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/dest/athena.md"
+  grep -Fq '# user custom agent, must survive' "$root/dest/my-helper.md"
+  grep -Fxq 'atlas.md' "$root/dest/.ai-engkit-native-manifest"
+  ! grep -Fxq 'athena.md' "$root/dest/.ai-engkit-native-manifest"
+  grep -Fq 'pruned stale deployed file: athena.md' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_deploy_is_idempotent() {
+  local root first_hash second_hash
+  root="$(mktemp -d)"
+  mkdir -p "$root/src" "$root/dest"
+  printf '%s\n' '# Atlas' > "$root/src/atlas.md"
+  printf '%s\n' '# stale ghost' > "$root/dest/Atlas - Plan Executor.md"
+  run_deploy "$root" > /dev/null 2>&1
+  first_hash="$(find "$root/dest" -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+  run_deploy "$root" > "$root/second.out" 2> "$root/second.err"
+  second_hash="$(find "$root/dest" -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+  test "$first_hash" = "$second_hash"
+  test ! -e "$root/dest/Atlas - Plan Executor.md"
+  rm -rf "$root"
+}
+
+assert_deploy_skips_missing_source() {
+  local root status=0
+  root="$(mktemp -d)"
+  run_deploy "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  test ! -e "$root/dest"
+  grep -Fq 'native agents source missing' "$root/stderr"
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -412,5 +495,11 @@ assert_upgrade_when_version_changes
 assert_skip_when_version_unchanged
 assert_skip_projects_without_skill
 assert_upgrade_multiple_skills_independently
+assert_deploy_installs_and_records_manifest
+assert_deploy_removes_omo_display_name_ghosts
+assert_deploy_prunes_dropped_agent_via_manifest
+assert_deploy_is_idempotent
+assert_deploy_skips_missing_source
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
+printf '%s\n' 'Native agents deploy tests passed'

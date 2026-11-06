@@ -453,19 +453,63 @@ fi
 # OMO line gets agents from the oh-my-openagent plugin; the native line is
 # plugin-free, so deploy the baked agent definitions into the user config.
 # Deployed on every boot so image upgrades take effect on recreate.
-if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
-  NATIVE_AGENTS_SRC="/opt/opencode/native-agents"
-  NATIVE_AGENTS_DEST="$OPCODE_CONFIG_DIR/agent"
-  if [ -d "$NATIVE_AGENTS_SRC" ]; then
-    mkdir -p "$NATIVE_AGENTS_DEST"
-    for agent_file in "$NATIVE_AGENTS_SRC"/*.md; do
-      [ -f "$agent_file" ] || continue
-      cp -p "$agent_file" "$NATIVE_AGENTS_DEST/$(basename "$agent_file")"
-    done
-    echo "Native agents deployed to $NATIVE_AGENTS_DEST"
-  else
-    echo "Warning: native agents source missing ($NATIVE_AGENTS_SRC), skipping" >&2
+# BEGIN FUNCTION: deploy_native_agents
+deploy_native_agents() {
+  local src_dir="$1"
+  local dest_dir="$2"
+  local manifest_file="${dest_dir}/.ai-engkit-native-manifest"
+  local agent_file base
+  if [ ! -d "$src_dir" ]; then
+    echo "Warning: native agents source missing ($src_dir), skipping" >&2
+    return 0
   fi
+  mkdir -p "$dest_dir"
+  # 1) Prune files this deployment previously installed but the image no
+  # longer ships (renamed or dropped agent): without this, a removed agent
+  # would linger in the persistent opencode-config volume forever. Only
+  # manifest-listed basenames without "/" are ever deleted, so user-created
+  # custom agents are never touched by this step.
+  if [ -f "$manifest_file" ]; then
+    while IFS= read -r base || [ -n "$base" ]; do
+      [ -n "$base" ] || continue
+      case "$base" in
+        *"/"*) continue ;;
+      esac
+      if [ ! -f "${src_dir}/${base}" ] && [ -f "${dest_dir}/${base}" ]; then
+        rm -f "${dest_dir}/${base}"
+        echo "Native agents pruned stale deployed file: $base" >&2
+      fi
+    done < "$manifest_file"
+  fi
+  # 2) One-time sweep of OMO display-name ghosts ("Atlas - Plan Executor.md"
+  # etc.): the OMO line materialized agents under "X - Y" display names while
+  # the native set uses plain config keys, and the copy loop below never
+  # deletes, so leftovers would keep showing up as duplicate primary agents
+  # in the picker. Only " - " names absent from the image are touched here,
+  # so user-created custom agents with ordinary names are never deleted.
+  for agent_file in "${dest_dir}/"*" - "*.md; do
+    [ -e "$agent_file" ] || continue
+    base="$(basename "$agent_file")"
+    if [ ! -f "${src_dir}/${base}" ]; then
+      rm -f "$agent_file"
+      echo "Native agents removed stale OMO display-name file: $base" >&2
+    fi
+  done
+  # 3) Deploy the current image set and record exactly what was installed.
+  {
+    for agent_file in "${src_dir}/"*.md; do
+      [ -f "$agent_file" ] || continue
+      base="$(basename "$agent_file")"
+      cp -p "$agent_file" "${dest_dir}/${base}"
+      printf '%s\n' "$base"
+    done
+  } > "${manifest_file}.tmp"
+  mv "${manifest_file}.tmp" "$manifest_file"
+  echo "Native agents deployed to $dest_dir"
+}
+# END FUNCTION: deploy_native_agents
+if [ "${NATIVE_AGENTS:-0}" = "1" ]; then
+  deploy_native_agents "/opt/opencode/native-agents" "$OPCODE_CONFIG_DIR/agent"
 fi
 
 if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f /opt/ai-engkit/scripts/migrate-omo-to-routing-v1.sh ]; then
