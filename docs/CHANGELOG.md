@@ -1,6 +1,32 @@
 ## [Unreleased]
 
 
+## [1.24.0] - 2026-11-06
+
+### Added
+- Bump DOCKER 29.9.2-29.9.3, COMPOSE 5.6.1-5.7.0, BUILDX 0.38.1-0.38.2, GLAB 1.126.0-1.128.0, PLAYWRIGHT 1.64.1-1.65.0, LEANCTX 3.12.0-3.12.2
+- One-click native/OMO agent line toggle with restart
+- Default new sessions to Sisyphus on native line
+- V1 native agents PoC without OMO (opt-in)
+
+### Fixed
+- Evaluate marker before OMO_ENABLED derivation
+- Re-seed opencode heads from routing on every boot
+- Pass routing heads via --argjson instead of inline literals
+- Include general in native configurable agents
+- Make native-line apply actually effective
+- Wire migrate script into entrypoint and bake it in image
+- Unify native-line flags so heads seed and Admin verifies
+- Bake native agents into image and deploy on NATIVE_AGENTS=1
+
+### Changed
+- Upgrade Docker Engine from 29.9.2 to 29.9.3.
+- Upgrade Docker Compose from 5.6.1 to 5.7.0.
+- Upgrade Docker Buildx from 0.38.1 to 0.38.2.
+- Upgrade Playwright from 1.64.1 to 1.65.0.
+- Upgrade GitLab CLI from 1.126.0 to 1.128.0.
+- Upgrade lean-ctx from 3.12.0 to 3.12.2.
+
 ## [1.23.5] - 2026-11-02
 
 ### Added
@@ -2375,7 +2401,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.23.5...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2543,6 +2569,14 @@
 [1.18.3]: https://github.com/tryweb/ai-engkit/compare/v1.18.2...v1.18.3
 [1.18.4]: https://github.com/tryweb/ai-engkit/compare/v1.18.3...v1.18.4
 [1.18.5]: https://github.com/tryweb/ai-engkit/compare/v1.18.4...v1.18.5
+[1.18.6]: https://github.com/tryweb/ai-engkit/compare/v1.18.5...v1.18.6
+[1.18.7]: https://github.com/tryweb/ai-engkit/compare/v1.18.6...v1.18.7
+[1.18.8]: https://github.com/tryweb/ai-engkit/compare/v1.18.7...v1.18.8
+[1.18.9]: https://github.com/tryweb/ai-engkit/compare/v1.18.8...v1.18.9
+[1.18.10]: https://github.com/tryweb/ai-engkit/compare/v1.18.9...v1.18.10
+[1.18.11]: https://github.com/tryweb/ai-engkit/compare/v1.18.10...v1.18.11
+[1.18.12]: https://github.com/tryweb/ai-engkit/compare/v1.18.11...v1.18.12
+[1.18.13]: https://github.com/tryweb/ai-engkit/compare/v1.18.12...v1.18.13
 [1.19.0]: https://github.com/tryweb/ai-engkit/compare/v1.18.13...v1.19.0
 [1.19.1]: https://github.com/tryweb/ai-engkit/compare/v1.19.0...v1.19.1
 [1.19.2]: https://github.com/tryweb/ai-engkit/compare/v1.19.1...v1.19.2
@@ -2562,3 +2596,4 @@
 [1.23.3]: https://github.com/tryweb/ai-engkit/compare/v1.23.2...v1.23.3
 [1.23.4]: https://github.com/tryweb/ai-engkit/compare/v1.23.3...v1.23.4
 [1.23.5]: https://github.com/tryweb/ai-engkit/compare/v1.23.4...v1.23.5
+[1.24.0]: https://github.com/tryweb/ai-engkit/compare/v1.23.5...v1.24.0
