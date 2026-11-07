@@ -29,6 +29,7 @@ export function OpenChamberSettingsPage() {
           <h3 style="margin-bottom:8px;">Agent line <span class="badge">Experimental</span></h3>
           <p class="text-sm text-muted" style="margin-bottom:12px;">One-way migration from oh-my-openagent (OMO) to native agents. Migration restarts ai-dev and interrupts active OpenCode sessions. It cannot be undone from this page.</p>
           <p id="agent-line-current" class="text-sm" role="status">Loading current line...</p>
+          <div id="agent-line-migrate-controls" style="display:none;">
           <label class="flex items-center gap-2 text-sm" style="margin-top:12px;">
             <input id="agent-line-confirm" type="checkbox" />
             <span>I understand this is a one-way migration and cannot be switched back.</span>
@@ -36,6 +37,7 @@ export function OpenChamberSettingsPage() {
           <div class="flex items-center gap-2" style="margin-top:8px;">
             <input id="agent-line-typed" type="text" placeholder="Type MIGRATE to confirm" style="max-width:220px;" />
             <button id="agent-line-migrate" type="button" onclick="migrateToNative()" disabled>Migrate to native</button>
+          </div>
           </div>
           <p id="agent-line-status" class="text-sm text-muted" role="status" />
         </div>
@@ -48,6 +50,7 @@ export function OpenChamberSettingsPage() {
           const agentLineConfirm = document.getElementById("agent-line-confirm");
           const agentLineTyped = document.getElementById("agent-line-typed");
           const agentLineStatus = document.getElementById("agent-line-status");
+          const agentLineControls = document.getElementById("agent-line-migrate-controls");
           let currentAgentLine = null;
           let canMigrate = false;
 
@@ -105,6 +108,7 @@ export function OpenChamberSettingsPage() {
                 if (data.source === "env") agentLineStatus.textContent = "NATIVE_AGENTS is explicitly set; migration is locked until the container environment is cleared.";
                 else agentLineStatus.textContent = "One-way migration: OMO to native. Sessions will be interrupted.";
               }
+              agentLineControls.style.display = canMigrate ? "" : "none";
               refreshMigrateButton();
             } catch (error) {
               agentLineCurrent.textContent = error instanceof Error ? error.message : "Failed to load agent line";
@@ -127,6 +131,7 @@ export function OpenChamberSettingsPage() {
               if (!response.ok) throw new Error(data.error || "Failed to migrate");
               currentAgentLine = data.line;
               canMigrate = false;
+              agentLineControls.style.display = "none";
               agentLineCurrent.textContent = "Current line: native (migrated, locked)";
               agentLineStatus.textContent = "Migrated. ai-dev restarted; existing sessions were interrupted.";
             } catch (error) {
