@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExecResult } from "./docker";
-import { getGhStatus, getGhStatusDetails, startDeviceFlow } from "./gh-auth";
+import { ensureGhCredentialHelper, getGhStatus, getGhStatusDetails, startDeviceFlow } from "./gh-auth";
 
 function fakeCommand(handler: (command: string) => Partial<ExecResult>): (command: string, timeoutMs: number) => Promise<ExecResult> {
   return async (command) => ({ stdout: "", stderr: "", exitCode: 0, ...handler(command) });
@@ -112,5 +112,48 @@ describe("gh device flow", () => {
   test("falls back to defaults when no code ever appears", async () => {
     const info = await startDeviceFlow(fakeCommand(() => ({ stdout: "" })));
     expect(info).toEqual({ device_code: "", verification_uri: "https://github.com/login/device" });
+  });
+});
+
+describe("gh credential helper wiring", () => {
+  test("is a no-op when gh is already the git credential helper", async () => {
+    const commands: string[] = [];
+    const command = fakeCommand((value) => {
+      commands.push(value);
+      if (value.includes("get-all credential")) return { stdout: "", stderr: "", exitCode: 0 };
+      return { stdout: "", stderr: "", exitCode: 1 };
+    });
+
+    await ensureGhCredentialHelper(command);
+    expect(commands).toEqual([
+      "git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -q 'gh auth git-credential'",
+    ]);
+  });
+
+  test("runs setup-git and verifies when the helper is missing", async () => {
+    const commands: string[] = [];
+    let wired = false;
+    const command = fakeCommand((value) => {
+      commands.push(value);
+      if (value.includes("get-all credential")) return wired ? { stdout: "", stderr: "", exitCode: 0 } : { stdout: "", stderr: "", exitCode: 1 };
+      if (value.includes("gh auth setup-git")) {
+        wired = true;
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    await ensureGhCredentialHelper(command);
+    expect(commands.filter((c) => c.includes("gh auth setup-git"))).toHaveLength(1);
+    expect(commands.filter((c) => c.includes("get-all credential"))).toHaveLength(2);
+  });
+
+  test("throws when setup-git fails so callers can report it", async () => {
+    const command = fakeCommand((value) => {
+      if (value.includes("get-all credential")) return { stdout: "", stderr: "", exitCode: 1 };
+      return { stdout: "error", stderr: "", exitCode: 1 };
+    });
+
+    await expect(ensureGhCredentialHelper(command)).rejects.toThrow("Failed to wire git credential helper to gh");
   });
 });

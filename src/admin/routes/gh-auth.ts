@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
-import { getGhStatusDetails, startDeviceFlow, logoutGh } from "../lib/gh-auth";
+import { getGhStatusDetails, startDeviceFlow, logoutGh, ensureGhCredentialHelper } from "../lib/gh-auth";
 import { updateGitHubAuthState } from "../lib/git-hosting-auth-state";
 
 const ghAuth = new Hono();
@@ -42,6 +42,17 @@ ghAuth.get("/api/auth/gh/status", async (c) => {
     await updateGitHubAuthState(details);
   } catch {
     console.error("GitHub auth status persistence failed");
+  }
+  // The device flow completes in the browser; the first status poll that
+  // observes a valid login is the only server-side success signal, so wire
+  // git here. Best-effort: a wiring failure must never break status reads,
+  // and already-wired environments cost one local git-config check.
+  if (details.validity === "valid") {
+    try {
+      await ensureGhCredentialHelper();
+    } catch {
+      console.error("GitHub credential helper wiring failed");
+    }
   }
   return c.json({
     status: details.validity === "valid" ? "authenticated" : "not authenticated",

@@ -174,3 +174,30 @@ export async function startDeviceFlow(command: GhCommand = execInAiDev): Promise
 export async function logoutGh(command: GhCommand = execInAiDev): Promise<void> {
   await command("gh auth logout 2>/dev/null || true", 15_000);
 }
+
+/**
+ * Wire git to `gh auth git-credential` for github.com after a successful
+ * GitHub login.
+ *
+ * `gh auth login` (device flow) authenticates the CLI but never touches git
+ * config, so without this every fresh environment can `gh api` while `git
+ * push` to github.com fails with "could not read Username". Mirrors the
+ * GitLab side (`setupGlabCredentialHelper`), except gh ships its own helper
+ * wiring via `gh auth setup-git` instead of a baked script.
+ *
+ * Idempotent: no-op when the helper is already configured.
+ */
+export async function ensureGhCredentialHelper(command: GhCommand = execInAiDev): Promise<void> {
+  const check = await command(
+    "git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -q 'gh auth git-credential'",
+    5_000,
+  );
+  if (check.exitCode === 0) return;
+  const setup = await command("gh auth setup-git 2>&1", 15_000);
+  if (setup.exitCode !== 0) throw new Error("Failed to wire git credential helper to gh");
+  const verify = await command(
+    "git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -q 'gh auth git-credential'",
+    5_000,
+  );
+  if (verify.exitCode !== 0) throw new Error("Git credential helper verification failed");
+}

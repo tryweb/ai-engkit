@@ -19,4 +19,18 @@ init_dir() {
 echo "=== Initializing GH CLI config ==="
 init_dir "$GH_CONFIG_DIR"
 echo "=== GH CLI config initialized ==="
+
+# Backfill: `gh auth login` (device flow via Admin UI, or `docker exec`)
+# authenticates the CLI but never wires git to it, so an
+# authenticated-but-unwired environment fails every `git push`/`pull` with
+# "could not read Username". Heal exactly that state on boot (mirrors the
+# Admin status-endpoint wiring for logins that complete while running).
+# Idempotent: skips when gh is not logged in or the helper is already set.
+if sudo -u devuser env HOME="$DEVUSER_HOME" gh auth status >/dev/null 2>&1; then
+  if ! sudo -u devuser env HOME="$DEVUSER_HOME" git config --global --get-all credential.https://github.com.helper 2>/dev/null | grep -q 'gh auth git-credential'; then
+    echo "Wiring git credential helper to gh (gh auth setup-git)"
+    sudo -u devuser env HOME="$DEVUSER_HOME" gh auth setup-git >/dev/null 2>&1 \
+      || echo "Warning: gh credential helper wiring failed" >&2
+  fi
+fi
 echo
