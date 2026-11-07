@@ -106,22 +106,47 @@ describe("OpenChamber agent line routes", () => {
     const directory = await mkdtemp(join(tmpdir(), "openchamber-agent-line-"));
     const markerPath = join(directory, ".native-agents");
     const configPath = join(directory, "opencode.json");
+    const omoPath = join(directory, "omo.jsonc");
+    const routingPath = join(directory, "routing.json");
     await writeFile(configPath, JSON.stringify({ plugin }));
+    await writeFile(omoPath, JSON.stringify({ agents: { general: { model: "opencode/big-pickle" } } }));
     if (marker) await writeFile(markerPath, "native agents enabled\n");
     return {
       markerPath,
       configPath,
+      omoPath,
+      routingPath,
       cleanup: () => rm(directory, { recursive: true, force: true }),
+    };
+  }
+
+  function routes(f: Awaited<ReturnType<typeof fixture>>, overrides: Record<string, unknown> = {}) {
+    const store: Record<string, string> = {};
+    return {
+      store,
+      app: createOpenChamberRoutes({
+        command: async (source) => shellCommand(source),
+        nativeAgentsMarkerPath: f.markerPath,
+        opencodeConfigPath: f.configPath,
+        omoConfigPath: f.omoPath,
+        routingConfigPath: f.routingPath,
+        env: {},
+        readEnv: () => ({ ...store }),
+        writeEnv: (k, v) => { store[k] = v; },
+        deleteEnv: (k) => { delete store[k]; },
+        ...overrides,
+      }),
     };
   }
 
   test("reports native only when marker and empty plugin config agree", async () => {
     const f = await fixture([], true);
     try {
-      const app = createOpenChamberRoutes({ command: async (source) => shellCommand(source), nativeAgentsMarkerPath: f.markerPath, opencodeConfigPath: f.configPath, env: {} });
+      const { app } = routes(f);
       const response = await app.request("http://localhost/api/openchamber/agent-line");
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ line: "native", source: "marker" });
+      // Legacy half-state (marker without OMO_ENABLED=0) stays migratable.
+      expect(await response.json()).toEqual({ line: "native", source: "marker", migrated: false, canMigrate: true });
     } finally {
       await f.cleanup();
     }
@@ -130,52 +155,107 @@ describe("OpenChamber agent line routes", () => {
   test("reports OMO when marker and plugin config agree", async () => {
     const f = await fixture(["oh-my-openagent"], false);
     try {
-      const app = createOpenChamberRoutes({ command: async (source) => shellCommand(source), nativeAgentsMarkerPath: f.markerPath, opencodeConfigPath: f.configPath, env: {} });
+      const { app } = routes(f);
       const response = await app.request("http://localhost/api/openchamber/agent-line");
-      expect(await response.json()).toEqual({ line: "omo", source: "marker" });
+      expect(await response.json()).toEqual({ line: "omo", source: "marker", migrated: false, canMigrate: true });
     } finally {
       await f.cleanup();
     }
   });
 
-  test("writes marker atomically and restarts ai-dev when switching to native", async () => {
+  test("reports migrated when marker and OMO_ENABLED=0 agree", async () => {
+    const f = await fixture([], true);
+    try {
+      const { app, store } = routes(f);
+      store["OMO_ENABLED"] = "0";
+      const response = await app.request("http://localhost/api/openchamber/agent-line");
+      expect(await response.json()).toEqual({ line: "native", source: "migrated", migrated: true, canMigrate: false });
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("retires the bidirectional switch", async () => {
+    const f = await fixture(["oh-my-openagent"], false);
+    try {
+      const { app } = routes(f);
+      const response = await app.request("http://localhost/api/openchamber/agent-line", { method: "POST" });
+      expect(response.status).toBe(410);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("requires explicit confirm for one-way migration", async () => {
+    const f = await fixture(["oh-my-openagent"], false);
+    try {
+      const { app } = routes(f);
+      const response = await app.request("http://localhost/api/openchamber/migrate-to-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("migrates OMO to native with marker, OMO_ENABLED, and routing seed", async () => {
     const f = await fixture(["oh-my-openagent"], false);
     let restarted = false;
     try {
-      const app = createOpenChamberRoutes({
-        command: async (source) => shellCommand(source),
-        nativeAgentsMarkerPath: f.markerPath,
-        opencodeConfigPath: f.configPath,
-        env: {},
+      const { app, store } = routes(f, {
         restart: async () => {
           restarted = true;
           return { ok: true };
         },
       });
-      const response = await app.request("http://localhost/api/openchamber/agent-line", { method: "POST" });
+      const response = await app.request("http://localhost/api/openchamber/migrate-to-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ ok: true, line: "native", source: "marker" });
+      expect(await response.json()).toEqual({ ok: true, line: "native", migrated: true, source: "migrated" });
       expect(await readFile(f.markerPath, "utf8")).toBe("native agents enabled\n");
+      expect(store["OMO_ENABLED"]).toBe("0");
       expect(restarted).toBe(true);
     } finally {
       await f.cleanup();
     }
   });
 
-  test("restores marker when ai-dev restart fails", async () => {
+  test("refuses to migrate twice", async () => {
+    const f = await fixture([], true);
+    try {
+      const { app, store } = routes(f);
+      store["OMO_ENABLED"] = "0";
+      const response = await app.request("http://localhost/api/openchamber/migrate-to-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      expect(response.status).toBe(409);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test("rolls back marker and env when ai-dev restart fails", async () => {
     const f = await fixture(["oh-my-openagent"], false);
     try {
-      const app = createOpenChamberRoutes({
-        command: async (source) => shellCommand(source),
-        nativeAgentsMarkerPath: f.markerPath,
-        opencodeConfigPath: f.configPath,
-        env: {},
+      const { app, store } = routes(f, {
         restart: async (): Promise<Awaited<ReturnType<typeof restartAiDev>>> => ({ ok: false, error: "restart unavailable" }),
       });
-      const response = await app.request("http://localhost/api/openchamber/agent-line", { method: "POST" });
+      const response = await app.request("http://localhost/api/openchamber/migrate-to-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: "ai-dev restart failed: restart unavailable" });
       await expect(readFile(f.markerPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      expect(store["OMO_ENABLED"]).toBeUndefined();
     } finally {
       await f.cleanup();
     }

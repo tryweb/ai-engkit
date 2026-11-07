@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { execInAiDev } from "../lib/docker";
 import { restartAiDev } from "../lib/restart-ai-dev";
+import { deleteEnvVar, readEnvFile, upsertEnvVar } from "../lib/env";
 import { OpenChamberSettingsPage } from "../views/openchamber";
 
 const DEFAULT_SETTINGS = { showOpenCodeUpdateNotifications: false };
@@ -54,8 +55,13 @@ export interface OpenChamberRoutesOptions {
   settingsPath?: string;
   nativeAgentsMarkerPath?: string;
   opencodeConfigPath?: string;
+  omoConfigPath?: string;
+  routingConfigPath?: string;
   env?: Readonly<Record<string, string | undefined>>;
   restart?: typeof restartAiDev;
+  readEnv?: () => Record<string, string>;
+  writeEnv?: (key: string, value: string) => void;
+  deleteEnv?: (key: string) => void;
 }
 
 export function createOpenChamberRoutes(options: OpenChamberRoutesOptions = {}) {
@@ -63,16 +69,33 @@ export function createOpenChamberRoutes(options: OpenChamberRoutesOptions = {}) 
   const settingsPath = options.settingsPath ?? "/home/devuser/.config/openchamber/settings.json";
   const markerPath = options.nativeAgentsMarkerPath ?? "/home/devuser/.config/opencode/.native-agents";
   const opencodeConfigPath = options.opencodeConfigPath ?? "/home/devuser/.config/opencode/opencode.json";
+  const omoConfigPath = options.omoConfigPath ?? "/home/devuser/.omo/omo.jsonc";
+  const routingConfigPath = options.routingConfigPath ?? "/home/devuser/.config/opencode/routing.json";
   const env = options.env ?? process.env;
   const restart = options.restart ?? restartAiDev;
+  const readEnv = options.readEnv ?? readEnvFile;
+  const writeEnv = options.writeEnv ?? upsertEnvVar;
+  const deleteEnv = options.deleteEnv ?? deleteEnvVar;
   const openchamber = new Hono();
 
-  openchamber.get("/api/openchamber/agent-line", async (c) => {
-    const explicitNativeAgents = env["NATIVE_AGENTS"];
-    if (explicitNativeAgents !== undefined && explicitNativeAgents !== "") {
-      return c.json({ line: explicitNativeAgents === "1" ? "native" : "omo", source: "env" });
+  function effectiveOmoEnabled(): string | undefined {
+    try {
+      const fromFile = readEnv()["OMO_ENABLED"];
+      if (fromFile !== undefined) return fromFile;
+    } catch {
+      // readEnv failure means no registry signal; fall through to container env.
     }
+    return env["OMO_ENABLED"];
+  }
 
+  // One-way migration is complete when the marker exists AND the effective
+  // OMO_ENABLED is "0". Either signal alone is a legacy half-state from the
+  // retired bidirectional toggle and must not be reported as migrated.
+  function isMigrated(marker: boolean, omoEnabled: string | undefined): boolean {
+    return marker === true && omoEnabled === "0";
+  }
+
+  async function inspectLine(): Promise<{ marker: boolean; pluginIsEmpty: boolean } | null> {
     const result = await command(
       `MARKER=${JSON.stringify(markerPath)}; CONFIG=${JSON.stringify(opencodeConfigPath)}; ` +
       `if [ -e "$MARKER" ]; then marker=true; else marker=false; fi; ` +
@@ -80,44 +103,125 @@ export function createOpenChamberRoutes(options: OpenChamberRoutesOptions = {}) 
       `printf '%s %s\\n' "$marker" "$plugin"`,
       10_000,
     );
-    if (result.exitCode !== 0) {
-      return c.json({ error: errorMessage(result, "Could not inspect native agents configuration") }, 500);
-    }
+    if (result.exitCode !== 0) return null;
     const [marker, plugin] = result.stdout.trim().split(" ");
-    if (marker === "true" && plugin === "true") return c.json({ line: "native", source: "marker" });
-    if (marker === "false" && plugin === "false") return c.json({ line: "omo", source: "marker" });
-    return c.json({ line: "omo", source: "default" });
+    return { marker: marker === "true", pluginIsEmpty: plugin === "true" };
+  }
+
+  openchamber.get("/api/openchamber/agent-line", async (c) => {
+    const explicitNativeAgents = env["NATIVE_AGENTS"];
+    if (explicitNativeAgents !== undefined && explicitNativeAgents !== "") {
+      const omoEnabled = effectiveOmoEnabled();
+      const line = explicitNativeAgents === "1" ? "native" : "omo";
+      // Container-env pin wins; migration state is still reported so the UI
+      // can explain why the button stays locked.
+      const inspected = await inspectLine();
+      const migrated = inspected !== null && isMigrated(inspected.marker, omoEnabled);
+      return c.json({ line, source: "env", migrated, canMigrate: !migrated });
+    }
+
+    const inspected = await inspectLine();
+    if (inspected === null) {
+      return c.json({ error: errorMessage({ exitCode: 1, stdout: "", stderr: "Could not inspect native agents configuration" }, "Could not inspect native agents configuration") }, 500);
+    }
+    const omoEnabled = effectiveOmoEnabled();
+    if (isMigrated(inspected.marker, omoEnabled)) {
+      return c.json({ line: "native", source: "migrated", migrated: true, canMigrate: false });
+    }
+    if (inspected.marker && inspected.pluginIsEmpty) {
+      // Legacy half-state from the retired toggle (marker without OMO_ENABLED=0).
+      // Report native for compatibility but keep migration available so the
+      // operator can complete it to the locked state.
+      return c.json({ line: "native", source: "marker", migrated: false, canMigrate: true });
+    }
+    if (!inspected.marker && !inspected.pluginIsEmpty) {
+      return c.json({ line: "omo", source: "marker", migrated: false, canMigrate: true });
+    }
+    return c.json({ line: "omo", source: "default", migrated: false, canMigrate: true });
   });
 
+  // Retired: the bidirectional marker flip caused native/omo divergence
+  // (marker moved but OMO_ENABLED/routing.json did not). Use the one-way
+  // migration endpoint instead.
   openchamber.post("/api/openchamber/agent-line", async (c) => {
-    if (env["NATIVE_AGENTS"] !== undefined && env["NATIVE_AGENTS"] !== "") {
-      return c.json({ error: "NATIVE_AGENTS is set in the container environment; the marker cannot override it" }, 409);
+    return c.json({ error: "Bidirectional switch retired; use POST /api/openchamber/migrate-to-native for the one-way OMO to native migration" }, 410);
+  });
+
+  openchamber.post("/api/openchamber/migrate-to-native", async (c) => {
+    let body: unknown = null;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Request body must be valid JSON with {confirm:true}" }, 400);
     }
-    const current = await command(
-      `MARKER=${JSON.stringify(markerPath)}; CONFIG=${JSON.stringify(opencodeConfigPath)}; ` +
-      `if [ -e "$MARKER" ]; then marker=true; else marker=false; fi; ` +
-      `jq -e '(.plugin // []) | length == 0' "$CONFIG" >/dev/null && plugin=true || plugin=false; ` +
-      `printf '%s %s\\n' "$marker" "$plugin"`,
+    if (typeof body !== "object" || body === null || Array.isArray(body) ||
+        (body as Record<string, unknown>).confirm !== true) {
+      return c.json({ error: "One-way migration requires {confirm:true}; this cannot be undone" }, 400);
+    }
+
+    const inspected = await inspectLine();
+    if (inspected === null) {
+      return c.json({ error: "Could not inspect native agents configuration" }, 500);
+    }
+    const previousMarker = inspected.marker;
+    let previousOmo: string | undefined;
+    try {
+      previousOmo = readEnv()["OMO_ENABLED"];
+    } catch {
+      previousOmo = undefined;
+    }
+    if (isMigrated(previousMarker, previousOmo ?? env["OMO_ENABLED"])) {
+      return c.json({ error: "Already migrated to native; migration cannot be run again" }, 409);
+    }
+
+    // 1) Ensure the marker exists (atomic write).
+    if (!previousMarker) {
+      const created = await command(
+        `umask 077; TMP="$(mktemp ${JSON.stringify(`${markerPath}.tmp.XXXXXX`)})" && printf '%s\\n' 'native agents enabled' > "$TMP" && mv "$TMP" ${JSON.stringify(markerPath)}`,
+        10_000,
+      );
+      if (created.exitCode !== 0) {
+        return c.json({ error: errorMessage(created, "Could not create native agents marker") }, 500);
+      }
+    }
+
+    // 2) Lock the single source of truth: OMO_ENABLED=0 in the registry file.
+    // The entrypoint derives the native line from NATIVE_AGENTS=1 || OMO_ENABLED=0,
+    // and Admin reads routing.json only when OMO_ENABLED=0 is effective.
+    try {
+      writeEnv("OMO_ENABLED", "0");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!previousMarker) await command(`rm -f ${JSON.stringify(markerPath)}`, 10_000);
+      return c.json({ error: `Could not persist OMO_ENABLED=0: ${message}` }, 500);
+    }
+
+    // 3) Best-effort carry-over: seed routing.json chains for general/plan from
+    // omo.jsonc when routing has no chain yet. Never fails the migration;
+    // the entrypoint seeds heads from routing.json on the next boot.
+    await command(
+      `ROUTING=${JSON.stringify(routingConfigPath)}; OMO=${JSON.stringify(omoConfigPath)}; ` +
+      `mkdir -p "$(dirname "$ROUTING")"; ` +
+      `if [ ! -f "$ROUTING" ]; then printf '%s' '{"version":1,"chains":{}}' > "$ROUTING"; fi; ` +
+      `if [ -f "$OMO" ]; then ` +
+      `jq -s '.[0] as $r | .[1] as $o | reduce ["general","plan"][] as $a ($r; if ((.chains[$a].chain // null) == null and (($o.agents[$a].model // null) | type) == "string") then .chains[$a] = {chain: [{model: $o.agents[$a].model} + (if (($o.agents[$a].variant // null) | type) == "string" then {variant: $o.agents[$a].variant} else {} end)]} else . end)' "$ROUTING" "$OMO" > "$ROUTING.tmp" 2>/dev/null && mv "$ROUTING.tmp" "$ROUTING" || rm -f "$ROUTING.tmp"; fi`,
       10_000,
     );
-    if (current.exitCode !== 0) return c.json({ error: errorMessage(current, "Could not inspect native agents configuration") }, 500);
-    const [marker, plugin] = current.stdout.trim().split(" ");
-    const previousMarker = marker === "true";
-    const currentlyNative = previousMarker && plugin === "true";
-    const targetNative = !currentlyNative;
-    const writeMarker = (enabled: boolean) => enabled
-      ? `umask 077; TMP="$(mktemp ${JSON.stringify(`${markerPath}.tmp.XXXXXX`)})" && printf '%s\\n' 'native agents enabled' > "$TMP" && mv "$TMP" ${JSON.stringify(markerPath)}`
-      : `if [ -e ${JSON.stringify(markerPath)} ]; then rm ${JSON.stringify(markerPath)}; else exit 1; fi`;
-    const written = await command(writeMarker(targetNative), 10_000);
-    if (written.exitCode !== 0) return c.json({ error: errorMessage(written, "Could not update native agents marker") }, 500);
 
+    // 4) Recreate ai-dev so the entrypoint regenerates plugin-free opencode.json,
+    // deploys native agents, and prunes OMO ghosts in one boot.
     const restarted = await restart();
     if (restarted.ok === false) {
-      const rollback = await command(writeMarker(previousMarker), 10_000);
-      const rollbackError = rollback.exitCode === 0 ? "" : `; marker rollback failed: ${errorMessage(rollback, "unknown error")}`;
-      return c.json({ error: `ai-dev restart failed: ${restarted.error}${rollbackError}` }, 500);
+      if (!previousMarker) await command(`rm -f ${JSON.stringify(markerPath)}`, 10_000);
+      try {
+        if (previousOmo === undefined) deleteEnv("OMO_ENABLED");
+        else writeEnv("OMO_ENABLED", previousOmo);
+      } catch {
+        // Report the restart failure; env rollback best-effort only.
+      }
+      return c.json({ error: `ai-dev restart failed: ${restarted.error}` }, 500);
     }
-    return c.json({ ok: true, line: targetNative ? "native" : "omo", source: "marker" });
+    return c.json({ ok: true, line: "native", migrated: true, source: "migrated" });
   });
 
   openchamber.get("/api/openchamber/settings", async (c) => {

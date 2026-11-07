@@ -27,10 +27,16 @@ export function OpenChamberSettingsPage() {
         </div>
         <div class="card" style="max-width:720px;margin-top:16px;">
           <h3 style="margin-bottom:8px;">Agent line <span class="badge">Experimental</span></h3>
-          <p class="text-sm text-muted" style="margin-bottom:12px;">Switch between the native agents and oh-my-openagent (OMO) configuration. This experimental change restarts ai-dev and interrupts active OpenCode sessions.</p>
+          <p class="text-sm text-muted" style="margin-bottom:12px;">One-way migration from oh-my-openagent (OMO) to native agents. Migration restarts ai-dev and interrupts active OpenCode sessions. It cannot be undone from this page.</p>
           <p id="agent-line-current" class="text-sm" role="status">Loading current line...</p>
-          <button id="agent-line-toggle" type="button" onclick="toggleAgentLine()" disabled>Switch agent line</button>
-          <p class="text-sm text-muted" style="margin-top:12px;">To roll back, use this switch again to return to the previous line. If Admin reports a restart failure, the marker is restored automatically; retry after checking ai-dev.</p>
+          <label class="flex items-center gap-2 text-sm" style="margin-top:12px;">
+            <input id="agent-line-confirm" type="checkbox" />
+            <span>I understand this is a one-way migration and cannot be switched back.</span>
+          </label>
+          <div class="flex items-center gap-2" style="margin-top:8px;">
+            <input id="agent-line-typed" type="text" placeholder="Type MIGRATE to confirm" style="max-width:220px;" />
+            <button id="agent-line-migrate" type="button" onclick="migrateToNative()" disabled>Migrate to native</button>
+          </div>
           <p id="agent-line-status" class="text-sm text-muted" role="status" />
         </div>
         <script>{html`
@@ -38,9 +44,12 @@ export function OpenChamberSettingsPage() {
           const settingsButton = document.getElementById("save-settings");
           const settingsStatus = document.getElementById("settings-status");
           const agentLineCurrent = document.getElementById("agent-line-current");
-          const agentLineToggle = document.getElementById("agent-line-toggle");
+          const agentLineMigrate = document.getElementById("agent-line-migrate");
+          const agentLineConfirm = document.getElementById("agent-line-confirm");
+          const agentLineTyped = document.getElementById("agent-line-typed");
           const agentLineStatus = document.getElementById("agent-line-status");
           let currentAgentLine = null;
+          let canMigrate = false;
 
           async function loadOpenChamberSettings() {
             try {
@@ -73,37 +82,58 @@ export function OpenChamberSettingsPage() {
             }
           }
 
+          function refreshMigrateButton() {
+            const typedOk = agentLineTyped.value.trim() === "MIGRATE";
+            const checkedOk = agentLineConfirm.checked === true;
+            agentLineMigrate.disabled = !(canMigrate && typedOk && checkedOk);
+          }
+          agentLineConfirm.addEventListener("change", refreshMigrateButton);
+          agentLineTyped.addEventListener("input", refreshMigrateButton);
+
           async function loadAgentLine() {
             try {
               const response = await fetch("/api/openchamber/agent-line");
               const data = await response.json();
               if (!response.ok) throw new Error(data.error || "Failed to load agent line");
               currentAgentLine = data.line;
-              agentLineCurrent.textContent = "Current line: " + data.line + " (" + data.source + ")";
-              agentLineToggle.disabled = data.source === "env";
-              if (data.source === "env") agentLineStatus.textContent = "NATIVE_AGENTS is explicitly set; change the container environment to switch lines.";
+              canMigrate = data.canMigrate === true;
+              if (data.migrated === true) {
+                agentLineCurrent.textContent = "Current line: native (migrated, locked)";
+                agentLineStatus.textContent = "Migration complete. OMO line is retired and cannot be switched back from this page.";
+              } else {
+                agentLineCurrent.textContent = "Current line: " + data.line + " (" + data.source + ")";
+                if (data.source === "env") agentLineStatus.textContent = "NATIVE_AGENTS is explicitly set; migration is locked until the container environment is cleared.";
+                else agentLineStatus.textContent = "One-way migration: OMO to native. Sessions will be interrupted.";
+              }
+              refreshMigrateButton();
             } catch (error) {
               agentLineCurrent.textContent = error instanceof Error ? error.message : "Failed to load agent line";
             }
           }
 
-          async function toggleAgentLine() {
-            const target = currentAgentLine === "native" ? "OMO" : "native agents";
-            if (!confirm("Switch to " + target + " and restart ai-dev? Active OpenCode sessions will be interrupted.")) return;
-            agentLineToggle.disabled = true;
-            agentLineStatus.textContent = "Switching and restarting ai-dev...";
+          async function migrateToNative() {
+            if (!canMigrate) return;
+            if (agentLineTyped.value.trim() !== "MIGRATE" || agentLineConfirm.checked !== true) return;
+            if (!confirm("Migrate OMO to native agents and restart ai-dev? This is one-way and cannot be switched back. Active OpenCode sessions will be interrupted.")) return;
+            agentLineMigrate.disabled = true;
+            agentLineStatus.textContent = "Migrating to native and restarting ai-dev...";
             try {
-              const response = await fetch("/api/openchamber/agent-line", { method: "POST" });
+              const response = await fetch("/api/openchamber/migrate-to-native", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ confirm: true }),
+              });
               const data = await response.json();
-              if (!response.ok) throw new Error(data.error || "Failed to switch agent line");
+              if (!response.ok) throw new Error(data.error || "Failed to migrate");
               currentAgentLine = data.line;
-              agentLineCurrent.textContent = "Current line: " + data.line + " (" + data.source + ")";
-              agentLineStatus.textContent = "Switched. ai-dev restarted; existing sessions were interrupted.";
+              canMigrate = false;
+              agentLineCurrent.textContent = "Current line: native (migrated, locked)";
+              agentLineStatus.textContent = "Migrated. ai-dev restarted; existing sessions were interrupted.";
             } catch (error) {
-              agentLineStatus.textContent = error instanceof Error ? error.message : "Failed to switch agent line";
+              agentLineStatus.textContent = error instanceof Error ? error.message : "Failed to migrate";
               await loadAgentLine();
             } finally {
-              agentLineToggle.disabled = false;
+              refreshMigrateButton();
             }
           }
 
