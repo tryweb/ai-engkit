@@ -412,6 +412,22 @@ run_prune_ghosts() {
   bash "$prune_source"
 }
 
+run_prune_plugin_cache() {
+  local root="$1"
+  local prune_source="$root/prune-cache.sh"
+  extract_function "prune_omo_plugin_cache" "$ENTRYPOINT_FILE" > "$prune_source"
+  printf '%s\n' "prune_omo_plugin_cache \"$root/cache\"" >> "$prune_source"
+  bash "$prune_source"
+}
+
+run_prune_state_cache() {
+  local root="$1"
+  local prune_source="$root/prune-state.sh"
+  extract_function "prune_omo_state_cache" "$ENTRYPOINT_FILE" > "$prune_source"
+  printf '%s\n' "prune_omo_state_cache \"$root/state\"" >> "$prune_source"
+  bash "$prune_source"
+}
+
 assert_deploy_installs_and_records_manifest() {
   local root
   root="$(mktemp -d)"
@@ -591,6 +607,58 @@ assert_prune_survives_malformed_config_json() {
   rm -rf "$root"
 }
 
+assert_plugin_cache_prunes_all_omo_versions_only() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/cache/oh-my-openagent@4.19.4" "$root/cache/oh-my-openagent@5.1.57" \
+    "$root/cache/oh-my-opencode@1.0.0" "$root/cache/superpowers@git+https:" \
+    "$root/cache/bash-language-server"
+  printf '%s\n' '# stale' > "$root/cache/oh-my-openagent@5.1.57/pkg.txt"
+  run_prune_plugin_cache "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/cache/oh-my-openagent@4.19.4"
+  test ! -e "$root/cache/oh-my-openagent@5.1.57"
+  test ! -e "$root/cache/oh-my-opencode@1.0.0"
+  test -d "$root/cache/superpowers@git+https:"
+  test -d "$root/cache/bash-language-server"
+  grep -Fq 'stale OMO plugin cache: oh-my-openagent@5.1.57' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_plugin_cache_is_noop_without_cache_dir() {
+  local root status=0
+  root="$(mktemp -d)"
+  run_prune_plugin_cache "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  test ! -s "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_state_cache_empties_contents_keeps_mount() {
+  local root
+  root="$(mktemp -d)"
+  mkdir -p "$root/state/nested"
+  printf '%s\n' 'data' > "$root/state/nested/file.txt"
+  run_prune_state_cache "$root" > "$root/stdout" 2> "$root/stderr"
+  test -d "$root/state"
+  test -z "$(ls -A "$root/state")"
+  grep -Fq 'pruned OMO state cache' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_state_cache_is_noop_when_empty_or_missing() {
+  local root status=0
+  root="$(mktemp -d)"
+  mkdir -p "$root/state"
+  run_prune_state_cache "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  test ! -s "$root/stderr"
+  rm -rf "$root/state"
+  run_prune_state_cache "$root" > "$root/stdout2" 2> "$root/stderr2" || status=$?
+  test "$status" -eq 0
+  test ! -s "$root/stderr2"
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -628,6 +696,10 @@ assert_prune_strips_config_json_ghost_keys
 assert_prune_is_noop_without_legacy_paths
 assert_prune_leaves_clean_config_json_alone
 assert_prune_survives_malformed_config_json
+assert_plugin_cache_prunes_all_omo_versions_only
+assert_plugin_cache_is_noop_without_cache_dir
+assert_state_cache_empties_contents_keeps_mount
+assert_state_cache_is_noop_when_empty_or_missing
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
 printf '%s\n' 'Native agents deploy tests passed'

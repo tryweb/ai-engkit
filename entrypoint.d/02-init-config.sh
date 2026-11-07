@@ -566,11 +566,44 @@ prune_legacy_omo_ghosts() {
   fi
 }
 # END FUNCTION: prune_legacy_omo_ghosts
+# BEGIN FUNCTION: prune_omo_plugin_cache
+prune_omo_plugin_cache() {
+  local cache_dir="$1"
+  local entry base
+  [ -d "$cache_dir" ] || return 0
+  # OpenCode caches one directory per plugin spec; the OMO directory name
+  # embeds the resolved version (oh-my-openagent@<ver>), which differs per
+  # environment (OH_MY_OPENAGENT_VERSION), so match the package family, never
+  # an exact version. Non-OMO entries (superpowers, language servers) are left
+  # untouched. OpenCode rebuilds a removed entry on demand if the OMO line
+  # ever returns.
+  for entry in "$cache_dir"/oh-my-openagent "$cache_dir"/oh-my-openagent@* "$cache_dir"/oh-my-opencode "$cache_dir"/oh-my-opencode@*; do
+    [ -e "$entry" ] || continue
+    base="$(basename "$entry")"
+    rm -rf "$entry"
+    echo "Native agents removed stale OMO plugin cache: $base" >&2
+  done
+}
+# END FUNCTION: prune_omo_plugin_cache
+# BEGIN FUNCTION: prune_omo_state_cache
+prune_omo_state_cache() {
+  local state_dir="$1"
+  [ -d "$state_dir" ] || return 0
+  # OMO-exclusive state cache (own named volume); dead weight on the
+  # plugin-free native line. Contents only: never remove the mount point.
+  if [ -n "$(ls -A "$state_dir" 2>/dev/null)" ]; then
+    find "$state_dir" -mindepth 1 -delete 2>/dev/null || true
+    echo "Native agents pruned OMO state cache: $state_dir" >&2
+  fi
+}
+# END FUNCTION: prune_omo_state_cache
 if [ "${NATIVE_AGENTS:-0}" = "1" ] || [ "${OMO_ENABLED:-1}" = "0" ]; then
   source "$(dirname "$0")/lib-native-routing-heads.bash"
   sync_native_routing_heads "$OPCODE_CONFIG_FILE" "$OPCODE_CONFIG_DIR/routing.json"
   deploy_native_agents "/opt/opencode/native-agents" "$OPCODE_CONFIG_DIR/agent"
   prune_legacy_omo_ghosts "$OPCODE_CONFIG_DIR"
+  prune_omo_plugin_cache "$HOME/.cache/opencode/packages"
+  prune_omo_state_cache "$HOME/.cache/oh-my-opencode"
 else
   # Leaving the native line must not leave its deployed files behind: with
   # the plugin back in charge they would register as duplicate plain-name
