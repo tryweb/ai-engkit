@@ -15,6 +15,25 @@ export type RecentRequestModelsResult = {
 };
 
 function buildRecentRequestModelsScript(auth: string): string {
+  const isV2 = process.env.OMO_ENABLED === "0";
+  const messageUrl = isV2 ? `"$BASE/api/session/\${SESSION}/message"` : `"$BASE/session/\${SESSION}/message"`;
+  const messageFilter = isV2
+    ? `'[.data[]?
+        | select(.type == "assistant" and (.error == null)
+          and (.model.id | type == "string") and (.model.providerID | type == "string"))
+        | {agent: (.agent // $agent), modelID: .model.id, providerID: .model.providerID,
+           completedAt: ((.time.completed // .time.created // 0)
+             | if type == "number" then . else (try (fromdateiso8601 * 1000) catch 0) end)}]
+      | map(select(.agent | type == "string"))
+      | if length == 0 then empty else max_by(.completedAt) end'`
+    : `'[.[]?.info
+        | select(.role == "assistant" and (.error == null)
+          and (.modelID | type == "string") and (.providerID | type == "string"))
+        | {agent: (.agent // $agent), modelID, providerID,
+           completedAt: ((.time.completed // .time.created // 0)
+             | if type == "number" then . else (try (fromdateiso8601 * 1000) catch 0) end)}]
+      | map(select(.agent | type == "string"))
+      | if length == 0 then empty else max_by(.completedAt) end'`;
   return `set -u
 MAX_DIRECTORIES=64
 MAX_PAGES_PER_DIRECTORY=50
@@ -124,17 +143,9 @@ for f in ${"$HOME"}/.config/openchamber/managed-opencode/*.json; do
     [ "\$ATTEMPTS" -le 20 ] || continue
     printf '%s\\n' "\$AGENT" >> "\$ATTEMPTS_FILE"
     OUT=\$(curl -fsS -m 10 -H 'Authorization: Basic ${auth}' \\
-      "\$BASE/session/\${SESSION}/message" 2>/dev/null || true)
+      ${messageUrl} 2>/dev/null || true)
     : > "\$CURRENT_FILE"
-    printf '%s' "\$OUT" | jq -c --arg agent "\$AGENT" '
-      [.[]?.info
-        | select(.role == "assistant" and (.error == null)
-          and (.modelID | type == "string") and (.providerID | type == "string"))
-        | {agent: (.agent // $agent), modelID, providerID,
-           completedAt: ((.time.completed // .time.created // 0)
-             | if type == "number" then . else (try (fromdateiso8601 * 1000) catch 0) end)}]
-      | map(select(.agent | type == "string"))
-      | if length == 0 then empty else max_by(.completedAt) end' \\
+    printf '%s' "\$OUT" | jq -c --arg agent "\$AGENT" ${messageFilter} \\
       > "\$CURRENT_FILE" 2>/dev/null || true
     CURRENT=\$(cat "\$CURRENT_FILE" 2>/dev/null || true)
     if [ -n "\$CURRENT" ]; then

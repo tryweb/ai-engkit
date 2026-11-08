@@ -52,6 +52,50 @@ describe("agent model history aggregation", () => {
     expect(calls[0]).not.toContain("rm -rf");
   });
 
+  test("uses V2 message endpoint and response shape when OMO is disabled", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+    try {
+      let command = "";
+      await createAgentModelHistoryClient({
+        exec: async (value) => {
+          command = value;
+          return { exitCode: 0, stdout: JSON.stringify({ models: [], truncated: false }), stderr: "" };
+        },
+      }).fetchRecentRequestModels("testpass");
+
+      expect(command).toContain("$BASE/api/session/${SESSION}/message");
+      expect(command).toContain(".data[]?");
+      expect(command).toContain(".model.id");
+      expect(command).not.toContain("$BASE/session/${SESSION}/message");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
+  test("keeps the V1 message endpoint and response shape", async () => {
+    const previous = process.env.OMO_ENABLED;
+    delete process.env.OMO_ENABLED;
+    try {
+      let command = "";
+      await createAgentModelHistoryClient({
+        exec: async (value) => {
+          command = value;
+          return { exitCode: 0, stdout: JSON.stringify({ models: [], truncated: false }), stderr: "" };
+        },
+      }).fetchRecentRequestModels("testpass");
+
+      expect(command).toContain("$BASE/session/${SESSION}/message");
+      expect(command).toContain(".[]?.info");
+      expect(command).toContain(".modelID");
+      expect(command).not.toContain("$BASE/api/session/${SESSION}/message");
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
+  });
+
   test("parses paginated object output and exposes truncation metadata", () => {
     const result = parseRecentRequestModelsResult(JSON.stringify({
       models: [
