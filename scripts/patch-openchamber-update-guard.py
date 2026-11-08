@@ -313,6 +313,12 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # CLI executeUpdate, and managed OpenCode upgrade seams. Verified against
     # the published tarball; the existing anchors remain unique.
     "2.6.1": PATCHES_V2,
+    # 2.7.0 keeps the v2 line's source shape: the install route registration,
+    # CLI executeUpdate, and managed OpenCode upgrade anchors are unchanged
+    # (verified against the @openchamber/web@2.7.0 tarball with the module's
+    # own check_version/classify: all three classify as apply, all unique).
+    # Anchor drift on any future version still fails the build closed.
+    "2.7.0": PATCHES_V2,
 }
 
 
