@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+## [2.0.18] - 2026-11-09
+
+### Changed
+- Upgrade OpenCode CLI from 2.2.5 to 2.2.6.
+- Upgrade OpenChamber from 2.6.1 to 2.7.0.
+- Upgrade OpenSpec from 1.16.0 to 1.16.1.
+- Extend the OpenChamber update guard to 2.7.0 and exercise the published package in the guard harness.
+
+### Fixed
+- Support V2 agent request history.
+
 ## [2.0.17] - 2026-11-06
 
 ### Changed
@@ -2488,8 +2499,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...HEAD
-[2.0.17]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...v2.0.17
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2685,3 +2695,5 @@
 [2.0.14]: https://github.com/tryweb/ai-engkit/compare/v2.0.13...v2.0.14
 [2.0.15]: https://github.com/tryweb/ai-engkit/compare/v2.0.14...v2.0.15
 [2.0.16]: https://github.com/tryweb/ai-engkit/compare/v2.0.15...v2.0.16
+[2.0.17]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...v2.0.17
+[2.0.18]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...v2.0.18
