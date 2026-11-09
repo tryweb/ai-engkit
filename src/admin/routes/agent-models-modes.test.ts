@@ -377,13 +377,13 @@ describe("agent verification semantics", () => {
     try {
       const routing = JSON.stringify({
         version: 1,
-        chains: { plan: { chain: [{ model: "nvidia/z-ai/glm-5.3" }] } },
+        chains: { general: { chain: [{ model: "nvidia/z-ai/glm-5.3" }] } },
       });
       const agents = JSON.stringify({
-        data: [{ id: "plan", name: "plan", mode: "subagent", model: { id: "kimi-k3", providerID: "opencode-go" } }],
+        data: [{ id: "general", name: "general", mode: "subagent", model: { id: "kimi-k3", providerID: "opencode-go" } }],
       });
       const request = JSON.stringify({
-        data: [{ type: "assistant", agent: "plan", model: { id: "z-ai/glm-5.3", providerID: "nvidia" }, error: null }],
+        data: [{ type: "assistant", agent: "general", model: { id: "z-ai/glm-5.3", providerID: "nvidia" }, error: null }],
       });
       const { deps, calls, cleanup } = stubDeps([
         { match: /jq -c '\.' ~\/\.config\/opencode\/routing\.json/, stdout: routing },
@@ -397,7 +397,7 @@ describe("agent verification semantics", () => {
       const response = await app.request("http://localhost/api/agent-models/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agents: ["plan"], verification: "inference" }),
+        body: JSON.stringify({ agents: ["general"], verification: "inference" }),
       });
 
       expect(response.status).toBe(200);
@@ -405,8 +405,8 @@ describe("agent verification semantics", () => {
         results: Record<string, { status: string; requestModel?: string }>;
         summary: { total: number; healthy: number; configured: number; unconfigured: number; failed: number; verification: string };
       };
-      expect(body.results.plan.status).toBe("healthy");
-      expect(body.results.plan.requestModel).toBe("nvidia/z-ai/glm-5.3");
+      expect(body.results.general.status).toBe("healthy");
+      expect(body.results.general.requestModel).toBe("nvidia/z-ai/glm-5.3");
       expect(body.summary).toEqual({ total: 1, healthy: 1, configured: 0, unconfigured: 0, failed: 0, verification: "inference" });
       const requestCall = calls.find((command) => command.includes("/api/session/${SESSION}/prompt"));
       expect(requestCall).toBeDefined();

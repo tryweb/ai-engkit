@@ -422,12 +422,12 @@ describe("createAgentModelsRoutes — verification mode", () => {
     const previous = process.env.OMO_ENABLED;
     process.env.OMO_ENABLED = "0";
     try {
-      const routing = '{"version":1,"chains":{"plan":{"chain":[{"model":"opencode/big-pickle"}]}}}';
+      const routing = '{"version":1,"chains":{"general":{"chain":[{"model":"opencode/big-pickle"}]}}}';
       const { deps, calls, cleanup } = stubDeps([
         { match: /jq -c '\.' ~\/\.config\/opencode\/routing\.json/, stdout: routing },
         { match: /\/api\/provider/, stdout: '{"data":[{"id":"opencode"}]}' },
         { match: /\/api\/model/, stdout: '{"data":[{"id":"big-pickle","providerID":"opencode","enabled":true,"status":"active"}]}' },
-        { match: /\/api\/agent/, stdout: '{"data":[{"id":"plan","model":{"id":"big-pickle","providerID":"opencode"}}]}' },
+        { match: /\/api\/agent/, stdout: '{"data":[{"id":"general","mode":"subagent","model":{"id":"big-pickle","providerID":"opencode"}}]}' },
         { match: /\/api\/session/, stdout: "[]" },
         { match: /mktemp \/tmp\/routing\.json\.snapshot/, stdout: "/tmp/routing.json.snapshot-test" },
         { match: /del\(\.chains\[\$agent\]\)/, stdout: "" },
@@ -436,10 +436,10 @@ describe("createAgentModelsRoutes — verification mode", () => {
       const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes: [{ agent: "plan", entries: [] }] }),
+        body: JSON.stringify({ changes: [{ agent: "general", entries: [] }] }),
       });
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ results: { plan: { ok: true, status: "cleared" } } });
+      expect(await response.json()).toMatchObject({ results: { general: { ok: true, status: "cleared" } } });
       expect(calls.some((command) => command.includes("del(.chains[$agent])"))).toBe(true);
       cleanup();
     } finally {

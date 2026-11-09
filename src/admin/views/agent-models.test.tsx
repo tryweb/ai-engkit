@@ -127,7 +127,7 @@ describe("AgentModelsPage pinned badge", () => {
 });
 
 describe("AgentModelsPage concise route status and diagnostics", () => {
-  it("shows the configured route and latest successful model while hiding the API default in diagnostics", () => {
+  it("shows the configured model and latest successful model while hiding the API default in diagnostics", () => {
     const html = render({
       agents: [{
         name: "plan",
@@ -144,10 +144,11 @@ describe("AgentModelsPage concise route status and diagnostics", () => {
     });
     const diagnosticsStart = html.indexOf("Diagnostics");
 
-    expect(html).toContain("Configured route");
+    expect(html).toContain("Configured model");
     expect(html).toContain("Last successful model");
     expect(html).toContain("Status");
-    expect(html).toContain("nvidia/z-ai/glm-5.3 → openrouter/free-fallback");
+    expect(html).toContain("nvidia/z-ai/glm-5.3");
+    expect(html).not.toContain("nvidia/z-ai/glm-5.3 → openrouter/free-fallback");
     expect(html).toContain("free-fallback @ openrouter");
     expect(html).toContain("2026-10-07 01:02 UTC");
     expect(diagnosticsStart).toBeGreaterThanOrEqual(0);

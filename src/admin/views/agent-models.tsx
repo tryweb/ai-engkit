@@ -249,7 +249,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           <table id="agent-models-table">
           <tr>
             <th>Agent</th>
-            <th>Configured route</th>
+            <th>Configured model</th>
             <th>Last successful model</th>
             <th>Status</th>
             <th></th>
@@ -280,7 +280,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
                   </dl>
                 </details>
               </td>
-              <td data-label="Configured route">
+              <td data-label="Configured model">
                 {configuredRoute ? <code>{configuredRoute}</code> : <span class="text-muted">Automatic</span>}
                 <span class="dirty-dot" style="display:none;" title="Pending change"></span>
                 <div class="pending-value text-sm" style="display:none; color:var(--warning);"></div>
