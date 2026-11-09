@@ -10,7 +10,8 @@ import {
 import { createAgentModelLiveClient } from "./agent-model-live";
 import {
   CONFIGURABLE_NATIVE_AGENTS,
-  NATIVE12_AGENTS,
+  V2_SUBAGENT_AGENTS,
+  V2_HIDDEN_MECHANISM_AGENTS,
   OMO_CONFIG,
   OPENCODE_JSON,
   ROUTING_CONFIG,
@@ -40,7 +41,7 @@ export {
   buildJqWriteCommand,
   buildRoutingWriteCommand,
   CONFIGURABLE_NATIVE_AGENTS,
-  NATIVE12_AGENTS,
+  V2_SUBAGENT_AGENTS,
   displayNameToKey,
   OMO_CONFIG,
   OPENCODE_JSON,
@@ -687,18 +688,17 @@ export async function collectAgentModelState(
   // general); internal mechanism agents (compaction, summary, title, build)
   // stay out because changing their model can break opencode internals.
   const configurableKeys = new Set<string>();
-  const gatingAgents: readonly string[] = v2 ? (NATIVE12_AGENTS as readonly string[]) : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
+  const gatingAgents: readonly string[] = v2 ? V2_SUBAGENT_AGENTS : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
   for (const displayName of subagentNames) {
     const key = displayNameToKey(displayName, knownKeys) ?? displayName.toLowerCase();
-    if ((gatingAgents as readonly string[]).includes(key) || (!v2 && knownKeys.has(key))) {
+    if (v2 ? (gatingAgents as readonly string[]).includes(key) : ((gatingAgents as readonly string[]).includes(key) || knownKeys.has(key))) {
       configurableKeys.add(key);
     }
   }
   if (v2) {
-    for (const agent of NATIVE12_AGENTS) configurableKeys.add(agent);
-    for (const key of Object.keys(config)) {
-      if ((gatingAgents as readonly string[]).includes(key)) configurableKeys.add(key);
-    }
+    for (const agent of V2_SUBAGENT_AGENTS) configurableKeys.add(agent);
+    for (const key of Object.keys(config)) if ((gatingAgents as readonly string[]).includes(key)) configurableKeys.add(key);
+    for (const key of V2_HIDDEN_MECHANISM_AGENTS) configurableKeys.delete(key);
   }
 
   const names = [...configurableKeys].sort();

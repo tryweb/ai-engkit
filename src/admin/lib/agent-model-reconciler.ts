@@ -12,7 +12,8 @@ import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type 
 import {
   CONFIGURABLE_NATIVE_AGENTS,
   MANAGED_OPENCODE_DIR,
-  NATIVE12_AGENTS,
+  V2_SUBAGENT_AGENTS,
+  V2_HIDDEN_MECHANISM_AGENTS,
   type AgentModelsDeps,
   type AgentModelChange,
   type ApplyResult,
@@ -233,15 +234,16 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
       ? Object.keys((config as RoutingConfig).chains)
       : Object.keys(config as Record<string, unknown>);
     const knownKeys = new Set(keys);
-    const gatingAgents: readonly string[] = isV2() ? (NATIVE12_AGENTS as readonly string[]) : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
+    const gatingAgents: readonly string[] = isV2() ? V2_SUBAGENT_AGENTS : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
     const configurable = new Set<string>();
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
-      if ((gatingAgents as readonly string[]).includes(key) || (!isV2() && knownKeys.has(key))) configurable.add(key);
+      if (isV2() ? (gatingAgents as readonly string[]).includes(key) : ((gatingAgents as readonly string[]).includes(key) || knownKeys.has(key))) configurable.add(key);
     }
     if (isV2()) {
-      for (const agent of NATIVE12_AGENTS) configurable.add(agent);
+      for (const agent of V2_SUBAGENT_AGENTS) configurable.add(agent);
       for (const k of keys) if ((gatingAgents as readonly string[]).includes(k)) configurable.add(k);
+      for (const k of V2_HIDDEN_MECHANISM_AGENTS) configurable.delete(k);
     }
     const mapped = new Map<string, ResolvedModel>();
     for (const [name, model] of resolvedMap ?? []) {

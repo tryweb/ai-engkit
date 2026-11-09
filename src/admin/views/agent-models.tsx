@@ -48,7 +48,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         build) are not configurable here.
       </p>
       <p class="text-sm text-muted" style="margin-top:8px;">
-        Configured route is the primary model followed by fallbacks. Last successful model comes from the latest completed request;
+        Configured model is the single override for that subagent. Saving replaces any legacy fallback chain. Last successful model comes from the latest completed request;
         its timestamp is UTC. Status separates pinning from request effectiveness. Expand Diagnostics for the OpenCode agent default
         (before V2 routing), source, and provider/config details. “Not yet verified” means no successful request is recorded;
         readiness checks provider connectivity only.
@@ -256,7 +256,9 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
           </tr>
           {state.agents.map((a) => {
             const status = STATUS_DISPLAY[a.effectiveness];
-            const configuredRoute = a.configured.map((entry) => `${entry.model}${entry.variant ? ` (${entry.variant})` : ""}`).join(" → ");
+            const configuredRoute = a.configured[0]
+              ? `${a.configured[0].model}${a.configured[0].variant ? ` (${a.configured[0].variant})` : ""}`
+              : "";
             const lastSuccessfulAt = a.lastSuccessfulRequestAt === null ? null : new Date(a.lastSuccessfulRequestAt).toISOString();
             return (
             <tr key={a.name} data-agent={a.name} id={"row-" + a.name}>
@@ -332,8 +334,7 @@ const AgentModelsContent: FC<{ state: AgentModelsState }> = ({ state }) => {
         <div class="modal" style="max-width:580px;">
           <h3 id="modal-title" style="margin-bottom:4px;">Edit primary model</h3>
           <p class="text-sm text-muted" style="margin-bottom:12px;">
-            Sets the model the subagent runs on. Fallback chains are not supported until the OMO
-            plugin honors them. Changes are collected locally — press Apply to restart once.
+            Sets one model override for this subagent. Saving replaces any existing fallback chain. Changes are collected locally — press Apply to restart once.
           </p>
           <div id="model-rows"></div>
           <div class="flex gap-2" style="justify-content:flex-end;margin-top:14px;">

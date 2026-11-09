@@ -18,6 +18,8 @@ test-output.txt
 docs/
 *.md
 *.mdx
+# Runtime agent definitions are baked into the environment image.
+!.opencode/agents/*.md
 # Exception: the image bundles MIT-licensed third-party components, so the
 # applicable third-party license terms must travel with it.
 !THIRD-PARTY-NOTICES.md

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { collectAgentModelState, createAgentModelsLib, type AgentModelStateSource, type AgentModelsDeps } from "./agent-models";
 import type { ExecResult as DockerExecResult } from "./docker";
-import { NATIVE12_AGENTS, type ResolvedModel } from "./agent-model-types";
+import { V2_SUBAGENT_AGENTS, type ResolvedModel } from "./agent-model-types";
 
 type ExecResponse = { match?: RegExp; stdout: string; stderr?: string; exitCode?: number };
 const SNAPSHOT_FILE = "/tmp/omo.jsonc.snapshot-test";
@@ -173,7 +173,7 @@ describe("fetchResolvedAgentModels", () => {
       expect(map?.get("plan")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
       expect(map?.get("librarian")).toEqual({ modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" });
       expect(map?.has("build")).toBe(false);
-      expect(calls[0]).toContain("/api/agent?location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace");
+      expect(calls[0]).toContain("/api/agent");
     } finally {
       if (previous === undefined) delete process.env.OMO_ENABLED;
       else process.env.OMO_ENABLED = previous;
@@ -717,17 +717,17 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
         fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
       };
       const state = await collectAgentModelState(fakeLib, "testpass");
-      const expected = [...NATIVE12_AGENTS].sort();
+      const expected = [...V2_SUBAGENT_AGENTS].sort();
       const actual = state.agents.map((entry) => entry.name);
       expect(actual).toEqual(expected);
-      expect(actual).toHaveLength(12);
+      expect(actual).toHaveLength(8);
       expect(actual).not.toContain("build");
       expect(actual).not.toContain("compaction");
       expect(actual).not.toContain("title");
       expect(actual).not.toContain("summary");
-      expect(actual).not.toContain("general");
+      expect(actual).toContain("general");
       for (const entry of state.agents) {
-        expect(entry.configured).toEqual([]);
+        if (entry.name !== "general") expect(entry.configured).toEqual([]);
         expect(entry.invalid).toBe(false);
       }
     } finally {
@@ -736,7 +736,7 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
     }
   });
 
-  test("Given OMO_ENABLED=0 with a configured chain for plan, When collecting state Then preserves that chain while still exposing NATIVE12", async () => {
+  test("Given OMO_ENABLED=0 with a primary-agent chain, When collecting state Then excludes the primary agent", async () => {
     const previous = process.env.OMO_ENABLED;
     process.env.OMO_ENABLED = "0";
     try {
@@ -752,10 +752,9 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
         fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
       };
       const state = await collectAgentModelState(fakeLib, "testpass");
-      const expected = [...NATIVE12_AGENTS].sort();
+      const expected = [...V2_SUBAGENT_AGENTS].sort();
       expect(state.agents.map((e) => e.name)).toEqual(expected);
-      const plan = state.agents.find((e) => e.name === "plan");
-      expect(plan?.configured).toEqual([{ model: "openai/gpt-5.6-luna-fast" }]);
+      expect(state.agents.find((e) => e.name === "plan")).toBeUndefined();
     } finally {
       if (previous === undefined) delete process.env.OMO_ENABLED;
       else process.env.OMO_ENABLED = previous;
@@ -779,10 +778,10 @@ describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
       };
       const withPins: AgentModelStateSource = {
         ...base,
-        readPinnedAgents: async () => new Set(["plan"]),
+        readPinnedAgents: async () => new Set(["general"]),
       };
       const pinned = await collectAgentModelState(withPins, "testpass");
-      expect(pinned.agents.find((e) => e.name === "plan")?.pinned).toBe(true);
+      expect(pinned.agents.find((e) => e.name === "general")?.pinned).toBe(true);
       expect(pinned.agents.find((e) => e.name === "explore")?.pinned).toBe(false);
       const withoutPins: AgentModelStateSource = { ...base };
       const unpinned = await collectAgentModelState(withoutPins, "testpass");

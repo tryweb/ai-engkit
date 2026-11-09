@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Fixed
+- Scope V2 Agent Models to the eight configurable subagents, use single-model override copy, and sync bundled agent definitions into the environment-wide OpenCode config at startup.
+
 ## [2.0.18] - 2026-11-09
 
 ### Changed

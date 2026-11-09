@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentModelReconciler } from "./agent-model-reconciler";
-import { NATIVE12_AGENTS, type AgentModelsDeps } from "./agent-model-types";
+import { V2_SUBAGENT_AGENTS, type AgentModelsDeps } from "./agent-model-types";
 import type { ExecResult } from "./docker";
 
 type Fixture = {
@@ -653,9 +653,9 @@ describe("agent model reconciler", () => {
         readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass" }),
       };
       const suggestions = await createAgentModelReconciler(deps).suggest();
-      const expected = [...NATIVE12_AGENTS].sort();
+      const expected = [...V2_SUBAGENT_AGENTS].sort();
       expect([...suggestions.keys()].sort()).toEqual(expected);
-      expect(suggestions.size).toBe(12);
+      expect(suggestions.size).toBe(8);
       expect([...suggestions.keys()]).not.toContain("build");
       expect([...suggestions.keys()]).not.toContain("compaction");
     } finally {

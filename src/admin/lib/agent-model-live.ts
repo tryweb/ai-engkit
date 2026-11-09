@@ -26,7 +26,7 @@ function buildAgentFetchScript(auth: string): string {
 }
 
 function buildV2AgentFetchScript(auth: string): string {
-  return buildManagedFetchScript(auth, "/api/agent?location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace");
+  return buildManagedFetchScript(auth, "/api/agent");
 }
 
 function buildV2ProviderFetchScript(auth: string): string {
@@ -51,7 +51,8 @@ function parseV2SubagentNames(stdout: string): readonly string[] | null {
     if (!isRecord(entry)) continue;
     const rawId = typeof entry.id === "string" ? entry.id : typeof entry.name === "string" ? entry.name : null;
     if (rawId === null || rawId.length === 0) continue;
-    if (entry.mode !== "subagent") continue;
+    if (entry.mode !== "subagent" && entry.mode !== "all") continue;
+    if (entry.hidden === true) continue;
     names.push(rawId);
   }
   return names;
@@ -98,7 +99,7 @@ export function buildRequestVerificationScript(auth: string, agent: string, mode
   else
     MODEL_JSON=null
   fi
-  SESSION=\$(jq -nc --arg agent "\$AGENT" --arg dir "/home/devuser/workspace" --argjson model "\$MODEL_JSON" '{agent:\$agent,location:{directory:\$dir}} + (if \$model == null then {} else {model:\$model} end)' | curl -fsS -m 5 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session" -d @- 2>/dev/null | jq -r '.data.id // .id // empty')
+  SESSION=\$(jq -nc --arg agent "\$AGENT" --arg dir "\$HOME/workspace" --argjson model "\$MODEL_JSON" '{agent:\$agent,location:{directory:\$dir}} + (if \$model == null then {} else {model:\$model} end)' | curl -fsS -m 5 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session" -d @- 2>/dev/null | jq -r '.data.id // .id // empty')
   [ -n "\$SESSION" ] || exit 2
   curl -fsS -m 10 -H "Authorization: Basic ${auth}" -H 'Content-Type: application/json' -X POST "\$BASE/api/session/\${SESSION}/prompt" -d "\$(jq -nc --arg agent "\$AGENT" '{agent:\$agent,text:"Reply with exactly OK."}')" >/dev/null 2>&1 || true
   curl -fsS -m 45 -H "Authorization: Basic ${auth}" -X POST "\$BASE/api/experimental/session/\${SESSION}/wait" >/dev/null 2>&1 || true
@@ -139,7 +140,7 @@ function buildRecentRequestScript(auth: string, agent: string): string {
   kill -0 "\$pid" 2>/dev/null || continue
   BASE="http://127.0.0.1:\${port}"
   AGENT=\$(printf '%s' '${agentBase64}' | base64 -d)
-  SESSIONS=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session?limit=100&location%5Bdirectory%5D=%2Fhome%2Fdevuser%2Fworkspace" 2>/dev/null || true)
+  SESSIONS=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session?limit=100&location%5Bdirectory%5D=\$(printf '%s' "\$HOME/workspace" | jq -sRr @uri)" 2>/dev/null || true)
   for SESSION in \$(printf '%s' "\$SESSIONS" | jq -r '(.data // .)[] | .id' 2>/dev/null); do
     OUT=\$(curl -fsS -m 10 -H "Authorization: Basic ${auth}" "\$BASE/api/session/\${SESSION}/message" 2>/dev/null || true)
     MODEL=\$(printf '%s' "\$OUT" | jq -c --arg agent "\$AGENT" '[.data[]? | select(.type=="assistant" and .agent==\$agent and (.error==null) and (.model.id | type=="string") and (.model.providerID | type=="string")) | {info:{role:"assistant",modelID:.model.id,providerID:.model.providerID}}] | last // empty' 2>/dev/null || true)

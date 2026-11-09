@@ -3,15 +3,22 @@ import { createAgentModelLiveClient } from "./agent-model-live";
 
 describe("buildRequestVerificationScript agent routing", () => {
   test("message POST body carries the agent so verification runs as the specified agent", async () => {
+    const previous = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "1";
+    try {
     const exec = async (command: string, _timeoutMs?: number) => {
       expect(command).toContain('jq -nc --arg agent "$AGENT"');
-      expect(command).toContain('{agent:$agent,parts:[{type:"text",text:"Reply with exactly OK."}]}');
+      expect(command).toContain("'{agent:$agent,parts:[{type:");
       expect(command).toContain("SESSION");
       return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
     };
     const lib = createAgentModelLiveClient({ exec });
     const result = await lib.fetchSuccessfulRequestModel("pass", "explore");
     expect(result).toEqual({ modelID: "mimo-v2.5-free", providerID: "opencode" });
+    } finally {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    }
   });
 });
 
@@ -233,7 +240,7 @@ describe("fetchSuccessfulRequestModel V2 gated on OMO_ENABLED=0", () => {
         expect(command).toContain("/api/experimental/session/${SESSION}/wait");
         expect(command).toContain("/api/session/${SESSION}/message");
         expect(command).toContain("location");
-        expect(command).toContain("/home/devuser/workspace");
+        expect(command).toContain('"$HOME/workspace"');
         expect(command).toContain("jq -nc");
         expect(command).toContain("prompt");
         expect(command).toContain("'{agent:$agent,text:");

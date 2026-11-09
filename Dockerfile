@@ -424,6 +424,7 @@ COPY --chmod=0755 scripts/git-credential-glab /home/${USERNAME}/.local/bin/git-c
 
 # ── entrypoint 腳本注入（需 root 寫入）──────────────────
 USER root
+COPY --chown=${USERNAME}:${USERNAME} .opencode/agents/ /opt/opencode/agents/
 COPY --chown=${USERNAME}:${USERNAME} entrypoint.d/ /entrypoint.d/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /entrypoint.d/*.sh

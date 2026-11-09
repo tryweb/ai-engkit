@@ -538,6 +538,19 @@ done
 AI_ENGKIT_AGENTS_DEFAULT="/etc/opencode/AGENTS.md.default"
 USER_AGENTS_MD="$OPCODE_CONFIG_DIR/AGENTS.md"
 
+sync_global_agent_definitions() {
+  [ "${OMO_ENABLED:-1}" = "0" ] || return 0
+  local source_dir="${AI_ENGKIT_AGENT_DEFINITIONS:-/opt/opencode/agents}"
+  local target_dir="$OPCODE_CONFIG_DIR/agents"
+  [ -d "$source_dir" ] || return 0
+  mkdir -p "$target_dir"
+  # Baked definitions are authoritative for shipped agents; retain unrelated user agents.
+  cp "$source_dir"/*.md "$target_dir"/
+  echo "Synchronized environment agent definitions to $target_dir"
+}
+
+sync_global_agent_definitions
+
 sync_ai_engkit_agents_md() {
   local default_file="$1"
   local user_file="$2"
