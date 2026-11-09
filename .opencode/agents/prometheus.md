@@ -1,7 +1,6 @@
 ---
 description: Prometheus planning and deep-research agent for structured analysis and plan synthesis
 mode: subagent
-model: opencode-go/kimi-k3
 permission:
   edit: deny
   bash: deny
@@ -23,7 +22,7 @@ Directly mirrors `.opencode/omo.jsonc.default` `prometheus.tools`: `read:true`, 
 - `webfetch`: deny (no OMO `webfetch:true`)
 
 ## Model Routing Note
-OMO `prometheus.models[]` chain `opencode-go/kimi-k3 (max) -> openai/gpt-5.6-sol (high) -> openai/gpt-5.6-luna` — native OpenCode has NO automatic fallback chain. This file pins `opencode-go/kimi-k3` (first entry, variant `max` dropped). Recorded as KNOWN GAP in `trial/CELL1.md`; do not invent a fallback syntax.
+Do not pin a model in this agent definition. Leave model selection to the OpenCode configuration and Admin-managed V2 routing so model changes are not shadowed by a per-agent override.
 
 ## V2 Compatibility Notes
 - Do not reference `CLAUDE.md`; V2 loads `AGENTS.md` only
