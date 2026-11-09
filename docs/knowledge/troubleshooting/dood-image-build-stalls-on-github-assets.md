@@ -6,6 +6,12 @@ Building the ai-engkit image from inside the ai-engkit container (Docker-out-of-
 Docker: the repo's `docker` CLI drives the host daemon) is the normal local
 verification loop, and it is what CI replaces on GitHub runners.
 
+The Docker host is Alpine 3.24. It must keep the `nftables` package installed:
+Docker's `libnetwork-setkey` prestart hook dynamically needs the host library
+`/usr/lib/libnftables.so.1`. This is a **host prerequisite**, not a dependency
+for the V2 image or its Dockerfile; ensure `nftables` remains in `/etc/apk/world`
+so future `apk upgrade` operations do not remove it.
+
 ## Problem
 
 On this DooD host a full `docker build` fails at the first `RUN`, and once past
@@ -78,6 +84,8 @@ file, then watch that file.
   ```
   Note: a script must be piped into `sh -s`, not bind-mounted — under DooD
   `-v /tmp/x.sh:/x.sh` resolves on the *host*, where that path does not exist.
+  Treat this as host bootstrap/maintenance: verify `/usr/lib/libnftables.so.1`
+  exists after installation and confirm a BuildKit `RUN` smoke build succeeds.
 - **Build with `--network=host` (no host change).** This clears the prestart-hook
   failure outright and gives the `RUN` steps working egress:
   ```bash
@@ -160,6 +168,12 @@ downloads entirely and stays the fastest way to validate one changed layer.
   showed only the broken in-daemon `default` builder at that moment, which is why
   `docker compose build` hit the hook instead of a container-driver builder.
 - `docker run --rm ubuntu:24.04 echo hello` and `--network=host` both succeed.
+- 2026-11-09: confirmed the Alpine 3.24.4 Docker host had no `nftables` library;
+  installed `nftables` 1.1.6-r1 with `chroot /host /sbin/apk add --no-cache nftables`
+  (which added it to the host's apk world). The library symlink was restored;
+  a BuildKit smoke build and `docker compose -f docker-compose.v2.dev.yml build
+  ai-dev` both completed successfully without restarting dockerd. The V2 image
+  was written as `sha256:e97fd342689b5d1f0440c1de42c31566a7cbdfc57a0e73a6ceb80c134ff2fa89`.
 - On 2026-10-12, the local `ai-engkit-ai-v2` tag pointed to an image where
   `opencode --version` was `1.18.32`, while the running `ai-engkit-v2` container
   used image `sha256:fb3e40bc1dc30cab9f4f31267a037ea5ad56ea5f28560404f12fb590fc70dc9f`
