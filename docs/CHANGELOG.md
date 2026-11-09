@@ -1,7 +1,14 @@
 ## [Unreleased]
 
+
+## [2.0.19] - 2026-11-10
+
 ### Fixed
 - Scope V2 Agent Models to the eight configurable subagents, use single-model override copy, and sync bundled agent definitions into the environment-wide OpenCode config at startup.
+- Align V2 Agent Models CI expectations with the subagent-only scope and configured-model display.
+
+### Documentation
+- Document the Alpine host `nftables` prerequisite for DooD BuildKit image builds.
 
 ## [2.0.18] - 2026-11-09
 
@@ -2502,7 +2509,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.19...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2700,3 +2707,4 @@
 [2.0.16]: https://github.com/tryweb/ai-engkit/compare/v2.0.15...v2.0.16
 [2.0.17]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...v2.0.17
 [2.0.18]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...v2.0.18
+[2.0.19]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...v2.0.19
