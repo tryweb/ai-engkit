@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 
+## [1.24.4] - 2026-11-09
+
+### Fixed
+- Prompt-free external reads via project opencode.json, scratch to .tmp/
+
 ## [1.24.3] - 2026-11-07
 
 ### Added
@@ -2426,7 +2431,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.3...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2625,3 +2630,4 @@
 [1.24.1]: https://github.com/tryweb/ai-engkit/compare/v1.24.0...v1.24.1
 [1.24.2]: https://github.com/tryweb/ai-engkit/compare/v1.24.1...v1.24.2
 [1.24.3]: https://github.com/tryweb/ai-engkit/compare/v1.24.2...v1.24.3
+[1.24.4]: https://github.com/tryweb/ai-engkit/compare/v1.24.3...v1.24.4
