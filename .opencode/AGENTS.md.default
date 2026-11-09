@@ -80,15 +80,15 @@ command gating. **Interpreter inline-code execution is permanently blocked**:
 
 ```bash
 # 1) Write the script to a file (heredoc, or your Write/editor tool)
-cat > /tmp/run.sh <<'EOF'
+cat > .tmp/run.sh <<'EOF'
 echo "step 1"
 docker ps
 EOF
 
 # 2) Execute the file (no -c flag)
-bash /tmp/run.sh                      # ✅ allowed
-sh  /tmp/run.sh                      # ✅ allowed
-chmod +x /tmp/run.sh && /tmp/run.sh  # ✅ allowed
+bash .tmp/run.sh                      # ✅ allowed
+sh .tmp/run.sh                      # ✅ allowed
+chmod +x .tmp/run.sh && .tmp/run.sh  # ✅ allowed
 ```
 
 For non-trivial conditional / cross-language logic, prefer the **`ctx_execute`**
@@ -96,6 +96,20 @@ MCP tool (sandboxed code execution) over shell scripting.
 
 Single direct commands (`git status`, `docker ps`, `jq ...`) run normally — only
 explicit `bash -c` / `sh -c` wrapper forms are blocked.
+
+### Workspace Scratch Space — Use `.tmp/`, Not `/tmp`
+
+Agent-generated scripts, downloads, and temporary outputs MUST live under the
+workspace-local `.tmp/` directory (e.g. `.tmp/run.sh`,
+`.tmp/<task>-<date>/`), never under `/tmp`:
+
+- `/tmp` is outside the opencode working directory, so every read there fires
+  an `external_directory` permission prompt.
+- `Always` survives only in server memory for the exact saved pattern — it is
+  lost on restart, and date-stamped paths (e.g. `/tmp/jonathan-ep-2026-11-08/`)
+  never match the next run.
+- `.tmp/` is gitignored, so scratch files never pollute the repo; delete your
+  own scratch files when done.
 
 ### lean-ctx background shell completion
 
