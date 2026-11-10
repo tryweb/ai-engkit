@@ -1,8 +1,8 @@
-<!-- skill-version: 1.1.0 -->
 ---
 name: knowledge-capture
 description: Manually capture reusable project knowledge into docs/knowledge markdown for Phase 1 validation.
 ---
+<!-- skill-version: 1.1.1 -->
 
 # Knowledge Capture Skill
 

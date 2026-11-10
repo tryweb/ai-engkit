@@ -131,11 +131,11 @@ put "$ROOT/docs/knowledge/maintenance/_template.md" <<'TEMPLATE'
 TEMPLATE
 
 put "$ROOT/.opencode/skills/finalize-maintenance/SKILL.md" 1 <<'SKILL'
-<!-- skill-version: 1.0.0 -->
 ---
 name: finalize-maintenance
 description: 維護完成後標準作業：撰寫維護報告、提煉經驗至知識庫、提交至 GitLab。
 ---
+<!-- skill-version: 1.0.1 -->
 
 # Finalize Maintenance
 
