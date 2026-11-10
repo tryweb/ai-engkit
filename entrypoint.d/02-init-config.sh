@@ -639,13 +639,46 @@ fi
 # --- Baked skills (enable-project-knowledge) ---
 SKILLS_ROOT="$OPCODE_CONFIG_DIR/skills"
 BAKED_SKILLS_DIR="/opt/opencode/baked-skills"
+# BEGIN FUNCTION: prune_stale_baked_skill_symlinks
+prune_stale_baked_skill_symlinks() {
+  local skills_root="$1"
+  local baked_dir="$2"
+  [ -d "$skills_root" ] || return 0
+  local link raw skill_name
+  while IFS= read -r link; do
+    [ -n "$link" ] || continue
+    raw="$(readlink "$link" 2>/dev/null || true)"
+    case "$raw" in
+      "$baked_dir"/*)
+        ;;
+      *)
+        continue
+        ;;
+    esac
+    skill_name="$(basename "$link")"
+    if [ ! -e "$link" ] || [ ! -d "$baked_dir/$skill_name" ] || [ ! -f "$baked_dir/$skill_name/SKILL.md" ]; then
+      rm "$link"
+      echo "Baked skill pruned stale symlink: $link -> $raw" >&2
+    fi
+  done < <(find "$skills_root" -mindepth 1 -maxdepth 1 -type l -print | sort)
+}
+# END FUNCTION: prune_stale_baked_skill_symlinks
 if [ -d "$BAKED_SKILLS_DIR" ]; then
   mkdir -p "$SKILLS_ROOT"
+  prune_stale_baked_skill_symlinks "$SKILLS_ROOT" "$BAKED_SKILLS_DIR"
   while IFS= read -r skill_dir; do
     [ -n "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     target="$SKILLS_ROOT/$skill_name"
-    if [ ! -e "$target" ]; then
+    if [ -L "$target" ]; then
+      if [ "$(readlink "$target" 2>/dev/null || true)" = "$skill_dir" ]; then
+        : # already symlinked to the current baked skill
+      else
+        echo "Baked skill name shadowed by existing symlink, skipping: $target (points to $(readlink "$target" 2>/dev/null || true))" >&2
+      fi
+    elif [ -e "$target" ]; then
+      echo "Baked skill shadowed by existing file, skipping symlink: $target (remove it to use baked '$skill_name')" >&2
+    else
       ln -s "$skill_dir" "$target"
       echo "Baked skill symlinked: $target -> $skill_dir"
     fi

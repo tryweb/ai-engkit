@@ -157,15 +157,12 @@ to the user. The script will report each path as `created` or `skipped (exists)`
 If all items were `skipped (exists)`, also say: "Knowledge base already enabled. Nothing changed."
 Include the ctx_knowledge status output so the user can verify facts were seeded.
 
-**Note:** The `knowledge-capture` skill is available globally and can be used
-immediately — no reload needed. Verify with:
+**Note:** The `knowledge-capture` skill is project-local only (created by the
+bootstrap script at `.opencode/skills/knowledge-capture/SKILL.md`). It is not
+installed globally, so open a new chat session (or restart and open a new
+session) for OpenCode to rescan and pick it up.
 
-```bash
-ls ~/.config/opencode/skills/knowledge-capture/SKILL.md
-```
-
-The project-local copy at `.opencode/skills/knowledge-capture/SKILL.md` (created by
-the bootstrap script) exists for git portability outside ai-engkit environments.
+The project-local copy exists for git portability outside ai-engkit environments.
 
 ---
 
