@@ -100,6 +100,10 @@ assert_eq "openchamber-row-is-current" "current" \
   "$(json_field "$aligned_out" '.OPENCHAMBER_VERSION.status // "absent"')"
 assert_eq "bun-derived-version-surfaced" "1.3.14" \
   "$(json_field "$aligned_out" '.BUN_VERSION.latest // "absent"')"
+assert_eq "omo-version-check-is-blocked" "blocked" \
+  "$(json_field "$aligned_out" '.OH_MY_OPENAGENT_VERSION.status // "absent"')"
+assert_eq "omo-upstream-is-not-queried" "blocked" \
+  "$(json_field "$aligned_out" '.OH_MY_OPENAGENT_VERSION.latest // "absent"')"
 
 echo "== CI workflow contract =="
 

@@ -23,7 +23,7 @@
 #   GH_VERSION             → github:cli/cli
 #   MARKSMAN_VERSION       → github:artempyanykh/marksman
 #   LEANCTX_VERSION        → github:yvgude/lean-ctx
-#   OH_MY_OPENAGENT_VERSION → npm:oh-my-openagent
+#   OH_MY_OPENAGENT_VERSION → blocked (v1 is no longer maintained)
 #   OPENCODE_VERSION       → npm:opencode-ai
 #   OPENCHAMBER_VERSION    → npm:@openchamber/web
 #
@@ -173,7 +173,7 @@ lookup() {
         PLAYWRIGHT_MCP_VERSION) get_npm_latest "@playwright/mcp" ;;
         GLAB_VERSION)           get_gitlab_latest "gitlab-org/cli" ;;
         LEANCTX_VERSION)        get_github_latest "yvgude/lean-ctx" ;;
-        OH_MY_OPENAGENT_VERSION) get_npm_latest "oh-my-openagent" ;;
+        OH_MY_OPENAGENT_VERSION) echo "blocked" ;;
         OPENSPEC_VERSION)        get_npm_latest "@fission-ai/openspec" ;;
         CODEGRAPH_VERSION)       get_npm_latest "@colbymchenry/codegraph" ;;
         *)                      echo "unknown" ;;
@@ -194,7 +194,7 @@ source_label() {
         PLAYWRIGHT_MCP_VERSION) echo "npm:@playwright/mcp" ;;
         GLAB_VERSION)           echo "gitlab:gitlab-org/cli" ;;
         LEANCTX_VERSION)        echo "github:yvgude/lean-ctx" ;;
-        OH_MY_OPENAGENT_VERSION) echo "npm:oh-my-openagent" ;;
+        OH_MY_OPENAGENT_VERSION) echo "v1 maintenance ended" ;;
         OPENSPEC_VERSION)        echo "npm:@fission-ai/openspec" ;;
         CODEGRAPH_VERSION)       echo "npm:@colbymchenry/codegraph" ;;
         *)                      echo "?" ;;
@@ -228,12 +228,15 @@ collect_rows() {
         case "$name" in
             OPENCODE_VERSION)    latest="$op_latest";    source="npm:opencode-ai" ;;
             OPENCHAMBER_VERSION) latest="$oc_latest";    source="npm:@openchamber/web" ;;
+            OH_MY_OPENAGENT_VERSION) latest="blocked"; source="$(source_label "$name")" ;;
             *) latest="$(lookup "$name")"; source="$(source_label "$name")" ;;
         esac
         partner_cand=""
         [[ "$name" == "OPENCODE_VERSION" ]] && partner_cand="$oc_cand"
         [[ "$name" == "OPENCHAMBER_VERSION" ]] && partner_cand="$op_cand"
-        if [[ "$latest" == "unknown" ]]; then
+        if [[ "$name" == "OH_MY_OPENAGENT_VERSION" ]]; then
+            status="blocked"
+        elif [[ "$latest" == "unknown" ]]; then
             status="check_failed"
         elif [[ "$pinned" == "$latest" ]]; then
             status="current"
