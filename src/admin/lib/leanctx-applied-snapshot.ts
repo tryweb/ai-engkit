@@ -15,6 +15,7 @@ export interface LeanCtxAppliedSnapshot {
   readonly crossProjectSearch: boolean | null;
   readonly secretDetectionEnabled: boolean | null;
   readonly secretRedactionEnabled: boolean | null;
+  readonly allowIdeConfigDirs?: boolean | null;
   readonly archiveEnabled: boolean | null;
   readonly archiveMaxAgeHours: number | null;
   readonly archiveMaxDiskMb: number | null;
@@ -60,6 +61,8 @@ function sanitizeRuntimeProfileFields(config: Record<string, unknown>): Omit<Lea
   const secretDetectionEnabled = typeof secretEnabledRaw === "boolean" ? secretEnabledRaw : null;
   const secretRedactRaw = getNested(config, ["secret_detection", "redact"]) ?? config["secret_detection.redact"];
   const secretRedactionEnabled = typeof secretRedactRaw === "boolean" ? secretRedactRaw : null;
+  const allowIdeConfigDirsRaw = config["allow_ide_config_dirs"];
+  const allowIdeConfigDirs = typeof allowIdeConfigDirsRaw === "boolean" ? allowIdeConfigDirsRaw : null;
 
   const archiveEnabledRaw = getNested(config, ["archive", "enabled"]) ?? config["archive.enabled"];
   const archiveEnabled = typeof archiveEnabledRaw === "boolean" ? archiveEnabledRaw : null;
@@ -75,6 +78,7 @@ function sanitizeRuntimeProfileFields(config: Record<string, unknown>): Omit<Lea
     crossProjectSearch,
     secretDetectionEnabled,
     secretRedactionEnabled,
+    allowIdeConfigDirs,
     archiveEnabled,
     archiveMaxAgeHours,
     archiveMaxDiskMb,
@@ -125,6 +129,7 @@ export function snapshotToProfile(snapshot: LeanCtxAppliedSnapshot): DashboardRu
     crossProjectSearch: snapshot.crossProjectSearch,
     secretDetectionEnabled: snapshot.secretDetectionEnabled,
     secretRedactionEnabled: snapshot.secretRedactionEnabled,
+    allowIdeConfigDirs: snapshot.allowIdeConfigDirs ?? null,
     archiveEnabled: snapshot.archiveEnabled,
     archiveMaxAgeHours: snapshot.archiveMaxAgeHours,
     archiveMaxDiskMb: snapshot.archiveMaxDiskMb,
@@ -160,7 +165,7 @@ export async function readAppliedSnapshot(path: string = APPLIED_SNAPSHOT_PATH):
     if (parsed["version"] !== SNAPSHOT_VERSION) return null;
     if (typeof parsed["fingerprint"] !== "string") return null;
     // Validate whitelist keys exist and no extra secret fields present
-    const allowed = new Set(["version", "fingerprint", "compressionLevel", "toolProfile", "permissionInheritance", "crossProjectSearch", "secretDetectionEnabled", "secretRedactionEnabled", "archiveEnabled", "archiveMaxAgeHours", "archiveMaxDiskMb"]);
+    const allowed = new Set(["version", "fingerprint", "compressionLevel", "toolProfile", "permissionInheritance", "crossProjectSearch", "secretDetectionEnabled", "secretRedactionEnabled", "allowIdeConfigDirs", "archiveEnabled", "archiveMaxAgeHours", "archiveMaxDiskMb"]);
     for (const k of Object.keys(parsed)) {
       if (!allowed.has(k)) return null;
     }
@@ -190,6 +195,10 @@ export async function readAppliedSnapshot(path: string = APPLIED_SNAPSHOT_PATH):
     if (!isBooleanOrNull(secretRedactRaw)) return null;
     const secretRedactionEnabled = secretRedactRaw;
 
+    const allowIdeConfigDirsRaw = parsed["allowIdeConfigDirs"] === undefined ? null : parsed["allowIdeConfigDirs"];
+    if (!isBooleanOrNull(allowIdeConfigDirsRaw)) return null;
+    const allowIdeConfigDirs = allowIdeConfigDirsRaw;
+
     const archiveEnabledRaw = parsed["archiveEnabled"] === undefined ? null : parsed["archiveEnabled"];
     if (!isBooleanOrNull(archiveEnabledRaw)) return null;
     const archiveEnabled = archiveEnabledRaw;
@@ -211,6 +220,7 @@ export async function readAppliedSnapshot(path: string = APPLIED_SNAPSHOT_PATH):
       crossProjectSearch,
       secretDetectionEnabled,
       secretRedactionEnabled,
+      allowIdeConfigDirs,
       archiveEnabled,
       archiveMaxAgeHours,
       archiveMaxDiskMb,
@@ -300,6 +310,7 @@ export function deriveDashboardRuntimeState(
       crossProjectSearch: null,
       secretDetectionEnabled: null,
       secretRedactionEnabled: null,
+      allowIdeConfigDirs: null,
       archiveEnabled: null,
       archiveMaxAgeHours: null,
       archiveMaxDiskMb: null,

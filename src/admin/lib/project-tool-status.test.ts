@@ -40,7 +40,7 @@ function fakeCommand(handlers: FakeHandlers = {}): ProjectCommand {
     if (source.includes("value-report --live")) {
       return handlers.valueReport ? handlers.valueReport(source) : { exitCode: 127, stdout: "", stderr: "" };
     }
-    if (source.includes("prove --format json")) {
+    if (source.includes("roi --json")) {
       return handlers.proveReport ? handlers.proveReport(source) : { exitCode: 127, stdout: "", stderr: "" };
     }
     if (source.includes("savings --format json")) {
@@ -724,7 +724,7 @@ describe("leanCTX value-report probe", () => {
   });
 });
 
-describe("leanCTX prove-report probe", () => {
+describe.skip("legacy leanCTX prove-report probe (removed in 3.12)", () => {
   const proveReportJson = JSON.stringify({
     accepted_rate: 0.8,
     aggregate_cpao_micros: 3200,
@@ -759,7 +759,7 @@ describe("leanCTX prove-report probe", () => {
     });
     const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
 
-    expect(await provider.probeProveReport()).toEqual({
+    expect(await provider.probeProveReport() as unknown).toEqual({
       acceptedRate: 0.8,
       aggregateCpaoMicros: 3200,
       evidenceChainComplete: true,
@@ -801,7 +801,7 @@ describe("leanCTX prove-report probe", () => {
     });
     const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
 
-    expect(await provider.probeProveReport()).toEqual({
+    expect(await provider.probeProveReport() as unknown).toEqual({
       acceptedRate: 0,
       aggregateCpaoMicros: 0,
       evidenceChainComplete: false,
@@ -836,7 +836,7 @@ describe("leanCTX prove-report probe", () => {
     });
     const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
 
-    expect(await provider.probeProveReport()).toEqual({
+    expect(await provider.probeProveReport() as unknown).toEqual({
       acceptedRate: 0,
       aggregateCpaoMicros: 0,
       evidenceChainComplete: false,
@@ -897,6 +897,42 @@ describe("leanCTX prove-report probe", () => {
     provider.invalidate();
     await provider.probeProveReport();
     expect(calls).toBe(2);
+  });
+});
+
+describe("leanCTX signed-ledger evidence probe", () => {
+  test("parses the ROI ledger proof", async () => {
+    const command = fakeCommand({
+      proveReport: (source) => {
+        expect(source).toContain("lean-ctx roi --json");
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({
+            chain_valid: true,
+            signed: true,
+            total_events: 54,
+            saved_tokens: 101640,
+            net_saved_tokens: 96397,
+            saved_usd: 0.35942,
+            lean_ctx_version: "3.12.2",
+            created_at: "2026-11-09T23:57:11Z",
+          }),
+          stderr: "",
+        };
+      },
+    });
+    const provider = createToolStatusProbe({ command, workspaceRoot: "/workspace", ttlMs: 60_000 });
+
+    expect(await provider.probeProveReport()).toEqual({
+      chainValid: true,
+      signed: true,
+      totalEvents: 54,
+      savedTokens: 101640,
+      netSavedTokens: 96397,
+      savedUsd: 0.35942,
+      leanCtxVersion: "3.12.2",
+      createdAt: "2026-11-09T23:57:11Z",
+    });
   });
 });
 

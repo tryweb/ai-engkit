@@ -112,38 +112,16 @@ export interface ValueReportStats {
   tasks: ValueReportTask[];
 }
 
-/** One task's Decision Loop evidence-chain entry from `lean-ctx prove --format json`. */
-export interface ProveReportTask {
-  taskId: string;
-  query: string;
-  profileIntent: string;
-  profileComplexity: string;
-  envelopeCreated: boolean;
-  referencesFound: string[];
-  bundleCandidates: number;
-  receiptSources: string[];
-  costMicros: number;
-  outcomeAccepted: boolean;
-  cpaoMicros: number;
-  evidenceStages: string[];
-}
-
-/** Provenance ledger metadata embedded in the prove report. */
-export interface ProvenanceLedger {
+/** Signed savings-ledger evidence surfaced from `lean-ctx roi --json` (legacy status field name retained). */
+export interface SignedLedgerEvidenceStats {
+  chainValid: boolean;
+  signed: boolean;
+  totalEvents: number;
+  savedTokens: number;
+  netSavedTokens: number;
+  savedUsd: number;
+  leanCtxVersion: string;
   createdAt: string;
-  updatedAt: string;
-  schemaVersion: number;
-  itemCount: number;
-}
-
-/** Decision Loop evidence-chain telemetry surfaced from `lean-ctx prove --format json`. */
-export interface ProveReportStats {
-  acceptedRate: number;
-  aggregateCpaoMicros: number;
-  evidenceChainComplete: boolean;
-  ledger: ProvenanceLedger;
-  totalTasks: number;
-  tasks: ProveReportTask[];
 }
 
 /** Period-scoped savings with tool breakdown from `lean-ctx savings --format json`. */
@@ -178,7 +156,7 @@ export interface ProjectToolStatusProvider {
   probeSite(): Promise<LeanCtxSiteStats | null>;
   probeGain(): Promise<GainStats | null>;
   probeValueReport(): Promise<ValueReportStats | null>;
-  probeProveReport(): Promise<ProveReportStats | null>;
+  probeProveReport(): Promise<SignedLedgerEvidenceStats | null>;
   probeSavingsReport(): Promise<SavingsReportStats | null>;
   invalidate(name?: string): void;
 }
@@ -284,8 +262,8 @@ const GAIN_JSON_COMMAND = "lean-ctx gain --json 2>/dev/null";
 const SAVINGS_VERIFY_COMMAND = "lean-ctx savings verify 2>/dev/null";
 /** `value-report --live` emits task value-gate JSON; `--live` is required for JSON output when no persisted data exists. */
 const VALUE_REPORT_COMMAND = "lean-ctx value-report --live --format json 2>/dev/null";
-/** `prove` emits Decision Loop evidence-chain JSON. */
-const PROVE_REPORT_COMMAND = "lean-ctx prove --format json 2>/dev/null";
+/** `roi --json` emits signed savings-ledger evidence; `prove` was removed. */
+const EVIDENCE_REPORT_COMMAND = "lean-ctx roi --json 2>/dev/null";
 /** `savings` emits period-scoped savings JSON with a tool breakdown. */
 const SAVINGS_REPORT_COMMAND = "lean-ctx savings --format json 2>/dev/null";
 
@@ -356,7 +334,7 @@ function parseValueReportStats(output: string): ValueReportStats | null {
   };
 }
 
-function parseProveReportStats(output: string): ProveReportStats | null {
+function parseProveReportStats(output: string): SignedLedgerEvidenceStats | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(output);
@@ -367,40 +345,15 @@ function parseProveReportStats(output: string): ProveReportStats | null {
   const record = parsed as Record<string, unknown>;
   const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
   const str = (value: unknown): string => (typeof value === "string" ? value : "");
-  const bool = (value: unknown): boolean => value === true;
-  const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((e): e is string => typeof e === "string") : []);
-  const tasksRaw = Array.isArray(record.tasks) ? record.tasks : [];
-  const tasks: ProveReportTask[] = tasksRaw.map((task) => {
-    const t = (typeof task === "object" && task !== null ? task : {}) as Record<string, unknown>;
-    return {
-      taskId: str(t.task_id),
-      query: str(t.query),
-      profileIntent: str(t.profile_intent),
-      profileComplexity: str(t.profile_complexity),
-      envelopeCreated: bool(t.envelope_created),
-      referencesFound: strings(t.references_found),
-      bundleCandidates: num(t.bundle_candidates),
-      receiptSources: strings(t.receipt_sources),
-      costMicros: num(t.cost_micros),
-      outcomeAccepted: bool(t.outcome_accepted),
-      cpaoMicros: num(t.cpao_micros),
-      evidenceStages: strings(t.evidence_stages),
-    };
-  });
-  const ledgerRaw = (typeof record.evidence_ledger === "object" && record.evidence_ledger !== null ? record.evidence_ledger : {}) as Record<string, unknown>;
-  const ledger: ProvenanceLedger = {
-    createdAt: str(ledgerRaw.created_at),
-    updatedAt: str(ledgerRaw.updated_at),
-    schemaVersion: num(ledgerRaw.schema_version),
-    itemCount: num(ledgerRaw.items),
-  };
   return {
-    acceptedRate: num(record.accepted_rate),
-    aggregateCpaoMicros: num(record.aggregate_cpao_micros),
-    evidenceChainComplete: bool(record.evidence_chain_complete),
-    ledger,
-    totalTasks: tasks.length,
-    tasks,
+    chainValid: record.chain_valid === true,
+    signed: record.signed === true,
+    totalEvents: num(record.total_events),
+    savedTokens: num(record.saved_tokens),
+    netSavedTokens: num(record.net_saved_tokens),
+    savedUsd: num(record.saved_usd),
+    leanCtxVersion: str(record.lean_ctx_version),
+    createdAt: str(record.created_at),
   };
 }
 
@@ -452,7 +405,7 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
   const leanCtxInFlight = new Map<string, Promise<Map<string, LeanCtxProjectStatus | null>>>();
   let gainCache: { at: number; value: GainStats | null } | null = null;
   let valueReportCache: { at: number; value: ValueReportStats | null } | null = null;
-  let proveReportCache: { at: number; value: ProveReportStats | null } | null = null;
+  let proveReportCache: { at: number; value: SignedLedgerEvidenceStats | null } | null = null;
   let savingsReportCache: { at: number; value: SavingsReportStats | null } | null = null;
 
   async function probeCodegraph(projectRoot: string): Promise<CodegraphStatus | null> {
@@ -564,11 +517,11 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
     }
   }
 
-  async function probeProveReport(): Promise<ProveReportStats | null> {
+  async function probeProveReport(): Promise<SignedLedgerEvidenceStats | null> {
     const now = Date.now();
     if (proveReportCache !== null && now - proveReportCache.at < ttlMs) return proveReportCache.value;
     try {
-      const result = await command(PROVE_REPORT_COMMAND, probeTimeoutMs);
+      const result = await command(EVIDENCE_REPORT_COMMAND, probeTimeoutMs);
       const value = result.exitCode === 0 ? parseProveReportStats(result.stdout) : null;
       proveReportCache = { at: Date.now(), value };
       return value;
@@ -627,7 +580,7 @@ export function createToolStatusProbe(options: ToolStatusProbeOptions): ProjectT
       leanCtxInFlight.clear();
       gainCache = null;
       valueReportCache = null;
-      proveReportCache = null;
+    proveReportCache = null;
       savingsReportCache = null;
     },
   };

@@ -41,7 +41,7 @@ describe("format helpers", () => {
     expect(formatArchive(true, 0).value).toBe("Unknown");
     expect(formatArchive(true, NaN).value).toBe("Unknown");
   });
-  test("Security precedence Unknown > At risk > Review > Protected", () => {
+  test("Security precedence Unknown > At risk > Review > Protected and reports widened IDE access", () => {
     expect(deriveSecurity({ secretDetectionEnabled: null, secretRedactionEnabled: true, crossProjectSearch: false }).value).toBe("Unknown");
     expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: false, crossProjectSearch: false }).value).toBe("At risk");
     expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: false, crossProjectSearch: false }).tone).toBe("danger");
@@ -49,6 +49,9 @@ describe("format helpers", () => {
     expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: true }).tone).toBe("warning");
     expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: false }).value).toBe("Protected");
     expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: false }).tone).toBe("success");
+    expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: false, allowIdeConfigDirs: true }).value).toBe("Review");
+    expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: false, allowIdeConfigDirs: true }).detail.at(-1)).toEqual({ label: "IDE config directory access", value: "Widened" });
+    expect(deriveSecurity({ secretDetectionEnabled: true, secretRedactionEnabled: true, crossProjectSearch: false, allowIdeConfigDirs: null }).value).toBe("Unknown");
   });
   test("Permission inheritance On/Off/Unknown", () => {
     expect(formatPermissionInheritance("on")).toBe("On");
@@ -256,5 +259,4 @@ describe("LSP aggregation", () => {
     expect(r.state).toBe("drifted"); expect(r.label).toBe("3 enabled · 1 drifted"); expect(r.tone).toBe("warning");
   });
 });
-
 

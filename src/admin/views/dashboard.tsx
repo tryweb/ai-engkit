@@ -1,7 +1,7 @@
 import type { FC } from "hono/jsx";
 import { html } from "hono/html";
 import { Layout } from "./layout";
-import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "../lib/project-tool-status";
+import type { GainStats, LeanCtxSiteStats, SignedLedgerEvidenceStats, SavingsReportStats, ValueReportStats } from "../lib/project-tool-status";
 import type { DashboardCenterSummary, DashboardRuntimeProfile, ProviderSummary, SubagentSummary, LspSummary } from "../lib/dashboard-aggregates";
 import { deriveSecurity, formatArchive, formatCompression, formatPermissionInheritance, formatTools, formatApplyState, formatBytesEnUs, formatIntEnUs, deriveDbHealthFreeSpaceTone } from "../lib/dashboard-aggregates";
 import type { DbHealthSummary } from "../lib/dashboard-aggregates";
@@ -40,7 +40,7 @@ interface DashboardData {
   leanctx: LeanCtxSiteStats | null;
   gain: GainStats | null;
   valueReport: ValueReportStats | null;
-  proveReport: ProveReportStats | null;
+  proveReport: SignedLedgerEvidenceStats | null;
   savingsReport: SavingsReportStats | null;
   update_check: UpdateCheckResult;
   upgrade_state: string;
@@ -69,6 +69,16 @@ const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ c
 };
 
 type PillTone = "success" | "danger" | "warning" | "neutral";
+
+function savingsPeriodLabel(period: string | undefined): string {
+  switch (period) {
+    case "day": return "last 24 hours";
+    case "week": return "last 7 days";
+    case "month": return "last 30 days";
+    case "all": return "all time";
+    default: return period || "period unavailable";
+  }
+}
 
 /** Reusable status pill — tone maps to .status-pill--{tone}; ariaLabel for glyph-only labels. */
 const StatusPill: FC<{ tone: PillTone; label: string; ariaLabel?: string }> = ({ tone, label, ariaLabel }) =>
@@ -101,7 +111,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
   const { gain, leanctx, valueReport, proveReport, savingsReport } = data;
   const uptime = data.uptime_seconds != null ? `${Math.floor(data.uptime_seconds / 60)}m` : null;
   const center = data.center ?? { state: "unavailable" as const, label: "Unavailable", tone: "danger" as const, href: "/agent" as const, ariaLabel: "Center Unavailable" };
-  const runtimeProfile = data.runtimeProfile ?? { applyState: "runtime-unavailable" as const, source: "unavailable" as const, compressionLevel: null, toolProfile: null, permissionInheritance: null, crossProjectSearch: null, secretDetectionEnabled: null, secretRedactionEnabled: null, archiveEnabled: null, archiveMaxAgeHours: null, archiveMaxDiskMb: null };
+  const runtimeProfile = data.runtimeProfile ?? { applyState: "runtime-unavailable" as const, source: "unavailable" as const, compressionLevel: null, toolProfile: null, permissionInheritance: null, crossProjectSearch: null, secretDetectionEnabled: null, secretRedactionEnabled: null, allowIdeConfigDirs: null, archiveEnabled: null, archiveMaxAgeHours: null, archiveMaxDiskMb: null };
   const providerSummary = data.providerSummary ?? { state: "unavailable" as const, totalCount: 0, issueCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/providers" as const };
   const subagentSummary = data.subagentSummary ?? { state: "unavailable" as const, configuredCount: 0, worstCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/agent-models" as const };
   const lspSummary = data.lspSummary ?? { state: "unavailable" as const, totalCount: 0, enabledCount: 0, driftCount: 0, label: "Status unavailable", tone: "neutral" as const, href: "/lsp" as const };
@@ -188,7 +198,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         const comp = formatCompression(runtimeProfile.compressionLevel);
         const tools = formatTools(runtimeProfile.toolProfile);
         const arch = formatArchive(runtimeProfile.archiveEnabled, runtimeProfile.archiveMaxAgeHours);
-        const sec = deriveSecurity({ secretDetectionEnabled: runtimeProfile.secretDetectionEnabled, secretRedactionEnabled: runtimeProfile.secretRedactionEnabled, crossProjectSearch: runtimeProfile.crossProjectSearch });
+        const sec = deriveSecurity({ secretDetectionEnabled: runtimeProfile.secretDetectionEnabled, secretRedactionEnabled: runtimeProfile.secretRedactionEnabled, crossProjectSearch: runtimeProfile.crossProjectSearch, allowIdeConfigDirs: runtimeProfile.allowIdeConfigDirs ?? null });
         const perm = formatPermissionInheritance(runtimeProfile.permissionInheritance);
         const isUnavailable = runtimeProfile.applyState === "runtime-unavailable";
         return (
@@ -346,7 +356,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               <div class="flex items-center gap-2" style="flex-wrap:wrap;">
                 <span class="badge" style="font-size:0.8rem;">{new Intl.NumberFormat("en-US").format(data.valueReport.totalTasks)} tasks assessed</span>
                 <span class="badge" style="font-size:0.8rem;">{`${(data.valueReport.acceptedRate <= 1 ? data.valueReport.acceptedRate * 100 : data.valueReport.acceptedRate).toFixed(1)}%`} acceptance</span>
-                <span class="badge" style="font-size:0.8rem;">CPAO {new Intl.NumberFormat("en-US").format(data.valueReport.cpaoMicros)}μs</span>
+                <span class="badge" style="font-size:0.8rem;">CPAO ${(data.valueReport.cpaoMicros / 1_000_000).toFixed(4)}</span>
                 <span class="badge" style="font-size:0.8rem;">ETPAO {new Intl.NumberFormat("en-US").format(data.valueReport.etpaoTokens)} tokens</span>
               </div>
             ) : (
@@ -359,23 +369,22 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         <div class="insights__subsection">
           <h4 class="insights__title">Evidence</h4>
           {data.proveReport ? (
-            data.proveReport.totalTasks > 0 ? (
-              <div class="flex items-center gap-2" style="flex-wrap:wrap;">
-                <span class="badge" style="font-size:0.8rem;">{new Intl.NumberFormat("en-US").format(data.proveReport.totalTasks)} tasks proven</span>
-                <span class={`badge ${data.proveReport.evidenceChainComplete ? "badge-success" : "badge-warning"}`} style="font-size:0.8rem;">
-                  {data.proveReport.evidenceChainComplete ? "Chain complete" : "Chain incomplete"}
+            <div class="flex items-center gap-2" style="flex-wrap:wrap;">
+                <span class={`badge ${data.proveReport.chainValid ? "badge-success" : "badge-warning"}`} style="font-size:0.8rem;">
+                  {data.proveReport.chainValid ? "SHA-256 chain valid" : "Chain invalid"}
                 </span>
-                <span class="badge" style="font-size:0.8rem;">ledger {new Intl.NumberFormat("en-US").format(data.proveReport.ledger.itemCount)} items</span>
+                <span class={`badge ${data.proveReport.signed ? "badge-success" : "badge-warning"}`} style="font-size:0.8rem;">
+                  {data.proveReport.signed ? "Signed" : "Unsigned"}
+                </span>
+                <span class="badge" style="font-size:0.8rem;">{new Intl.NumberFormat("en-US").format(data.proveReport.totalEvents)} ledger events</span>
+                <span class="badge" style="font-size:0.8rem;">{new Intl.NumberFormat("en-US").format(data.proveReport.netSavedTokens)} net tokens saved</span>
               </div>
-            ) : (
-              <p class="text-sm text-muted">No evidence data</p>
-            )
           ) : (
-            <p class="text-sm text-muted">Data unavailable</p>
+            <p class="text-sm text-muted">Signed ledger evidence unavailable</p>
           )}
         </div>
         <div class="insights__subsection insights__subsection--wide">
-          <h4 class="insights__title">Top Saving Tools</h4>
+          <h4 class="insights__title">{`Top Saving Tools (${savingsPeriodLabel(savingsReport?.period)})`}</h4>
           {data.savingsReport ? (
             data.savingsReport.topSources.length > 0 ? (
               <table>

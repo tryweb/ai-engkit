@@ -14,7 +14,7 @@ import {
   type GitHostingAuthState,
 } from "./git-hosting-auth-state";
 import { getGlabAuthStatus, type GlabAuthStatusSummary } from "./glab-auth";
-import type { GainStats, LeanCtxSiteStats, ProveReportStats, SavingsReportStats, ValueReportStats } from "./project-tool-status";
+import type { GainStats, LeanCtxSiteStats, SignedLedgerEvidenceStats, SavingsReportStats, ValueReportStats } from "./project-tool-status";
 
 export type AuthStatus = "authenticated" | "not authenticated";
 
@@ -48,8 +48,8 @@ export interface StatusResponse {
   gain: GainStats | null;
   /** LeanCTX value-gate telemetry; null when no probe is wired or the probe fails. */
   valueReport: ValueReportStats | null;
-  /** LeanCTX Decision Loop evidence-chain telemetry; null when no probe is wired or the probe fails. */
-  proveReport: ProveReportStats | null;
+  /** Signed LeanCTX savings-ledger proof; null when no probe is wired or the probe fails. */
+  proveReport: SignedLedgerEvidenceStats | null;
   /** LeanCTX period-scoped savings with tool breakdown; null when no probe is wired or the probe fails. */
   savingsReport: SavingsReportStats | null;
   admin_version: string;
@@ -73,7 +73,7 @@ export interface StatusDeps {
   probeLeanCtxSite?: () => Promise<LeanCtxSiteStats | null>;
   probeGain?: () => Promise<GainStats | null>;
   probeValueReport?: () => Promise<ValueReportStats | null>;
-  probeProveReport?: () => Promise<ProveReportStats | null>;
+  probeProveReport?: () => Promise<SignedLedgerEvidenceStats | null>;
   probeSavingsReport?: () => Promise<SavingsReportStats | null>;
 }
 

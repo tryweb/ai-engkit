@@ -5,7 +5,7 @@ Adds optional lean-ctx Decision Loop summary metrics to the Admin Dashboard, alo
 ## Requirements
 
 ### Requirement: Dashboard displays Decision Loop summary metrics
-The Admin Dashboard SHALL present Decision Loop data inside the single `LeanCTX Insights` section under the `Decision Quality` label. It SHALL show total tasks assessed, acceptance rate, CPAO in microseconds, and ETPAO in tokens, and SHALL NOT repeat estimated USD savings already represented by the Dashboard savings hierarchy or show per-task details. When the value-report probe fails or returns no data, only the Decision Quality subsection SHALL render its unavailable or empty state.
+The Admin Dashboard SHALL present Decision Loop data inside the single `LeanCTX Insights` section under the `Decision Quality` label. It SHALL show total tasks assessed, acceptance rate, CPAO in USD, and ETPAO in tokens, and SHALL NOT repeat estimated USD savings already represented by the Dashboard savings hierarchy or show per-task details. When the value-report probe fails or returns no data, only the Decision Quality subsection SHALL render its unavailable or empty state.
 
 #### Scenario: Value report data renders successfully
 - **WHEN** the `value-report --live --format json` probe succeeds and returns task data
@@ -19,23 +19,19 @@ The Admin Dashboard SHALL present Decision Loop data inside the single `LeanCTX 
 - **WHEN** the value-report probe succeeds but reports zero tasks assessed
 - **THEN** Decision Quality displays `No assessments recorded yet`
 
-### Requirement: Dashboard displays evidence chain summary status
-The Admin Dashboard SHALL present evidence data inside the single `LeanCTX Insights` section under the `Evidence` label. It SHALL show total tasks proven, evidence chain completeness, and ledger item count, and SHALL NOT repeat acceptance rate already shown by Decision Quality or show per-task and full ledger metadata.
+### Requirement: Dashboard displays signed savings-ledger evidence
+The Admin Dashboard SHALL present signed savings-ledger proof inside the single `LeanCTX Insights` section under the `Evidence` label using the supported `roi --json` report. It SHALL show signature status, chain validity, and event count without implying task-level proof or evidence-chain completeness.
 
-#### Scenario: Prove report data renders successfully
-- **WHEN** the `prove --format json` probe succeeds and returns task data
-- **THEN** Evidence shows tasks proven, `Chain complete` or `Chain incomplete`, and ledger item count within LeanCTX Insights
+#### Scenario: ROI report data renders successfully
+- **WHEN** the `roi --json` probe succeeds
+- **THEN** Evidence shows whether the report is signed, whether its hash chain is valid, and the ledger event count
 
-#### Scenario: Prove probe fails
-- **WHEN** the prove probe times out, returns non-JSON, or the command is unavailable
+#### Scenario: ROI probe fails
+- **WHEN** the ROI probe times out, returns non-JSON, or the command is unavailable
 - **THEN** Evidence displays `Data unavailable` and the other Insights subsections still render
 
-#### Scenario: Prove returns empty data
-- **WHEN** the prove probe succeeds but reports zero tasks
-- **THEN** Evidence displays `No evidence data`
-
 ### Requirement: Dashboard displays a savings-by-tool summary
-The Admin Dashboard SHALL present up to five top tools inside the single `LeanCTX Insights` section under the `Top Saving Tools` label. Tools SHALL be ordered by tokens saved descending and each entry SHALL show tool name, tokens saved, and derived share using a compact proportional bar. Net tokens saved, net USD saved, and compression percentage SHALL remain owned by the KPI card and SHALL NOT be repeated in LeanCTX Insights.
+The Admin Dashboard SHALL present up to five top tools inside the single `LeanCTX Insights` section under the `Top Saving Tools` label. It SHALL identify the savings period from the report. Tools SHALL be ordered by tokens saved descending and each entry SHALL show tool name, tokens saved, and derived share using a compact proportional bar. Net tokens saved, net USD saved, and compression percentage SHALL remain owned by the KPI card and SHALL NOT be repeated in LeanCTX Insights.
 
 #### Scenario: Savings report data renders successfully
 - **WHEN** the `savings --format json` probe succeeds with more than five sources
@@ -50,7 +46,7 @@ The Admin Dashboard SHALL present up to five top tools inside the single `LeanCT
 - **THEN** Top Saving Tools displays `No savings data`
 
 ### Requirement: LeanCTX Insights uses fixed order and deterministic formatting
-LeanCTX Insights SHALL render its subsections in this fixed order: `Savings Economics`, `Decision Quality`, `Evidence`, then `Top Saving Tools`. Integer counts and token values SHALL use `en-US` grouping with no decimal places; percentages SHALL use one decimal place followed by `%`; USD values SHALL use `$` and exactly two decimal places; CPAO SHALL use a grouped integer followed by `μs`; and ETPAO SHALL use a grouped integer followed by ` tokens`.
+LeanCTX Insights SHALL render its subsections in this fixed order: `Savings Economics`, `Decision Quality`, `Evidence`, then `Top Saving Tools`. Integer counts and token values SHALL use `en-US` grouping with no decimal places; percentages SHALL use one decimal place followed by `%`; USD values SHALL use `$` and exactly two decimal places; CPAO SHALL be converted from micros to USD and shown with four decimal places; and ETPAO SHALL use a grouped integer followed by ` tokens`.
 
 #### Scenario: Insights renders complete data
 - **WHEN** all four Insights data sources succeed

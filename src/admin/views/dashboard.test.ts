@@ -445,4 +445,50 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     expect(html.includes('href="/env"')).toBe(true);
     expect(html.includes('class="dashboard__ops-row"')).toBe(true);
   });
+
+  test("Given LeanCTX insights, When rendered, Then CPAO uses dollars, savings period is explicit, and unsupported evidence is explained", () => {
+    const html = String(DashboardPage(baseData({
+      valueReport: {
+        totalTasks: 35,
+        acceptedRate: 0.8,
+        cpaoMicros: 14000,
+        etpaoTokens: 2125,
+        totalCostMicros: 392000,
+        savingsUsd: 0.12601,
+        tasks: [],
+      },
+      savingsReport: {
+        period: "week",
+        totalTasks: 0,
+        acceptedTasks: 0,
+        tokensProcessed: 34288,
+        tokensSaved: 25011,
+        compressionPercent: 72.9,
+        estimatedCostUsd: 0.08572,
+        actualCostUsd: 0.02319,
+        totalSavingsUsd: 0.06253,
+        savingsPercent: 72.9,
+        cpaoUsd: 0,
+        etpao: 0,
+        topSources: [["ctx_read", 25011]],
+      },
+      proveReport: {
+        chainValid: true,
+        signed: true,
+        totalEvents: 54,
+        savedTokens: 101640,
+        netSavedTokens: 96397,
+        savedUsd: 0.35942,
+        leanCtxVersion: "3.12.2",
+        createdAt: "2026-11-09T23:57:11Z",
+      },
+    })));
+
+    expect(html.includes("CPAO $0.0140")).toBe(true);
+    expect(html.includes("CPAO 14,000μs")).toBe(false);
+    expect(html.includes("Top Saving Tools (last 7 days)")).toBe(true);
+    expect(html.includes("SHA-256 chain valid")).toBe(true);
+    expect(html.includes("Signed")).toBe(true);
+    expect(html.includes("54 ledger events")).toBe(true);
+  });
 });

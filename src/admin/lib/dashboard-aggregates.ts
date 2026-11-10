@@ -17,6 +17,7 @@ export interface DashboardRuntimeProfile {
   readonly crossProjectSearch: boolean | null;
   readonly secretDetectionEnabled: boolean | null;
   readonly secretRedactionEnabled: boolean | null;
+  readonly allowIdeConfigDirs?: boolean | null;
   readonly archiveEnabled: boolean | null;
   readonly archiveMaxAgeHours: number | null;
   readonly archiveMaxDiskMb: number | null;
@@ -139,23 +140,26 @@ export type SecurityInputs = {
   secretDetectionEnabled: boolean | null;
   secretRedactionEnabled: boolean | null;
   crossProjectSearch: boolean | null;
+  allowIdeConfigDirs?: boolean | null;
 };
 
 export function deriveSecurity(inputs: SecurityInputs): RuntimeFieldDisplay & { detail: Array<{ label: string; value: string }> } {
   const { secretDetectionEnabled, secretRedactionEnabled, crossProjectSearch } = inputs;
+  const allowIdeConfigDirs = inputs.allowIdeConfigDirs ?? false;
   const detail: Array<{ label: string; value: string }> = [
     { label: "Secret detection", value: secretDetectionEnabled === null ? "Unknown" : secretDetectionEnabled ? "On" : "Off" },
     { label: "Secret redaction", value: secretRedactionEnabled === null ? "Unknown" : secretRedactionEnabled ? "On" : "Off" },
     { label: "Cross-project search", value: crossProjectSearch === null ? "Unknown" : crossProjectSearch ? "On" : "Off" },
+    { label: "IDE config directory access", value: allowIdeConfigDirs ? "Widened" : inputs.allowIdeConfigDirs === null ? "Unknown" : "Restricted" },
   ];
   // permission inheritance not part of posture but detail will be added by caller
-  if (secretDetectionEnabled === null || secretRedactionEnabled === null || crossProjectSearch === null) {
+  if (secretDetectionEnabled === null || secretRedactionEnabled === null || crossProjectSearch === null || inputs.allowIdeConfigDirs === null) {
     return { label: "Security", value: "Unknown", tone: "neutral", ariaLabel: "Security Unknown", detail };
   }
   if (!secretDetectionEnabled || !secretRedactionEnabled) {
     return { label: "Security", value: "At risk", tone: "danger", ariaLabel: "Security At risk", detail };
   }
-  if (crossProjectSearch) {
+  if (crossProjectSearch || allowIdeConfigDirs) {
     return { label: "Security", value: "Review", tone: "warning", ariaLabel: "Security Review", detail };
   }
   return { label: "Security", value: "Protected", tone: "success", ariaLabel: "Security Protected", detail };
