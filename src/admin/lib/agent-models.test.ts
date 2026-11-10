@@ -748,4 +748,27 @@ describe("applyAndVerifyBatch write observability", () => {
       restoreEnv();
     }
   });
+
+  test("probe timeout keeps the applied config and reports unverified without rollback", async () => {
+    const ctx = stubDeps([
+      { match: /snapshot/, stdout: SNAPSHOT_FILE },
+      { match: /opencode-go\/gemini-4-argon/, stdout: "" }, // write ok
+      { match: /\/agent/, stdout: JSON.stringify([{ name: "momus", model: { modelID: "gemini-4-argon", providerID: "opencode-go" } }]) },
+      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["opencode-go"], all: [] }) },
+      { match: /\/session/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gemini-4-argon", providerID: "opencode-go" } }) },
+      { match: /title:\"model availability probe\"/, stdout: "probe polling timed out after 90 seconds" },
+      {
+        match: /jq -c '\./,
+        stdout: '{"momus":{"model":"opencode-go/gemini-4-argon"}}',
+      },
+    ]);
+    const lib = createAgentModelsLib(ctx.deps);
+    const result = await lib.applyAndVerify("momus", [{ model: "opencode-go/gemini-4-argon" }], "inference");
+    expect(result).toMatchObject({ ok: false, status: "unverified" });
+    expect((result as { error?: unknown }).error).toContain("timed out");
+    // no rollback: single recovery restart only when rolling back
+    expect(ctx.restartCount).toBe(1);
+    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
+    ctx.cleanup();
+  });
 });

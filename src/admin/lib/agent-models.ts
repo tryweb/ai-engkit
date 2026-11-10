@@ -237,7 +237,11 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         warning: probe.reason ?? `provider quota exhausted for ${configured}`,
       };
     }
-    if (probe.status === "retryable" || probe.status === "unreachable") {
+    // Fail-open set mirrors the PUT pre-probe gate, which only blocks
+    // confirmed-dead models (retired/wrong_endpoint/unavailable). Slow or
+    // aborted probes are transient: keep the config and report unverified
+    // instead of probe_failed, which would roll back the whole batch.
+    if (probe.status === "retryable" || probe.status === "unreachable" || probe.status === "timeout" || probe.status === "aborted") {
       return { ok: false, status: "unverified", error: probe.reason ?? "model probe could not be completed" };
     }
     return { ok: false, status: "probe_failed", error: probe.reason ?? `model ${configured} is unavailable` };
