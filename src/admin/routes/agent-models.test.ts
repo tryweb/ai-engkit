@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
+import type { AgentModelsDeps } from "../lib/agent-models";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
 
 const { createAgentModelsRoutes } = await import("./agent-models");
@@ -30,9 +31,36 @@ function nativeRoutingHandlers() {
   ];
 }
 
+// The support stub serves every matching exec with the same static stdout,
+// but the post-apply read-back must observe the just-written state while
+// pre-apply reads must observe the prior state. Route the config-read
+// command through an ordered state list instead (last state repeats).
+function evolvingDeps(
+  base: { deps: AgentModelsDeps; calls: string[]; cleanup: () => void },
+  pattern: RegExp,
+  states: readonly string[],
+) {
+  let hits = 0;
+  const innerExec = base.deps.exec;
+  const exec: AgentModelsDeps["exec"] = async (command: string, timeoutMs?: number) => {
+    if (pattern.test(command)) {
+      const stdout = states[Math.min(hits, states.length - 1)] ?? "";
+      hits += 1;
+      return { stdout, stderr: "", exitCode: 0 };
+    }
+    return innerExec(command, timeoutMs);
+  };
+  return { deps: { ...base.deps, exec }, calls: base.calls, cleanup: base.cleanup };
+}
+
 describe("native routing PUT compatibility", () => {
   test("accepts a two-entry chain and preserves the primary ApplyResult", async () => {
-    const { deps, calls, cleanup } = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    const base = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    // Batch path reads config once pre-apply and once for read-back; both
+    // observe the written state (pre-apply checks pass with it present).
+    const { deps, calls, cleanup } = evolvingDeps(base, /jq -c '\./, [
+      '{"version":1,"chains":{"plan":{"chain":[{"model":"opencode/big-pickle"},{"model":"opencode/backup-model"}]}}}',
+    ]);
     const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -51,7 +79,13 @@ describe("native routing PUT compatibility", () => {
   });
 
   test("accepts legacy entries as the native chain alias", async () => {
-    const { deps, calls, cleanup } = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    const base = stubDeps(nativeRoutingHandlers(), { routingEnabled: true });
+    // Reads: pre-apply state check, applyAgent noop check, post-apply read-back.
+    const { deps, calls, cleanup } = evolvingDeps(base, /jq -c '\./, [
+      '{"version":1,"chains":{}}',
+      '{"version":1,"chains":{}}',
+      '{"version":1,"chains":{"plan":{"chain":[{"model":"opencode/big-pickle"}]}}}',
+    ]);
     const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models/plan", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -87,7 +121,7 @@ describe("native routing PUT compatibility", () => {
 
 describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
   test("clears an existing configured model", async () => {
-    const { deps, cleanup } = stubDeps([
+    const base = stubDeps([
       { match: /jq -c '\.agents/, stdout: '{"librarian":{"model":"opencode/nemotron-3.5-lightning-free"}}' },
       { match: /connected-providers\.json/, stdout: '{"connected":["opencode-go"]}' },
       { match: /provider-models\.json/, stdout: "opencode-go/qwen3.7-plus\n" },
@@ -96,6 +130,12 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
       ]) },
       { match: /cat ~\/\.omo\/omo\.jsonc/, stdout: '{"agents":{}}' },
       { match: /del\(\.agents\[\$agent\]\.model/, stdout: "" },
+    ]);
+    // Reads: pre-apply state check, applyAgent noop check, post-apply read-back (cleared).
+    const { deps, cleanup } = evolvingDeps(base, /jq -c '\.agents/, [
+      '{"librarian":{"model":"opencode/nemotron-3.5-lightning-free"}}',
+      '{"librarian":{"model":"opencode/nemotron-3.5-lightning-free"}}',
+      '{}',
     ]);
     const response = await createAgentModelsRoutes(deps).request("http://localhost/api/agent-models/librarian", {
       method: "PUT",
@@ -202,7 +242,7 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
   });
 
   test("returns verified when the resolved model matches", async () => {
-    const { deps, cleanup } = stubDeps([
+    const base = stubDeps([
       { match: /jq -c '\.agents/, stdout: '{"plan":{}}' },
       { match: /connected-providers\.json/, stdout: '{"connected":["opencode"]}' },
       { match: /provider-models\.json/, stdout: "opencode/big-pickle\n" },
@@ -211,6 +251,12 @@ describe("createAgentModelsRoutes — PUT /api/agent-models/:agent", () => {
       { match: /\/agent\b/, stdout: JSON.stringify([
         { name: "plan", mode: "subagent", model: { modelID: "big-pickle", providerID: "opencode" } },
       ]) },
+    ]);
+    // Reads: pre-apply state check, applyAgent noop check, post-apply read-back.
+    const { deps, cleanup } = evolvingDeps(base, /jq -c '\.agents/, [
+      '{"plan":{}}',
+      '{"plan":{}}',
+      '{"plan":{"model":"opencode/big-pickle","variant":"medium"}}',
     ]);
     const app = createAgentModelsRoutes(deps);
     const res = await app.request("http://localhost/api/agent-models/plan", {
