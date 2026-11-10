@@ -213,7 +213,8 @@ describe("applyAndVerify", () => {
     ]);
     const ctx = stubDeps([
       { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
+      { stdout: "" }, // explore write ok
+      { stdout: "" }, // librarian write ok
       { stdout: agentsJson },
       { stdout: agentsJson },
     ]);
@@ -222,7 +223,7 @@ describe("applyAndVerify", () => {
       { agent: "librarian", entries: [] },
     ]);
     expect(ctx.restartCount).toBe(1);
-    expect(ctx.calls.filter((command) => command.includes(".agents[$agent]")).length).toBe(1);
+    expect(ctx.calls.filter((command) => command.includes(".agents[$agent]")).length).toBe(2);
     expect(result.get("explore")).toMatchObject({ ok: true, status: "cleared" });
     expect(result.get("librarian")).toMatchObject({ ok: true, status: "cleared" });
   });
@@ -327,6 +328,10 @@ describe("applyAndVerify", () => {
       {
         match: /title:\"model availability probe\"/,
         stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }),
+      },
+      {
+        match: /jq -c '\./,
+          stdout: '{"explore":{"model":"openai/gpt-5.6-luna-fast"}}',
       },
     ]);
     const lib = createAgentModelsLib(deps);
@@ -446,7 +451,8 @@ describe("applyAndVerify", () => {
     ]);
     const lib = createAgentModelsLib(deps);
     const result = await lib.applyAndVerify("explore", [{ model: "claude-opus-5" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "write_failed", error: "jq: parse error" });
+    expect(result).toMatchObject({ ok: false, status: "write_failed" });
+    expect((result as { error?: unknown }).error).toContain("jq: parse error");
     expect(restartCount).toBe(0);
     cleanup();
   });
@@ -589,6 +595,10 @@ describe("applyAndVerify", () => {
       { stdout: "" },
       { stdout: agentsJson },
       { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
+      {
+        match: /jq -c '\./,
+          stdout: '{"explore":{"model":"openai/gpt-5.6-luna-fast"}}',
+      },
     ]);
     const lib = createAgentModelsLib(deps);
     const result = await lib.applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "readiness");
@@ -644,6 +654,98 @@ describe("applyAndVerify", () => {
     } finally {
       Object.defineProperty(globalThis, "setTimeout", { value: originalSetTimeout, writable: true, configurable: true });
       Object.defineProperty(globalThis, "clearTimeout", { value: originalClearTimeout, writable: true, configurable: true });
+    }
+  });
+});
+
+describe("applyAndVerifyBatch write observability", () => {
+  function pinBackendEnv(mode: "omo" | "routing"): () => void {
+    const previous = process.env.OMO_ENABLED;
+    if (mode === "routing") {
+      process.env.OMO_ENABLED = "0";
+    } else {
+      delete process.env.OMO_ENABLED;
+    }
+    return () => {
+      if (previous === undefined) delete process.env.OMO_ENABLED;
+      else process.env.OMO_ENABLED = previous;
+    };
+  }
+
+  test("second-agent write failure names the agent and aborts the rest", async () => {
+    const ctx = stubDeps([
+      { match: /snapshot/, stdout: SNAPSHOT_FILE },
+      { match: /openai\/a/, stdout: "" }, // explore write ok
+      { match: /openai\/b/, stdout: "", exitCode: 1, stderr: "disk full" }, // librarian write fails
+    ]);
+    const lib = createAgentModelsLib(ctx.deps);
+    const result = await lib.applyAndVerifyBatch([
+      { agent: "explore", entries: [{ model: "openai/a" }] },
+      { agent: "librarian", entries: [{ model: "openai/b" }] },
+    ]);
+    expect(result.get("librarian")).toMatchObject({ ok: false, status: "write_failed" });
+    expect((result.get("librarian") as { error?: unknown } | undefined)?.error).toContain("librarian");
+    expect((result.get("librarian") as { error?: unknown } | undefined)?.error).toContain("disk full");
+    expect(result.get("explore")).toMatchObject({ ok: false, status: "write_failed" });
+    expect((result.get("explore") as { error?: unknown } | undefined)?.error).toContain("librarian");
+    expect(ctx.restartCount).toBe(0);
+    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
+    ctx.cleanup();
+  });
+
+  test("read-back downgrades a verified result whose write did not persist (omo backend)", async () => {
+    const restoreEnv = pinBackendEnv("omo");
+    try {
+      const agentsJson = JSON.stringify([{ name: "oracle", model: { modelID: "beam-free", providerID: "opencode-go" } }]);
+      const ctx = stubDeps([
+        { match: /snapshot/, stdout: SNAPSHOT_FILE },
+        { match: /opencode-go\/beam-free/, stdout: "" }, // write reports success but persists nothing
+        { match: /\/agent/, stdout: agentsJson }, // live runtime resolves the new model
+        { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["opencode-go"], all: [] }) },
+        {
+          match: /jq -c '\./,
+          stdout: '{"oracle":{"model":"ollama/gemma4:e2b"}}', // stale file
+        },
+      ]);
+      const lib = createAgentModelsLib(ctx.deps);
+      const result = await lib.applyAndVerify("oracle", [{ model: "opencode-go/beam-free" }], "readiness");
+      expect(result).toMatchObject({ ok: false, status: "write_failed" });
+      expect((result as { error?: unknown }).error).toContain("oracle");
+      expect((result as { error?: unknown }).error).toContain("opencode-go/beam-free");
+      expect((result as { error?: unknown }).error).toContain("ollama/gemma4:e2b");
+      // no rollback: the live state may be fine, report only
+      expect(ctx.restartCount).toBe(1);
+      expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
+      ctx.cleanup();
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  test("read-back downgrades a verified result whose write did not persist (routing backend)", async () => {
+    const restoreEnv = pinBackendEnv("routing");
+    try {
+      const agentsJson = JSON.stringify([{ name: "prometheus", model: { modelID: "longcat-2.5-free", providerID: "opencode-go" } }]);
+      const ctx = stubDeps([
+        { match: /snapshot/, stdout: SNAPSHOT_FILE },
+        { match: /longcat-2\.5-free/, stdout: "" }, // write reports success but persists nothing
+        { match: /routing-heads\.tmp/, stdout: "" }, // native heads sync
+        { match: /\/agent/, stdout: agentsJson }, // live runtime resolves the new model
+        { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["opencode-go"], all: [] }) },
+        {
+          match: /jq -c '\./,
+          stdout: '{"version":1,"chains":{"prometheus":{"chain":[{"model":"ollama/gemma4:e2b"}]}}}', // stale file
+        },
+      ]);
+      const lib = createAgentModelsLib(ctx.deps);
+      const result = await lib.applyAndVerify("prometheus", [{ model: "opencode-go/longcat-2.5-free" }], "readiness");
+      expect(result).toMatchObject({ ok: false, status: "write_failed" });
+      expect((result as { error?: unknown }).error).toContain("prometheus");
+      expect(ctx.restartCount).toBe(1);
+      expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
+      ctx.cleanup();
+    } finally {
+      restoreEnv();
     }
   });
 });

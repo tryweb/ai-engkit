@@ -310,19 +310,40 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         return results;
       }
 
-      const write = await deps.exec(changes.map(({ agent, entries }) =>
-        usesRoutingConfig ? buildRoutingWriteCommand(agent, entries) : buildJqWriteCommand(agent, entries),
-      ).join(" && "), 30_000);
-      if (timedOut) {
-        for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
-        return results;
+      // Write each agent with its own exec so a failure names the agent and
+      // the exact stderr instead of collapsing the whole batch into one opaque
+      // `cmd1 && cmd2 && ...` invocation.
+      let failedWriteAgent: string | null = null;
+      let failedWriteError = "";
+      for (const change of changes) {
+        if (timedOut) {
+          for (const pending of changes) if (!results.has(pending.agent)) results.set(pending.agent, timeoutError);
+          return results;
+        }
+        const command = usesRoutingConfig
+          ? buildRoutingWriteCommand(change.agent, change.entries)
+          : buildJqWriteCommand(change.agent, change.entries);
+        const write = await deps.exec(command, 30_000);
+        if (timedOut) {
+          for (const pending of changes) if (!results.has(pending.agent)) results.set(pending.agent, timeoutError);
+          return results;
+        }
+        if (write.exitCode !== 0) {
+          failedWriteAgent = change.agent;
+          failedWriteError = write.stderr || write.stdout || "jq write failed";
+          break;
+        }
       }
-      if (write.exitCode !== 0) {
+      if (failedWriteAgent !== null) {
         const rollback = await restoreAgentModelsConfig(snapshot);
         for (const change of changes) {
+          const ownFailure = change.agent === failedWriteAgent;
+          const message = ownFailure
+            ? `agent ${change.agent}: ${failedWriteError}`
+            : `batch aborted: write failed for agent ${failedWriteAgent}`;
           results.set(change.agent, rollback.ok
-            ? { ok: false, status: "write_failed", error: write.stderr || write.stdout || "jq write failed" }
-            : { ok: false, status: "rollback_failed", error: `${write.stderr || write.stdout || "jq write failed"}; ${rollback.error ?? "rollback failed"}` });
+            ? { ok: false, status: "write_failed", error: message }
+            : { ok: false, status: "rollback_failed", error: `${message}; ${rollback.error ?? "rollback failed"}` });
         }
         return results;
       }
@@ -392,6 +413,42 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
       if (timedOut) {
         for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
         return results;
+      }
+
+      // Read-back: verification above checks the live runtime, which can look
+      // correct even when the config file did not persist the change. Re-read
+      // the file and downgrade any success whose change is missing, so a lost
+      // write can never report verified. Deliberately no rollback here: the
+      // live state may be fine, and rolling back would destroy it.
+      const persisted = await readAgentModelsConfig();
+      if (timedOut) {
+        for (const change of changes) if (!results.has(change.agent)) results.set(change.agent, timeoutError);
+        return results;
+      }
+      for (const change of changes) {
+        const current = results.get(change.agent);
+        if (current === undefined || !current.ok) continue;
+        const expectedPrimary = change.entries[0];
+        const stored = persisted[change.agent];
+        const storedPrimary = usesRoutingConfig
+          ? stored?.models?.[0]
+          : stored?.model !== undefined
+            ? { model: stored.model, ...(stored.variant ? { variant: stored.variant } : {}) }
+            : undefined;
+        const matches = expectedPrimary === undefined
+          ? storedPrimary === undefined
+          : storedPrimary !== undefined
+            && storedPrimary.model === expectedPrimary.model
+            && (storedPrimary.variant ?? "") === (expectedPrimary.variant ?? "");
+        if (!matches) {
+          const describe = (entry: { readonly model: string; readonly variant?: string } | undefined): string =>
+            entry === undefined ? "cleared" : entry.variant ? `${entry.model} (${entry.variant})` : entry.model;
+          results.set(change.agent, {
+            ok: false,
+            status: "write_failed",
+            error: `agent ${change.agent}: config file does not contain the applied change (expected ${describe(expectedPrimary)}, found ${describe(storedPrimary)}); the write did not persist`,
+          });
+        }
       }
 
       const probeFailure = [...results.entries()].find(([, result]) => !result.ok && result.status === "probe_failed");
