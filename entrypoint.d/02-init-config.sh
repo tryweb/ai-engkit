@@ -597,6 +597,19 @@ prune_omo_state_cache() {
   fi
 }
 # END FUNCTION: prune_omo_state_cache
+# BEGIN FUNCTION: archive_omo_residual_config
+archive_omo_residual_config() {
+  local omo_file="$1"
+  local backup_file
+  [ -f "$omo_file" ] || return 0
+  backup_file="${omo_file}.ai-engkit-legacy-backup"
+  if [ -e "$backup_file" ]; then
+    backup_file="${backup_file}.$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+  mv "$omo_file" "$backup_file"
+  echo "Native agents archived residual OMO config: $omo_file -> $backup_file" >&2
+}
+# END FUNCTION: archive_omo_residual_config
 if [ "${NATIVE_AGENTS:-0}" = "1" ] || [ "${OMO_ENABLED:-1}" = "0" ]; then
   source "$(dirname "$0")/lib-native-routing-heads.bash"
   sync_native_routing_heads "$OPCODE_CONFIG_FILE" "$OPCODE_CONFIG_DIR/routing.json"
@@ -604,6 +617,7 @@ if [ "${NATIVE_AGENTS:-0}" = "1" ] || [ "${OMO_ENABLED:-1}" = "0" ]; then
   prune_legacy_omo_ghosts "$OPCODE_CONFIG_DIR"
   prune_omo_plugin_cache "$HOME/.cache/opencode/packages"
   prune_omo_state_cache "$HOME/.cache/oh-my-opencode"
+  archive_omo_residual_config "$HOME/.omo/omo.jsonc"
 else
   # Leaving the native line must not leave its deployed files behind: with
   # the plugin back in charge they would register as duplicate plain-name

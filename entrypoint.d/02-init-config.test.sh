@@ -428,6 +428,14 @@ run_prune_state_cache() {
   bash "$prune_source"
 }
 
+run_archive_omo_residual() {
+  local root="$1"
+  local archive_source="$root/archive.sh"
+  extract_function "archive_omo_residual_config" "$ENTRYPOINT_FILE" > "$archive_source"
+  printf '%s\n' "archive_omo_residual_config \"$root/omo.jsonc\"" >> "$archive_source"
+  bash "$archive_source"
+}
+
 assert_deploy_installs_and_records_manifest() {
   local root
   root="$(mktemp -d)"
@@ -659,6 +667,39 @@ assert_state_cache_is_noop_when_empty_or_missing() {
   rm -rf "$root"
 }
 
+assert_archive_moves_omo_jsonc_to_backup() {
+  local root
+  root="$(mktemp -d)"
+  printf '%s\n' '{"agents":{"general":{"model":"opencode/big-pickle"}}}' > "$root/omo.jsonc"
+  run_archive_omo_residual "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/omo.jsonc"
+  grep -Fq '"general"' "$root/omo.jsonc.ai-engkit-legacy-backup"
+  grep -Fq 'archived residual OMO config' "$root/stderr"
+  rm -rf "$root"
+}
+
+assert_archive_is_noop_when_missing() {
+  local root status=0
+  root="$(mktemp -d)"
+  run_archive_omo_residual "$root" > "$root/stdout" 2> "$root/stderr" || status=$?
+  test "$status" -eq 0
+  test ! -s "$root/stderr"
+  test ! -e "$root/omo.jsonc.ai-engkit-legacy-backup"
+  rm -rf "$root"
+}
+
+assert_archive_uses_timestamp_when_backup_exists() {
+  local root
+  root="$(mktemp -d)"
+  printf '%s\n' '{"old":true}' > "$root/omo.jsonc.ai-engkit-legacy-backup"
+  printf '%s\n' '{"new":true}' > "$root/omo.jsonc"
+  run_archive_omo_residual "$root" > "$root/stdout" 2> "$root/stderr"
+  test ! -e "$root/omo.jsonc"
+  grep -Fq '"old":true' "$root/omo.jsonc.ai-engkit-legacy-backup"
+  grep -Fq '"new":true' "$root"/omo.jsonc.ai-engkit-legacy-backup.*
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -700,6 +741,9 @@ assert_plugin_cache_prunes_all_omo_versions_only
 assert_plugin_cache_is_noop_without_cache_dir
 assert_state_cache_empties_contents_keeps_mount
 assert_state_cache_is_noop_when_empty_or_missing
+assert_archive_moves_omo_jsonc_to_backup
+assert_archive_is_noop_when_missing
+assert_archive_uses_timestamp_when_backup_exists
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
 printf '%s\n' 'Native agents deploy tests passed'
