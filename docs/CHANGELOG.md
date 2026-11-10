@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+## [2.0.20] - 2026-11-10
+
+### Changed
+- Upgrade @playwright/mcp from 0.0.84 to 0.0.85.
+- Upgrade OpenSpec from 1.16.1 to 1.17.0.
+
+### Fixed
+- Keep skill frontmatter first.
+- Update LeanCTX insights evidence.
+- Let admin routing select Prometheus model.
+
+### Documentation
+- Record V2 Prometheus model override fix.
 
 ## [2.0.19] - 2026-11-10
 
@@ -2509,7 +2522,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.19...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.20...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2708,3 +2721,4 @@
 [2.0.17]: https://github.com/tryweb/ai-engkit/compare/v2.0.16...v2.0.17
 [2.0.18]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...v2.0.18
 [2.0.19]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...v2.0.19
+[2.0.20]: https://github.com/tryweb/ai-engkit/compare/v2.0.19...v2.0.20
