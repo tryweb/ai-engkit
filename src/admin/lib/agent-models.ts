@@ -66,10 +66,15 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   // OMO_ENABLED=0 reaches Admin only via the environment (the registry file
   // is only seeded on first boot), so checking readEnv alone silently keeps
   // the OMO backend and writes go to a store the native runtime ignores.
-  const usesRoutingConfig = deps.readEnv()["OMO_ENABLED"] === "0" || process.env.OMO_ENABLED === "0";
+  // Evaluated per call (not captured at lib creation): the admin process is
+  // long-lived and the flag can land after boot (migrate, upgrade, manual
+  // edit), so a frozen value would pin the wrong backend until restart.
+  function readUsesRoutingConfig(): boolean {
+    return deps.readEnv()["OMO_ENABLED"] === "0" || process.env.OMO_ENABLED === "0";
+  }
 
   async function readAgentModelsConfig(): Promise<Record<string, AgentModelConfig>> {
-    if (usesRoutingConfig) {
+    if (readUsesRoutingConfig()) {
       const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
       const result = await deps.exec(
         `if [ -f ${routing} ]; then jq -c '.' ${routing} 2>/dev/null; else printf '%s' '{"version":1,"chains":{}}'; fi`,
@@ -85,7 +90,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
     agent: string,
     entries: readonly FallbackModelEntry[],
   ): Promise<{ readonly ok: boolean; readonly error?: string }> {
-    const command = usesRoutingConfig ? buildRoutingWriteCommand(agent, entries) : buildJqWriteCommand(agent, entries);
+    const command = readUsesRoutingConfig() ? buildRoutingWriteCommand(agent, entries) : buildJqWriteCommand(agent, entries);
     const result = await deps.exec(command, 30_000);
     if (result.exitCode !== 0) {
       return { ok: false, error: result.stderr || result.stdout || "jq write failed" };
@@ -94,7 +99,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   async function snapshotAgentModelsConfig(): Promise<string | null> {
-    if (usesRoutingConfig) {
+    if (readUsesRoutingConfig()) {
       const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
       const result = await deps.exec(
         `snapshot=$(mktemp /tmp/routing.json.snapshot.XXXXXX) && if [ -f ${routing} ]; then cp ${routing} "$snapshot"; else printf '%s' '__ROUTING_CONFIG_MISSING__' > "$snapshot"; fi && printf '%s' "$snapshot"`,
@@ -112,7 +117,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   async function restoreAgentModelsConfig(snapshotFile: string): Promise<{ readonly ok: boolean; readonly error?: string }> {
-    if (usesRoutingConfig) {
+    if (readUsesRoutingConfig()) {
       const routing = `"$HOME${ROUTING_CONFIG.slice(1)}"`;
       const result = await deps.exec(
         `if [ "$(cat '${snapshotFile}')" = '__ROUTING_CONFIG_MISSING__' ]; then rm -f ${routing}; else tmp=$(mktemp "${routing}.restore.XXXXXX") && cp '${snapshotFile}' "$tmp" && chmod 600 "$tmp" && mv "$tmp" ${routing}; fi; code=$?; rm -f '${snapshotFile}'; exit "$code"`,
@@ -324,7 +329,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
           for (const pending of changes) if (!results.has(pending.agent)) results.set(pending.agent, timeoutError);
           return results;
         }
-        const command = usesRoutingConfig
+        const command = readUsesRoutingConfig()
           ? buildRoutingWriteCommand(change.agent, change.entries)
           : buildJqWriteCommand(change.agent, change.entries);
         const write = await deps.exec(command, 30_000);
@@ -352,7 +357,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         return results;
       }
 
-      const nativeSync = usesRoutingConfig
+      const nativeSync = readUsesRoutingConfig()
         ? await syncRoutingHeads(changes)
         : await syncNativeAgentOverrides();
       if (timedOut) {
@@ -434,7 +439,7 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
         if (current === undefined || !current.ok) continue;
         const expectedPrimary = change.entries[0];
         const stored = persisted[change.agent];
-        const storedPrimary = usesRoutingConfig
+        const storedPrimary = readUsesRoutingConfig()
           ? stored?.models?.[0]
           : stored?.model !== undefined
             ? { model: stored.model, ...(stored.variant ? { variant: stored.variant } : {}) }
@@ -504,7 +509,9 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   }
 
   return {
-    usesRoutingConfig,
+    get usesRoutingConfig(): boolean {
+      return readUsesRoutingConfig();
+    },
     readAgentModelsConfig,
     writeAgentFallbackModels,
     snapshotAgentModelsConfig,

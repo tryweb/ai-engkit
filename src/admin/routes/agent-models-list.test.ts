@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentModelsRoutes } from "./agent-models";
+import type { AgentModelsDeps } from "../lib/agent-models";
+import type { ExecResult } from "../lib/docker";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
 import { CONFIGURABLE_NATIVE_AGENTS } from "../lib/agent-model-types";
 
@@ -225,5 +227,75 @@ describe("createAgentModelsRoutes — GET /api/agent-models", () => {
     for (const agent of data.agents) expect(agent.resolved).toBeNull();
     expect(calls.some((command) => command.includes("/agent"))).toBe(false);
     cleanup();
+  });
+
+  test("reevaluates the OMO/native backend on every request", async () => {
+    // Regression: the backend flag was captured once at lib creation, so an
+    // admin booted before OMO_ENABLED=0 landed stayed on the OMO backend
+    // (and, with omo.jsonc archived, listed only "general") until restart.
+    const saved = process.env["OMO_ENABLED"];
+    delete process.env["OMO_ENABLED"];
+    try {
+      const envStore: Record<string, string> = {};
+      const routing = JSON.stringify({
+        version: 1,
+        chains: { general: { chain: [{ model: "opencode/mimo-v2.5-free" }] } },
+      });
+      const live = JSON.stringify([
+        { name: "general", mode: "subagent", model: { modelID: "mimo-v2.5-free", providerID: "opencode" } },
+        { name: "explore", mode: "subagent", model: { modelID: "kimi-k3", providerID: "opencode-go" } },
+      ]);
+      const exec = async (command: string): Promise<ExecResult> => {
+        if (/jq -c '\.agents/.test(command)) {
+          return { stdout: '{"explore":{"model":"opencode-go/kimi-k3"}}', stderr: "", exitCode: 0 };
+        }
+        if (/jq -c '\.'/.test(command)) {
+          return { stdout: routing, stderr: "", exitCode: 0 };
+        }
+        if (/\/provider\b/.test(command)) {
+          return {
+            stdout: JSON.stringify({
+              connected: ["opencode", "opencode-go"],
+              all: [
+                { id: "opencode", models: { "mimo-v2.5-free": {} } },
+                { id: "opencode-go", models: { "kimi-k3": {} } },
+              ],
+            }),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (/\/agent\b/.test(command)) return { stdout: live, stderr: "", exitCode: 0 };
+        if (/\/api\/session/.test(command)) return { stdout: "[]", stderr: "", exitCode: 0 };
+        return { stdout: "", stderr: "", exitCode: 1 };
+      };
+      const deps: AgentModelsDeps = {
+        exec,
+        restart: async () => ({ ok: true }),
+        readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass", ...envStore }),
+      };
+      const app = createAgentModelsRoutes(deps);
+      const get = async () =>
+        await (await app.request("http://localhost/api/agent-models")).json() as {
+          agents: Array<{ name: string; source: string; configured: unknown[] }>;
+        };
+
+      // OMO backend: explore is configured from omo.jsonc.
+      let data = await get();
+      expect(data.agents.map((agent) => agent.name).sort()).toEqual(["explore", "general"]);
+      expect(data.agents.find((agent) => agent.name === "explore")?.source).toBe("configured");
+
+      // Flip the flag without recreating the app: the next request must use
+      // the native backend (explore falls back to plugin, general is chained).
+      envStore["OMO_ENABLED"] = "0";
+      data = await get();
+      expect(data.agents.map((agent) => agent.name).sort()).toEqual(["explore", "general"]);
+      expect(data.agents.find((agent) => agent.name === "explore")?.source).toBe("plugin");
+      expect(data.agents.find((agent) => agent.name === "explore")?.configured).toEqual([]);
+      expect(data.agents.find((agent) => agent.name === "general")?.source).toBe("configured");
+    } finally {
+      if (saved === undefined) delete process.env["OMO_ENABLED"];
+      else process.env["OMO_ENABLED"] = saved;
+    }
   });
 });
