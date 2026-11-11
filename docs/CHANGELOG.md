@@ -1,6 +1,30 @@
 ## [Unreleased]
 
 
+## [1.24.5] - 2026-11-11
+
+### Added
+- Bump glab 1.128.0 → 1.130.0
+- Bump Playwright MCP and OpenSpec
+
+### Fixed
+- Correct frontmatter assertion awk in repair test
+- Auto-repair legacy bootstrapped skill formats
+- Treat timed-out or aborted inference probes as unverified
+- Attribute batch write failures per agent and read back config after apply
+- Archive residual omo.jsonc on native boot
+- Block OMO version update checks
+- Frontmatter-first templates and stale baked-symlink pruning
+
+### Documentation
+- Record legacy flat skill skipped by auto-upgrade
+- Capture inference-verify timeout rollback incident and test harness pitfalls
+
+### Changed
+- Feed post-apply config state to route-level apply tests
+- Upgrade @playwright/mcp from 0.0.84 to 0.0.85.
+- Upgrade GitLab CLI from 1.128.0 to 1.130.0.
+
 ## [1.24.4] - 2026-11-09
 
 ### Fixed
@@ -2431,7 +2455,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2631,3 +2655,4 @@
 [1.24.2]: https://github.com/tryweb/ai-engkit/compare/v1.24.1...v1.24.2
 [1.24.3]: https://github.com/tryweb/ai-engkit/compare/v1.24.2...v1.24.3
 [1.24.4]: https://github.com/tryweb/ai-engkit/compare/v1.24.3...v1.24.4
+[1.24.5]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...v1.24.5
