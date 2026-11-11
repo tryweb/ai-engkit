@@ -86,6 +86,51 @@ The OpenChamber `/` autocomplete then displayed:
 - `.opencode/baked-skills/enable-finalize-maintenance/SKILL.md`
 - `.opencode/baked-skills/enable-finalize-maintenance/bootstrap.sh`
 
+## Legacy Flat File Is Skipped by Auto-Upgrade (added 2026-11)
+
+A project that was bootstrapped **before** the folder migration keeps a flat
+file that is never loaded and never upgraded:
+
+```text
+<project>/.opencode/skills/knowledge-capture.md        # legacy, not loaded
+<project>/.opencode/skills/knowledge-capture/SKILL.md  # missing → auto-upgrade skips it
+```
+
+- `upgrade_bootstrapped_skills` (`entrypoint.d/02-init-config.sh`) only upgrades
+  projects where `.opencode/skills/<skill>/SKILL.md` already exists. A
+  flat-file-only project is silently skipped on every container start, even
+  after the template version is bumped.
+- Fix: move the flat file to the folder form (`git mv` keeps history), then
+  put the version marker after the closing `---`:
+
+```bash
+mkdir -p .opencode/skills/knowledge-capture
+git mv .opencode/skills/knowledge-capture.md .opencode/skills/knowledge-capture/SKILL.md
+# then insert "<!-- skill-version: 1.1.1 -->" after the closing "---"
+```
+
+- Verify against the backend, not a model's self-report: an agent answering
+  "list your skills" can only see what its session loaded, so it cannot prove
+  the file is loadable. Query
+  `GET /skill?directory=<project>` on the managed `opencode serve` with
+  `OPENCODE_SERVER_PASSWORD` basic auth, or compare against a freshly created
+  probe directory containing the same file.
+- The managed backend caches a project's skill scan. A fixed file is invisible
+  until the backend process restarts (see
+  `opencode-skill-leading-comment-breaks-discovery.md`). Confirm no session is
+  `busy` before restarting.
+
+Evidence (`ep-design` workspace, OpenCode `1.19.5`, ai-engkit `v1.24.4` host):
+
+- Legacy file introduced in commit `cc54d89` (`建立知識庫結構與 knowledge-capture skill`).
+- Before restart, `/skill?directory=ep-design` returned 18 skills without
+  `knowledge-capture`; a fresh probe directory with the same fixed file returned
+  21 including it.
+- After backend restart, `ep-design` returned 19 skills including
+  `knowledge-capture`. The user confirmed a new session lists the skill.
+- Not covered here: six other `ep-design` project skills lack frontmatter
+  entirely and remain unloaded; they need a separate fix.
+
 ## Tags
 
-`#opencode` `#openchamber` `#skills` `#discovery` `#troubleshooting`
+`#opencode` `#openchamber` `#skills` `#discovery` `#troubleshooting` `#auto-upgrade`
