@@ -49,6 +49,14 @@ run_upgrade() {
   source "$upgrade_source"
 }
 
+run_repair_legacy() {
+  local root="$1"
+  local repair_source="$root/repair.sh"
+  extract_function "repair_legacy_bootstrapped_skills" "$ENTRYPOINT_FILE" > "$repair_source"
+  printf '%s\n' "repair_legacy_bootstrapped_skills \"$root/workspace\" knowledge-capture finalize-maintenance security-audit" >> "$repair_source"
+  bash "$repair_source" 2> "$root/repair.stderr"
+}
+
 assert_migration_backup_and_marker_boundary() {
   local root
   root="$(mktemp -d)"
@@ -367,6 +375,56 @@ assert_upgrade_multiple_skills_independently() {
   grep -q 'skill-version: 1.1.0' "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md" || { echo "FAIL: finalize-maintenance not upgraded" >&2; exit 1; }
   grep -q 'finalize-maintenance=1.1.0' "$root/.skill-versions" || { echo "FAIL: finalize-maintenance marker not written" >&2; exit 1; }
 
+  rm -rf "$root"
+}
+
+assert_repair_migrates_legacy_flat_file() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-flat"
+  mkdir -p "$project_dir/.opencode/skills"
+  printf '%s\n' '---' 'name: knowledge-capture' '---' '# Legacy body' > "$project_dir/.opencode/skills/knowledge-capture.md"
+  run_repair_legacy "$root"
+  test ! -f "$project_dir/.opencode/skills/knowledge-capture.md"
+  test -f "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -Fxq -- '---' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -Fxq '# Legacy body' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -Fq 'migrated (flat -> directory)' "$root/repair.stderr"
+  rm -rf "$root"
+}
+
+assert_repair_fixes_leading_version_comment() {
+  local root project_dir
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-broken"
+  mkdir -p "$project_dir/.opencode/skills/knowledge-capture"
+  printf '%s\n' '<!-- skill-version: 1.0.0 -->' '---' 'name: knowledge-capture' 'description: d' '---' '# Broken' > "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  run_repair_legacy "$root"
+  test "$(sed -n '1p' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md")" = "---"
+  grep -Fq '<!-- skill-version: 1.0.0 -->' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  awk 'NR==1{exit($0=="---"?0:1)} /^---$/{n++} n==2{found=NR} END{exit(found?0:1)}' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  grep -Fq 'frontmatter moved to line 1' "$root/repair.stderr"
+  rm -rf "$root"
+}
+
+assert_repair_is_idempotent_and_safe() {
+  local root project_dir before after
+  root="$(mktemp -d)"
+  project_dir="$root/workspace/proj-ok"
+  mkdir -p "$project_dir/.opencode/skills/knowledge-capture" "$project_dir/.opencode/skills/finalize-maintenance"
+  printf '%s\n' '---' 'name: knowledge-capture' '---' '<!-- skill-version: 1.1.1 -->' '# OK' > "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  # Flat file must not be touched when directory format already exists.
+  printf '%s\n' '---' 'name: finalize-maintenance' '---' '# Legacy sidecar' > "$project_dir/.opencode/skills/finalize-maintenance.md"
+  printf '%s\n' '---' 'name: finalize-maintenance' '---' '# OK' > "$project_dir/.opencode/skills/finalize-maintenance/SKILL.md"
+  # Unmanaged/custom skill must not be reported or modified.
+  printf '%s\n' '# custom' > "$project_dir/.opencode/skills/custom.md"
+  mkdir -p "$project_dir/.opencode/skills/custom-skill"
+  printf '%s\n' '<!-- not a version marker -->' '# custom' > "$project_dir/.opencode/skills/custom-skill/SKILL.md"
+  before="$(find "$project_dir/.opencode/skills" -type f -print0 | sort -z | xargs -0 sha256sum)"
+  run_repair_legacy "$root"
+  after="$(find "$project_dir/.opencode/skills" -type f -print0 | sort -z | xargs -0 sha256sum)"
+  test "$before" = "$after"
+  test ! -s "$root/repair.stderr"
   rm -rf "$root"
 }
 
@@ -724,6 +782,9 @@ assert_upgrade_when_version_changes
 assert_skip_when_version_unchanged
 assert_skip_projects_without_skill
 assert_upgrade_multiple_skills_independently
+assert_repair_migrates_legacy_flat_file
+assert_repair_fixes_leading_version_comment
+assert_repair_is_idempotent_and_safe
 assert_deploy_installs_and_records_manifest
 assert_deploy_removes_omo_display_name_ghosts
 assert_deploy_prunes_dropped_agent_via_manifest

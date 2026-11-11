@@ -769,7 +769,100 @@ upgrade_bootstrapped_skills() {
 }
 # END FUNCTION: upgrade_bootstrapped_skills
 
-# Register all bootstrappable skills for auto-upgrade.
+# Repair legacy or broken bootstrapped skill formats so OpenCode can load them.
+# - Flat <skill>.md (no <skill>/SKILL.md): move to directory format, preserving content.
+# - SKILL.md with a leading <!-- skill-version ... --> before frontmatter: move marker after
+#   the closing frontmatter delimiter (OpenCode requires frontmatter at line 1).
+# Writes only to managed skill paths; idempotent. Backend restart is still required for
+# a running managed opencode serve to rescan.
+# Usage: repair_legacy_bootstrapped_skills <workspace_dir> [skill_name...]
+# BEGIN FUNCTION: repair_legacy_bootstrapped_skills
+repair_legacy_bootstrapped_skills() {
+  local workspace_dir="$1"
+  shift || true
+  local skills=("$@")
+  local proj_dir skill flat_file skill_dir skill_file first_line tmp_file
+
+  repair_bootstrapped_skill_frontmatter() {
+    local file="$1"
+    local head
+    IFS= read -r head < "$file" || head=""
+    case "$head" in
+      ---) return 0 ;;
+      '<!-- skill-version:'*'-->')
+        ;;
+      *)
+        echo "Bootstrapped skill has unrecognized leading content (manual fix needed): ${file}" >&2
+        return 0
+        ;;
+    esac
+    tmp_file="$(mktemp "${file}.tmp.XXXXXX")" || {
+      echo "Bootstrapped skill frontmatter repair failed (mktemp): ${file}" >&2
+      return 1
+    }
+    if awk '
+      NR==1 { marker=$0; next }
+      NR==2 && $0=="---" { in_fm=1; print; next }
+      in_fm && $0=="---" { print; print ""; print marker; in_fm=2; next }
+      { print }
+      END { exit(in_fm==2 ? 0 : 1) }
+    ' "$file" > "$tmp_file"; then
+      if chmod --reference="$file" "$tmp_file" 2>/dev/null || chmod 644 "$tmp_file"; then
+        if mv "$tmp_file" "$file"; then
+          echo "Bootstrapped skill repaired (frontmatter moved to line 1): ${file}" >&2
+        else
+          rm -f "$tmp_file"
+          echo "Bootstrapped skill frontmatter repair failed (move): ${file}" >&2
+          return 1
+        fi
+      else
+        rm -f "$tmp_file"
+        echo "Bootstrapped skill frontmatter repair failed (chmod): ${file}" >&2
+        return 1
+      fi
+    else
+      rm -f "$tmp_file"
+      echo "Bootstrapped skill frontmatter repair skipped (unexpected structure): ${file}" >&2
+    fi
+  }
+
+  [ -d "$workspace_dir" ] || return 0
+  for proj_dir in "$workspace_dir"/*/; do
+    [ -d "$proj_dir" ] || continue
+    for skill in "${skills[@]}"; do
+      [ -n "$skill" ] || continue
+      flat_file="${proj_dir}.opencode/skills/${skill}.md"
+      skill_dir="${proj_dir}.opencode/skills/${skill}"
+      skill_file="${skill_dir}/SKILL.md"
+
+      if [ -f "$flat_file" ] && [ ! -e "$skill_file" ]; then
+        if [ -e "$skill_dir" ] && [ ! -d "$skill_dir" ]; then
+          echo "Bootstrapped skill migration skipped (path is not a directory): ${skill_dir}" >&2
+          continue
+        fi
+        if ! mkdir -p "$skill_dir"; then
+          echo "Bootstrapped skill migration failed (mkdir): ${skill_dir}" >&2
+          continue
+        fi
+        if mv "$flat_file" "$skill_file"; then
+          echo "Bootstrapped skill migrated (flat -> directory): ${flat_file} -> ${skill_file}" >&2
+          repair_bootstrapped_skill_frontmatter "$skill_file" || true
+        else
+          echo "Bootstrapped skill migration failed (move): ${flat_file}" >&2
+        fi
+      elif [ -f "$skill_file" ]; then
+        IFS= read -r first_line < "$skill_file" || first_line=""
+        case "$first_line" in
+          ---) ;;
+          *) repair_bootstrapped_skill_frontmatter "$skill_file" || true ;;
+        esac
+      fi
+    done
+  done
+}
+# END FUNCTION: repair_legacy_bootstrapped_skills
+
+# Register all bootstrappable skills for auto-upgrade/repair.
 # Format: <skill_name> <bootstrap_dir>
 # Skills not following the bootstrap.sh + SKILL.md pattern (e.g. superpowers via symlink,
 # openspec via CLI) are not listed here.
@@ -778,6 +871,10 @@ UPGRADEABLE_SKILLS=(
   "finalize-maintenance:$SKILLS_ROOT/enable-finalize-maintenance"
   "security-audit:$SKILLS_ROOT/enable-security-audit"
 )
+
+# Repair legacy/broken project skill formats before version-based upgrades so that
+# migrated projects become eligible for upgrade in the same boot.
+repair_legacy_bootstrapped_skills "$WORKSPACE_DIR" "knowledge-capture" "finalize-maintenance" "security-audit"
 
 for _entry in "${UPGRADEABLE_SKILLS[@]}"; do
   _skill_name="${_entry%%:*}"
