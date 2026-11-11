@@ -402,7 +402,7 @@ assert_repair_fixes_leading_version_comment() {
   run_repair_legacy "$root"
   test "$(sed -n '1p' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md")" = "---"
   grep -Fq '<!-- skill-version: 1.0.0 -->' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
-  awk 'NR==1{exit($0=="---"?0:1)} /^---$/{n++} n==2{found=NR} END{exit(found?0:1)}' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
+  awk 'NR==1{first=($0=="---")} /^---$/{n++; if(n==2){second=NR}} /<!-- skill-version/{marker=NR} END{exit (first && n>=2 && marker>second ? 0 : 1)}' "$project_dir/.opencode/skills/knowledge-capture/SKILL.md"
   grep -Fq 'frontmatter moved to line 1' "$root/repair.stderr"
   rm -rf "$root"
 }
