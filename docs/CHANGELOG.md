@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 
+## [1.24.6] - 2026-11-12
+
+### Fixed
+- Native suggestions cover all subagents, not just general
+- Reevaluate agent-models backend per request
+
+### Changed
+- Upgrade Docker Compose from 5.7.0 to 5.7.1.
+- Upgrade Docker Buildx from 0.38.2 to 0.39.0.
+- Upgrade lean-ctx from 3.12.2 to 3.12.3.
+- Upgrade OpenSpec from 1.17.0 to 2.0.0.
+
 ## [1.24.5] - 2026-11-11
 
 ### Added
@@ -2455,7 +2467,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2656,3 +2668,4 @@
 [1.24.3]: https://github.com/tryweb/ai-engkit/compare/v1.24.2...v1.24.3
 [1.24.4]: https://github.com/tryweb/ai-engkit/compare/v1.24.3...v1.24.4
 [1.24.5]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...v1.24.5
+[1.24.6]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...v1.24.6
