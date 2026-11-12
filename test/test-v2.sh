@@ -28,8 +28,14 @@ cell1() {
   docker exec ai-engkit-v2dev rm -rf /home/devuser/workspace/.opencode/agents
   docker cp "${repo_root}/.opencode/agents" ai-engkit-v2dev:/home/devuser/workspace/.opencode/agents
 
-  docker exec ai-engkit-v2dev opencode --version 2>&1 | grep -q '2\.2\.6'
-  echo "PASS: opencode 2.2.6 in V2 container"
+  # Derive the expected CLI version from the V2 compose pin so a version bump
+  # does not need a matching edit here (the image must match what compose ships).
+  local expected_cli
+  expected_cli="$(sed -nE 's/.*OPENCODE_CLI_VERSION:-([0-9][0-9.]*)\}.*/\1/p' \
+    "${repo_root}/docker-compose.v2.dev.yml" | head -1)"
+  test -n "$expected_cli"
+  docker exec ai-engkit-v2dev opencode --version 2>&1 | grep -qF "$expected_cli"
+  echo "PASS: opencode ${expected_cli} in V2 container"
   docker exec ai-engkit-v2dev test ! -e /home/devuser/.bun/install/global/node_modules/7zip-bin/win
   echo "PASS: Windows-only 7-Zip executables excluded from Linux image"
 
