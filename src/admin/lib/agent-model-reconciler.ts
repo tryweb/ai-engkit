@@ -7,6 +7,7 @@ import { fetchModelMetadata } from "./model-metadata";
 import { capabilityScore, compareReferences, suggestForMode, type PolicyCapabilityCatalog, type SuggestionMode } from "./agent-model-suggestion-policy";
 import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type ProbeResult } from "./model-probe";
 import {
+  CONFIGURABLE_NATIVE_AGENTS,
   CONFIGURABLE_OMO_AGENTS,
   MANAGED_OPENCODE_DIR,
   type AgentModelsDeps,
@@ -166,9 +167,16 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     ]);
     const knownKeys = new Set(Object.keys(config));
     const configurable = new Set<string>();
+    // The suggestion set must follow the active backend: on native the
+    // configurable universe is CONFIGURABLE_NATIVE_AGENTS, not the two OMO
+    // agents. Freezing this to the OMO list silently limits native
+    // suggestions to general/plan (and, with omo.jsonc archived, general).
+    const configurableAgents: readonly string[] = lib.usesRoutingConfig
+      ? CONFIGURABLE_NATIVE_AGENTS
+      : CONFIGURABLE_OMO_AGENTS;
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
-      if (knownKeys.has(key) || (CONFIGURABLE_OMO_AGENTS as readonly string[]).includes(key)) configurable.add(key);
+      if (knownKeys.has(key) || (configurableAgents as readonly string[]).includes(key)) configurable.add(key);
     }
     const mapped = new Map<string, ResolvedModel>();
     for (const [name, model] of resolvedMap ?? []) {

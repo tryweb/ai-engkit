@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentModelReconciler } from "./agent-model-reconciler";
+import { clearModelMetadataCache } from "./model-metadata";
 import type { AgentModelsDeps } from "./agent-model-types";
 import type { ExecResult } from "./docker";
 
@@ -634,6 +635,63 @@ describe("agent model reconciler", () => {
     expect(probedModelIds(calls)).toHaveLength(12);
     expect(new Set(probedModelIds(calls)).size).toBe(12);
     base.cleanup();
+  });
+
+  test("suggestExplicit on native covers all live subagents, not just general/plan", async () => {
+    // Regression: the suggestion agent set was frozen to CONFIGURABLE_OMO_AGENTS,
+    // so native suggestions only ever covered general (plan is primary) even
+    // though the table lists all native subagents.
+    clearModelMetadataCache();
+    try {
+      const routing = JSON.stringify({
+        version: 1,
+        chains: { general: { chain: [{ model: "opencode-go/beam-free" }] } },
+      });
+      const provider = JSON.stringify({
+        connected: ["opencode-go"],
+        all: [{ id: "opencode-go", models: { "beam-free": {} } }],
+      });
+      const agents = JSON.stringify([
+        { name: "general", mode: "subagent", model: { providerID: "opencode-go", modelID: "beam-free" } },
+        { name: "explore", mode: "subagent", model: { providerID: "opencode-go", modelID: "beam-free" } },
+        { name: "plan", mode: "primary", model: null },
+      ]);
+      const deps: AgentModelsDeps = {
+        exec: async (command: string): Promise<ExecResult> => {
+          if (command.includes("/provider")) return { stdout: provider, stderr: "", exitCode: 0 };
+          if (command.includes("/agent")) return { stdout: agents, stderr: "", exitCode: 0 };
+          if (command.includes("jq -c '.'")) return { stdout: routing, stderr: "", exitCode: 0 };
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+        restart: async () => ({ ok: true }),
+        readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass", OMO_ENABLED: "0" }),
+      };
+      const fetchImpl = async (): Promise<Response> =>
+        new Response(
+          JSON.stringify({
+            providers: {
+              "opencode-go": {
+                models: {
+                  "beam-free": {
+                    cost: { input: 0, output: 0 },
+                    limit: { context: 1048576, output: 131072 },
+                    reasoning: true,
+                    tool_call: true,
+                  },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      const out = await createAgentModelReconciler(deps).suggestExplicit("economy", ["opencode-go"], { fetchImpl });
+      expect(out.mode).toBe("economy");
+      expect([...out.suggestions.keys()].sort()).toEqual(["explore", "general"]);
+      expect(out.suggestions.get("explore")?.model).toBe("opencode-go/beam-free");
+      expect(out.suggestions.get("general")?.model).toBe("opencode-go/beam-free");
+    } finally {
+      clearModelMetadataCache();
+    }
   });
 
 });
