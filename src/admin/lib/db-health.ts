@@ -42,6 +42,11 @@ function countOrZero(db: Database, table: string): number {
   }
 }
 
+function hasTable(db: Database, table: string): boolean {
+  const row = db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+  return row !== null;
+}
+
 function freelistOrZero(db: Database): number {
   try {
     const row = db.query("PRAGMA freelist_count").get() as { freelist_count: number } | null;
@@ -76,11 +81,12 @@ export async function probeLocalDbHealth(
   let rowCounts: DbHealthRowCounts = { session: 0, event: 0, message: 0, part: 0 };
   try {
     freelistCount = freelistOrZero(db);
+    const v2 = hasTable(db, "session_v2");
     rowCounts = {
-      session: countOrZero(db, "session"),
+      session: countOrZero(db, v2 ? "session_v2" : "session"),
       event: countOrZero(db, "event"),
-      message: countOrZero(db, "message"),
-      part: countOrZero(db, "part"),
+      message: countOrZero(db, v2 ? "session_message" : "message"),
+      part: countOrZero(db, v2 ? "session_part" : "part"),
     };
   } finally {
     try {
@@ -125,15 +131,17 @@ export async function collectHostDbHealth(
   const sqliteRo = (sql: string): string =>
     `sqlite3 "file:${dbPath}?mode=ro" "${sql.replace(/"/g, '\\"')}"`;
 
-  const tables: (keyof DbHealthRowCounts)[] = ["session", "event", "message", "part"];
-  const [fileSizeRaw, freelistRaw, countRaws, dfRaw] = await Promise.all([
+  const [fileSizeRaw, freelistRaw, schemaRaw, dfRaw] = await Promise.all([
     execFn(`stat -c %s "${dbPath}" 2>/dev/null || stat -f %z "${dbPath}" 2>/dev/null || echo ""`),
     execFn(sqliteRo("PRAGMA freelist_count;")),
-    Promise.all(tables.map((t) => execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`)))),
+    execFn(sqliteRo("SELECT name FROM sqlite_master WHERE type='table' AND name='session_v2';")),
     execFn(
       `df -B1 --output=avail "${freeSpacePath}" 2>/dev/null | tail -n1 | tr -d ' ' | tr -d '\\n' || df -B1 "${freeSpacePath}" 2>/dev/null | awk 'NR==2{print $4}' | tr -d ' '`,
     ),
   ]);
+  const v2 = schemaRaw.exitCode === 0 && schemaRaw.stdout.trim() === "session_v2";
+  const sourceTables = [v2 ? "session_v2" : "session", "event", v2 ? "session_message" : "message", v2 ? "session_part" : "part"];
+  const countRaws = await Promise.all(sourceTables.map((t) => execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`))));
   const fileSizeBytes = parseCount(fileSizeRaw.stdout);
   const freelistCount = freelistRaw.exitCode === 0 ? parseCount(freelistRaw.stdout) : 0;
   const rowCounts: DbHealthRowCounts = {

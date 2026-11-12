@@ -65,6 +65,17 @@ describe("probeLocalDbHealth", () => {
     expect(typeof health.collectedAt).toBe("string");
   });
 
+  test("Given v2 schema, When probed, Then v2 session/message/part tables are counted", async () => {
+    const v2Path = join(dir, "v2.db");
+    const db = new Database(v2Path, { create: true });
+    db.exec("CREATE TABLE session_v2 (id TEXT); CREATE TABLE session_message (id TEXT); CREATE TABLE session_part (id TEXT); CREATE TABLE event (id TEXT);");
+    db.exec("INSERT INTO session_v2 VALUES ('s'); INSERT INTO session_message VALUES ('m'), ('m2'); INSERT INTO session_part VALUES ('p');");
+    db.close();
+
+    const health = await probeLocalDbHealth(v2Path);
+    expect(health.rowCounts).toEqual({ session: 1, event: 0, message: 2, part: 1 });
+  });
+
   test("Given fixture DB, When probed, Then zero writes: hash/mtime unchanged, no WAL growth", async () => {
     const beforeHash = hashFile(dbPath);
     const beforeStat = statSync(dbPath);
@@ -159,6 +170,26 @@ describe("collectHostDbHealth via execInAiDev", () => {
     for (const c of sqliteCmds) {
       expect(c).toContain("mode=ro");
     }
+  });
+
+  test("Given host database has v2 schema, Then v2 tables are queried", async () => {
+    const seen: string[] = [];
+    const fakeExec = async (cmd: string) => {
+      seen.push(cmd);
+      if (cmd.includes("stat")) return { stdout: "4096", stderr: "", exitCode: 0 };
+      if (cmd.includes("df")) return { stdout: "1000", stderr: "", exitCode: 0 };
+      if (cmd.includes("sqlite_master")) return { stdout: "session_v2", stderr: "", exitCode: 0 };
+      if (cmd.includes("session_v2")) return { stdout: "96", stderr: "", exitCode: 0 };
+      if (cmd.includes("session_message")) return { stdout: "7519", stderr: "", exitCode: 0 };
+      if (cmd.includes("session_part")) return { stdout: "0", stderr: "", exitCode: 0 };
+      if (cmd.includes("event")) return { stdout: "0", stderr: "", exitCode: 0 };
+      return { stdout: "0", stderr: "", exitCode: 0 };
+    };
+    const health = await collectHostDbHealth(fakeExec);
+    expect(health.rowCounts).toEqual({ session: 96, event: 0, message: 7519, part: 0 });
+    expect(seen.some((cmd) => cmd.includes("COUNT(*) FROM") && cmd.includes("session_v2"))).toBe(true);
+    expect(seen.some((cmd) => cmd.includes("COUNT(*) FROM") && cmd.includes("session_message"))).toBe(true);
+    expect(seen.some((cmd) => cmd.includes("COUNT(*) FROM") && cmd.includes("session_part"))).toBe(true);
   });
 });
 
