@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+
+## [2.0.21] - 2026-11-12
+
+### Changed
+- Upgrade OpenCode CLI from 2.2.6 to 2.2.7.
+- Upgrade Docker Compose from 5.7.0 to 5.7.1.
+- Upgrade Docker Buildx from 0.38.2 to 0.39.0.
+- Upgrade GitLab CLI from 1.128.0 to 1.130.0.
+- Upgrade lean-ctx from 3.12.2 to 3.12.3.
+- Upgrade OpenSpec from 1.17.0 to 2.0.0 (major: skills move to `.agents/skills/` and `/opsx:*` commands are dropped; CLI workflows used by the shipped skills are unchanged).
+
+### Fixed
+- Derive the expected OpenCode CLI version in the V2 cell1 test from the compose pin instead of hardcoding it.
+
 ## [2.0.20] - 2026-11-10
 
 ### Changed
@@ -2522,7 +2536,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.20...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2722,3 +2736,4 @@
 [2.0.18]: https://github.com/tryweb/ai-engkit/compare/v2.0.17...v2.0.18
 [2.0.19]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...v2.0.19
 [2.0.20]: https://github.com/tryweb/ai-engkit/compare/v2.0.19...v2.0.20
+[2.0.21]: https://github.com/tryweb/ai-engkit/compare/v2.0.20...v2.0.21
