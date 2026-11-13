@@ -319,6 +319,15 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # own check_version/classify: all three classify as apply, all unique).
     # Anchor drift on any future version still fails the build closed.
     "2.7.0": PATCHES_V2,
+    # 2.7.1 keeps the v2 line's source shape: all three anchors classify as
+    # apply and unique. The 2.7.0 -> 2.7.1 drift sits outside the anchors:
+    # openchamber-routes.js gains an OpenCode-version shortfall check
+    # (readOpenCodeShortfall via engines.opencode floor >=2.2.4) plus a
+    # release-notes route; package-manager.js gains a canary R2 mirror and
+    # fetchRequiredOpenCodeVersion; routes.js is byte-identical to 2.7.0
+    # (verified against the @openchamber/web@2.7.1 tarball with the module's
+    # own check_version/classify).
+    "2.7.1": PATCHES_V2,
 }
 
 

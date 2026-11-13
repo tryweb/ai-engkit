@@ -68,8 +68,9 @@ import runpy, sys
 patcher = runpy.run_path(sys.argv[1])
 assert patcher['patches_for_version']('2.7.0') is patcher['PATCHES_V2']
 assert patcher['patches_for_version']('2.6.1') is patcher['PATCHES_V2']
+assert patcher['patches_for_version']('2.7.1') is patcher['PATCHES_V2']
 try:
-    patcher['patches_for_version']('2.7.1')
+    patcher['patches_for_version']('9.9.9')
 except patcher['PatchError']:
     pass
 else:
