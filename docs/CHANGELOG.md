@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 
+## [2.0.22] - 2026-11-14
+
+### Changed
+- Upgrade OpenChamber from 2.7.0 to 2.7.1.
+- Upgrade GitHub CLI from 2.103.3 to 2.104.0.
+- Upgrade lean-ctx from 3.12.3 to 3.12.4.
+- Upgrade OpenCode CLI from 2.2.7 to 2.3.0.
+- Upgrade Playwright from 1.65.0 to 1.65.1.
+
+### Fixed
+- Harden the V2 Admin live integration check against DooD networking, startup timing, and ambient password false failures.
+- Count V2 database health tables correctly.
+
 ## [2.0.21] - 2026-11-12
 
 ### Changed
@@ -2536,7 +2549,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.22...HEAD
+[2.0.22]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...v2.0.22
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
