@@ -328,6 +328,9 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # (verified against the @openchamber/web@2.7.1 tarball with the module's
     # own check_version/classify).
     "2.7.1": PATCHES_V2,
+    # 2.7.2: expected to keep the v2 line's guarded seams/anchors; build-time
+    # anchor checks remain fail-closed if the published tarball drifts.
+    "2.7.2": PATCHES_V2,
 }
 
 
