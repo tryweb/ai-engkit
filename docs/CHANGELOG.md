@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 
+## [2.0.23] - 2026-11-16
+
+### Added
+- Bump Docker 29.9.3→29.10.0, OpenChamber 2.7.1→2.7.2, lean-ctx 3.12.4→3.12.6
+
+### Changed
+- Upgrade Docker Engine from 29.9.3 to 29.10.0.
+- Upgrade OpenChamber from 2.7.1 to 2.7.2.
+- Upgrade lean-ctx from 3.12.4 to 3.12.6.
+
 ## [2.0.22] - 2026-11-14
 
 ### Changed
@@ -2549,8 +2559,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.22...HEAD
-[2.0.22]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...v2.0.22
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2751,3 +2760,5 @@
 [2.0.19]: https://github.com/tryweb/ai-engkit/compare/v2.0.18...v2.0.19
 [2.0.20]: https://github.com/tryweb/ai-engkit/compare/v2.0.19...v2.0.20
 [2.0.21]: https://github.com/tryweb/ai-engkit/compare/v2.0.20...v2.0.21
+[2.0.22]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...v2.0.22
+[2.0.23]: https://github.com/tryweb/ai-engkit/compare/v2.0.22...v2.0.23
