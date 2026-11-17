@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 
+## [1.24.7] - 2026-11-17
+
+### Changed
+- Upgrade Docker Engine from 29.9.3 to 29.10.0.
+- Upgrade Playwright from 1.65.0 to 1.65.1.
+- Upgrade GitHub CLI from 2.103.3 to 2.104.0.
+- Upgrade lean-ctx from 3.12.3 to 3.12.6.
+
 ## [1.24.6] - 2026-11-12
 
 ### Fixed
@@ -2467,7 +2475,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2669,3 +2677,4 @@
 [1.24.4]: https://github.com/tryweb/ai-engkit/compare/v1.24.3...v1.24.4
 [1.24.5]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...v1.24.5
 [1.24.6]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...v1.24.6
+[1.24.7]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...v1.24.7
