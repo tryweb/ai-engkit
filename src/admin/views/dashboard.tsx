@@ -54,7 +54,7 @@ interface DashboardData {
 
 const UpdateBadge: FC<{ check: UpdateCheckResult; adminVersion: string }> = ({ check, adminVersion }) => {
   if (check.status === "pinned") {
-    return <span class="badge" style="background:rgba(99,102,241,0.15);color:var(--accent);font-size:0.65rem;">● Pinned {check.configured || check.current}</span>;
+    return <span class="badge" style="background:rgba(99,102,241,0.15);color:var(--accent);font-size:0.65rem;">● Target pin {check.configured || check.current}</span>;
   }
   if (check.status === "update-available") {
     return <button type="button" class="badge badge-warning" style="cursor:pointer;font-family:inherit;" onclick="startUpgrade()">▲ Upgrade</button>;
@@ -266,7 +266,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
                 <span class="badge badge-warning" style="font-size:0.65rem;">⚠ {data.admin_version}</span>
               <button type="button" onclick="restartAdmin(event)" class="btn-outline" style="padding:2px 8px;font-size:0.7rem;color:var(--danger);border-color:var(--danger);">↻ Restart</button>
               </div>
-              <p class="text-sm text-muted" style="margin-top:4px;">Admin container needs restart to match ai-dev version</p>
+              <p class="text-sm text-muted" style="margin-top:4px;">ai-admin is running a different image from ai-dev. Restart recreates ai-admin to apply the configured image.</p>
             </div>
           )}
         </div>
@@ -421,10 +421,10 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <tr><th>Component</th><th>Version</th></tr>
           {Object.entries(data.versions).map(([name, version]) => (
             <tr key={name}>
-              <td>{name}</td>
+              <td>{name === "AI-EngKit" ? "AI-EngKit (ai-dev)" : name}</td>
               <td>
                 {name === "AI-EngKit" ? (
-                  <a href="/upgrade" aria-label={`AI-EngKit version ${version}`}><code>{version}</code></a>
+                  <a href="/upgrade" aria-label={`AI-EngKit (ai-dev) version ${version || "unknown"}`}><code>{version || "unknown"}</code></a>
                 ) : (
                   <code>{version}</code>
                 )}
@@ -433,6 +433,10 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               </td>
             </tr>
           ))}
+          <tr>
+            <td>AI-EngKit Admin (ai-admin)</td>
+            <td><code>{data.admin_version || "unknown"}</code></td>
+          </tr>
         </table>
         <p class="text-sm text-muted" style="margin-top:12px;">
           <a href="/env">Advanced: raw .env editor</a> for variables without a dedicated settings page.

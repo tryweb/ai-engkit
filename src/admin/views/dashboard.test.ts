@@ -202,6 +202,55 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     };
   }
 
+  test("separates running container versions from the configured target during an upgrade", () => {
+    const html = String(DashboardPage(baseData({
+      versions: { "AI-EngKit": "v2.0.23" },
+      admin_version: "v2.0.22",
+      admin_version_mismatch: true,
+      update_check: {
+        current: "v2.0.23", latest: "", update_available: false,
+        status: "pinned", configured: "v2.0.24", message: "",
+      },
+    })));
+    expect(html).toContain('AI-EngKit (ai-dev)</td>');
+    expect(html).toContain('AI-EngKit (ai-dev) version v2.0.23');
+    expect(html).toContain('AI-EngKit Admin (ai-admin)</td><td><code>v2.0.22</code>');
+    expect(html).toContain("Target pin v2.0.24");
+    expect(html).toContain("ai-admin is running a different image from ai-dev.");
+    expect(html).toContain('onclick="restartAdmin(event)"');
+  });
+
+  test("always shows the admin version when both running images are aligned", () => {
+    const html = String(DashboardPage(baseData({
+      versions: { "AI-EngKit": "v2.0.23" },
+      admin_version: "v2.0.23",
+      admin_version_mismatch: false,
+    })));
+    expect(html).toContain('AI-EngKit Admin (ai-admin)</td><td><code>v2.0.23</code>');
+    expect(html).not.toContain('onclick="restartAdmin(event)"');
+  });
+
+  test("keeps the restart action for different digests even with identical version strings", () => {
+    const html = String(DashboardPage(baseData({
+      versions: { "AI-EngKit": "v2.0.23" },
+      admin_version: "v2.0.23",
+      admin_version_mismatch: true,
+    })));
+    expect(html).toContain("ai-admin is running a different image from ai-dev.");
+    expect(html).toContain('onclick="restartAdmin(event)"');
+  });
+
+  test("shows missing versions as unknown without claiming the containers are aligned", () => {
+    const html = String(DashboardPage(baseData({
+      versions: { "AI-EngKit": "" },
+      admin_version: "",
+      admin_version_mismatch: false,
+    })));
+    expect(html).toContain('AI-EngKit (ai-dev) version unknown');
+    expect(html).toContain('AI-EngKit Admin (ai-admin)</td><td><code>unknown</code>');
+    expect(html).not.toContain("Containers aligned");
+  });
+
   test("Given admin_version dev and up-to-date, When DashboardPage rendered, Then no ✓ Latest in Site Summary or Component Versions", () => {
     // Given: dev version with up-to-date status would previously show Latest in two places
     const html = String(
@@ -319,7 +368,7 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     expect(html.includes(" title=\"")).toBe(false);
   });
 
-  test("Given admin_version dev and pinned, When rendered, Then Pinned badge remains visible", () => {
+  test("Given admin_version dev and pinned, When rendered, Then target pin remains visible", () => {
     // Given: dev should not hide unrelated actionable states like pinned
     const html = String(
       DashboardPage(
@@ -336,7 +385,7 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
         }),
       ),
     );
-    expect(html.includes("Pinned")).toBe(true);
+    expect(html.includes("Target pin")).toBe(true);
     expect(html.includes("v0.9.0")).toBe(true);
   });
 
