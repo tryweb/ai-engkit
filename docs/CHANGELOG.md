@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 
+## [2.0.24] - 2026-11-17
+
+### Fixed
+- Show ai-dev and ai-admin runtime versions separately on the Admin dashboard, label the configured version as the target pin, and clarify the ai-admin restart warning.
+
+### Documentation
+- Capture the DooD production recreate incident and the V2 Admin version-detection verification on prod-199.
+
+
 ## [2.0.23] - 2026-11-16
 
 ### Added
@@ -2559,7 +2568,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...HEAD
+[2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
