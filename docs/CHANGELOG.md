@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 
+## [1.24.8] - 2026-11-19
+
+### Changed
+- Run native-agent line instead of retired OMO path
+- Allow absent routing.json on fresh native install
+- Upgrade Docker Compose from 5.7.1 to 5.8.0.
+- Upgrade OpenCode from 1.19.5 to 1.19.6.
+- Upgrade @playwright/mcp from 0.0.85 to 0.0.86.
+- Upgrade GitHub CLI from 2.104.0 to 2.105.0.
+- Upgrade GitLab CLI from 1.130.0 to 1.131.0.
+- Upgrade OpenSpec from 2.0.0 to 2.1.0.
+- Upgrade CodeGraph from 1.6.2 to 1.6.3.
+
 ## [1.24.7] - 2026-11-17
 
 ### Changed
@@ -2475,7 +2488,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2678,3 +2691,4 @@
 [1.24.5]: https://github.com/tryweb/ai-engkit/compare/v1.24.4...v1.24.5
 [1.24.6]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...v1.24.6
 [1.24.7]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...v1.24.7
+[1.24.8]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...v1.24.8
