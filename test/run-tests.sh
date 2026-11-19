@@ -213,13 +213,13 @@ echo "--- Config Files ---"
 assert_file_exists "opencode.json exists" "/home/devuser/.config/opencode/opencode.json"
 assert_file_exists "settings.json exists" "/home/devuser/.config/openchamber/settings.json"
 
-OPCODE_PLUGINS=$(docker exec "$CONTAINER" jq -r '.plugin | length' ~/.config/opencode/opencode.json 2>/dev/null || \
-  docker exec "$CONTAINER" sh -c 'jq -r ".plugin | length" ~/.config/opencode/opencode.json' 2>/dev/null || echo "0")
-if [ "$OPCODE_PLUGINS" -gt 0 ] 2>/dev/null; then
-  pass "opencode.json has $OPCODE_PLUGINS plugin(s)"
-else
-  fail "opencode.json has no plugins"
-fi
+# Native-agent line: OMO is being retired, so the runtime must be in native
+# mode and opencode.json must be plugin-free.
+NATIVE_AGENTS=$(docker exec "$CONTAINER" sh -c 'printf "%s" "${NATIVE_AGENTS:-}"' 2>/dev/null || echo "")
+assert_eq "native agents mode is enabled" "1" "$NATIVE_AGENTS"
+
+OPCODE_PLUGINS=$(docker exec "$CONTAINER" jq -r '.plugin | length' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "read_error")
+assert_eq "opencode.json is plugin-free in native mode" "0" "$OPCODE_PLUGINS"
 
 # --------------------------------------------------
 # 5. Data Persistence
@@ -625,17 +625,31 @@ assert_contains "lean-ctx doctor reports BASH_ENV set" 'BASH_ENV' "$LEAN_CTX_DOC
 assert_contains "lean-ctx doctor reports CLAUDE_ENV_FILE set" 'CLAUDE_ENV_FILE' "$LEAN_CTX_DOCTOR"
 
 # --------------------------------------------------
-# 8.3 OMO Unified Agent Permissions
+# 8.3 Native Agents (plugin-free line)
 # --------------------------------------------------
 echo ""
-echo "--- OMO Unified Agent Permissions ---"
+echo "--- Native Agents ---"
 
-# 8.3.1 Default file in image
-assert_file_exists "omo.jsonc.default in /etc/opencode" "/etc/opencode/omo.jsonc.default"
+# Every baked agent definition must be deployed into the user config on boot.
+NATIVE_AGENT_MISSING=$(docker exec "$CONTAINER" sh -c '
+  src=/opt/opencode/native-agents
+  dst=/home/devuser/.config/opencode/agent
+  if [ ! -d "$src" ] || [ ! -d "$dst" ]; then printf "source_or_dest_missing"; exit 0; fi
+  for f in "$src"/*.md; do
+    b=$(basename "$f")
+    [ -f "$dst/$b" ] || printf "%s " "$b"
+  done
+' 2>/dev/null || echo "read_error")
+assert_eq "all baked native agents deployed" "" "$NATIVE_AGENT_MISSING"
 
-# 8.3.2 Runtime config in user OMO directory
-OMO_CONFIG_FILE="/home/devuser/.omo/omo.jsonc"
-assert_file_exists "omo.jsonc in user OMO directory" "$OMO_CONFIG_FILE"
+# OMO config and plugin cache must not be active on the native line.
+if docker exec "$CONTAINER" test ! -f /home/devuser/.omo/omo.jsonc 2>/dev/null; then
+  pass "no active OMO config in native mode"
+else
+  fail "OMO config is active in native mode"
+fi
+OMO_PLUGIN_CACHE=$(docker exec "$CONTAINER" sh -c 'ls /home/devuser/.cache/opencode/packages 2>/dev/null | grep -iE "^oh-my-(openagent|opencode)" | tr "\n" ","' 2>/dev/null || echo "")
+assert_eq "no OMO plugin cache in native mode" "" "$OMO_PLUGIN_CACHE"
 
 if docker exec "$CONTAINER" test ! -f /home/devuser/.config/opencode/oh-my-openagent.json 2>/dev/null; then
   pass "legacy oh-my-openagent.json is not an active config"
@@ -643,47 +657,33 @@ else
   fail "legacy oh-my-openagent.json remains active"
 fi
 
-OMO_PLUGIN=$(docker exec "$CONTAINER" jq -r '.plugin[] | select(startswith("oh-my-openagent@"))' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
-OMO_VERSION=$(docker exec "$CONTAINER" sh -c 'printf "%s" "$OH_MY_OPENAGENT_VERSION"' 2>/dev/null || echo "")
-if [[ "$OMO_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-  pass "OMO runtime version is pinned ($OMO_VERSION)"
-else
-  fail "OMO runtime version is not an exact semver ('$OMO_VERSION')"
-fi
-assert_eq "OMO plugin declaration matches runtime pin" "oh-my-openagent@$OMO_VERSION" "$OMO_PLUGIN"
+# OpenChamber defaults new sessions to the native Sisyphus agent and pinned model.
+assert_eq "native default agent is sisyphus" "sisyphus" "$(docker exec "$CONTAINER" jq -r '.defaultAgent // empty' /home/devuser/.config/openchamber/settings.json 2>/dev/null || echo "")"
+assert_eq "native default model is opencode/big-pickle" "opencode/big-pickle" "$(docker exec "$CONTAINER" jq -r '.defaultModel // empty' /home/devuser/.config/openchamber/settings.json 2>/dev/null || echo "")"
 
-# 8.3.3 All 11 OMO agents present
-OMO_AGENTS=$(docker exec "$CONTAINER" jq -r '.agents | keys | join(",")' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
-assert_contains "explore agent defined"  'explore'           "$OMO_AGENTS"
-assert_contains "oracle agent defined"   'oracle'            "$OMO_AGENTS"
-assert_contains "librarian agent defined" 'librarian'        "$OMO_AGENTS"
-assert_contains "multimodal-looker defined" 'multimodal-looker' "$OMO_AGENTS"
-assert_contains "metis agent defined"    'metis'             "$OMO_AGENTS"
-assert_contains "momus agent defined"    'momus'             "$OMO_AGENTS"
-assert_contains "prometheus agent defined" 'prometheus'      "$OMO_AGENTS"
-assert_contains "sisyphus agent defined" 'sisyphus'          "$OMO_AGENTS"
-assert_contains "hephaestus agent defined" 'hephaestus'      "$OMO_AGENTS"
-assert_contains "atlas agent defined"    'atlas'             "$OMO_AGENTS"
-assert_contains "sisyphus-junior defined" 'sisyphus-junior'  "$OMO_AGENTS"
+# routing.json is the authoritative model source on the native line; its chain
+# heads are seeded into opencode.json .agent.<name>.model on every boot.
+assert_file_exists "native routing config exists" "/home/devuser/.config/opencode/routing.json"
+ROUTING_VALID=$(docker exec "$CONTAINER" jq -r 'if .version == 1 and (.chains | type) == "object" then "ok" else "invalid" end' /home/devuser/.config/opencode/routing.json 2>/dev/null || echo "unreadable")
+assert_eq "native routing config is valid" "ok" "$ROUTING_VALID"
 
-# 8.3.4 Runtime config uses schema-valid tools and no stale migration layer
-OMO_PERMISSION_COUNT=$(docker exec "$CONTAINER" jq '[.agents[] | select(has("permission"))] | length' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
-OMO_STALE_AGENT_LAYER=$(docker exec "$CONTAINER" jq '.["[opencode]"] | type == "object" and has("agents")' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
-assert_eq "OMO agents contain no unsupported permission keys" "0" "$OMO_PERMISSION_COUNT"
-assert_eq "OMO config contains no stale [opencode].agents layer" "false" "$OMO_STALE_AGENT_LAYER"
+ROUTING_HEAD_MISMATCH=$(docker exec "$CONTAINER" jq -rs --slurpfile routing /home/devuser/.config/opencode/routing.json '
+  .[0] as $opencode
+  | [ $routing[0].chains | to_entries[]
+      | select((.value.chain | type) == "array" and (.value.chain | length) > 0)
+      | select((($opencode.agent // {})[.key].model // "") != .value.chain[0].model)
+      | .key ] | join(",")
+' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "read_error")
+assert_eq "native routing heads applied to opencode.json" "" "$ROUTING_HEAD_MISMATCH"
 
-# 8.3.8 Only allowlisted native agents may be generated inline
-OPCODE_UNEXPECTED_AGENTS=$(docker exec "$CONTAINER" jq -r '[(.agent // {}) | keys[] | select((. != "general") and (. != "plan"))] | join(",")' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
-assert_eq "opencode.json has no unexpected inline agents" "" "$OPCODE_UNEXPECTED_AGENTS"
-# Reconcile runs after openchamber serve (provider 120s + lifecycle 120s + 3x30s retry + 60s deferred; observed 9m43s in CI); allow eventual consistency up to 300s.
-for _ in $(seq 1 60); do
-  OMO_GENERAL_MODEL=$(docker exec "$CONTAINER" jq -r '.agents.general.model // empty' "$OMO_CONFIG_FILE" 2>/dev/null || echo "")
-  OPCODE_GENERAL_MODEL=$(docker exec "$CONTAINER" jq -r '.agent.general.model // empty' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
-  if [ "$OMO_GENERAL_MODEL" = "$OPCODE_GENERAL_MODEL" ]; then break; fi
-  echo "  waiting for native bridge sync: OMO='$OMO_GENERAL_MODEL' OPCODE='$OPCODE_GENERAL_MODEL' (attempt $_/60)" >&2
-  sleep 5
-done
-assert_eq "general native model matches persisted OMO override" "$OMO_GENERAL_MODEL" "$OPCODE_GENERAL_MODEL"
+STALE_INLINE_AGENTS=$(docker exec "$CONTAINER" jq -rs --slurpfile routing /home/devuser/.config/opencode/routing.json '
+  .[0] as $opencode
+  | ($routing[0].chains) as $chains
+  | [ ($opencode.agent // {}) | keys[] as $name
+      | select(($chains | has($name)) | not)
+      | $name ] | join(",")
+' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "read_error")
+assert_eq "no inline agents outside native routing chains" "" "$STALE_INLINE_AGENTS"
 
 # --------------------------------------------------
 # 8.4 Superpowers (per-project only)
