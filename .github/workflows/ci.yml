@@ -122,11 +122,11 @@ jobs:
             ai-dev:
               image: ai-engkit:ci
               container_name: ci-test
-              # run-tests.sh validates the OMO compatibility path; keep CI
-              # explicit because docker-compose.dev.yml defaults to native.
+              # run-tests.sh validates the native-agent line; keep CI explicit
+              # because the OMO compatibility path is being retired.
               environment:
-                NATIVE_AGENTS: "0"
-                OMO_ENABLED: "1"
+                NATIVE_AGENTS: "1"
+                OMO_ENABLED: "0"
               volumes:
                 - workspace-dev:/home/devuser/workspace
                 - opencode-data-dev:/home/devuser/.local/share/opencode
@@ -138,7 +138,7 @@ jobs:
             ai-admin:
               image: ai-engkit:ci
               environment:
-                OMO_ENABLED: "1"
+                OMO_ENABLED: "0"
           EOF
           docker compose -p dev -f docker-compose.dev.yml -f docker-compose.override.yml up -d
           echo "Waiting for services..."
