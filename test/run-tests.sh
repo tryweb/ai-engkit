@@ -662,27 +662,29 @@ assert_eq "native default agent is sisyphus" "sisyphus" "$(docker exec "$CONTAIN
 assert_eq "native default model is opencode/big-pickle" "opencode/big-pickle" "$(docker exec "$CONTAINER" jq -r '.defaultModel // empty' /home/devuser/.config/openchamber/settings.json 2>/dev/null || echo "")"
 
 # routing.json is the authoritative model source on the native line; its chain
-# heads are seeded into opencode.json .agent.<name>.model on every boot.
-assert_file_exists "native routing config exists" "/home/devuser/.config/opencode/routing.json"
-ROUTING_VALID=$(docker exec "$CONTAINER" jq -r 'if .version == 1 and (.chains | type) == "object" then "ok" else "invalid" end' /home/devuser/.config/opencode/routing.json 2>/dev/null || echo "unreadable")
-assert_eq "native routing config is valid" "ok" "$ROUTING_VALID"
+# heads are seeded into opencode.json .agent.<name>.model on every boot. A fresh
+# install boots without it (admin seeds it on first model change), and the
+# runtime falls back to empty chains -- validate that fallback shape too.
+ROUTING_JSON=$(docker exec "$CONTAINER" sh -c 'cat /home/devuser/.config/opencode/routing.json 2>/dev/null || printf "{\"version\":1,\"chains\":{}}"' 2>/dev/null || echo '{"version":1,"chains":{}}')
+ROUTING_VALID=$(printf '%s' "$ROUTING_JSON" | jq -r 'if .version == 1 and (.chains | type) == "object" then "ok" else "invalid" end' 2>/dev/null || echo "unreadable")
+assert_eq "native routing config valid or defaulted" "ok" "$ROUTING_VALID"
 
-ROUTING_HEAD_MISMATCH=$(docker exec "$CONTAINER" jq -rs --slurpfile routing /home/devuser/.config/opencode/routing.json '
-  .[0] as $opencode
-  | [ $routing[0].chains | to_entries[]
+OPENCODE_JSON=$(docker exec "$CONTAINER" cat /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "")
+ROUTING_HEAD_MISMATCH=$(printf '%s' "$OPENCODE_JSON" | jq -r --argjson routing "$ROUTING_JSON" '
+  . as $opencode
+  | [ $routing.chains | to_entries[]
       | select((.value.chain | type) == "array" and (.value.chain | length) > 0)
       | select((($opencode.agent // {})[.key].model // "") != .value.chain[0].model)
       | .key ] | join(",")
-' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "read_error")
+' 2>/dev/null || echo "read_error")
 assert_eq "native routing heads applied to opencode.json" "" "$ROUTING_HEAD_MISMATCH"
 
-STALE_INLINE_AGENTS=$(docker exec "$CONTAINER" jq -rs --slurpfile routing /home/devuser/.config/opencode/routing.json '
-  .[0] as $opencode
-  | ($routing[0].chains) as $chains
-  | [ ($opencode.agent // {}) | keys[] as $name
+STALE_INLINE_AGENTS=$(printf '%s' "$OPENCODE_JSON" | jq -r --argjson routing "$ROUTING_JSON" '
+  ($routing.chains) as $chains
+  | [ (.agent // {}) | keys[] as $name
       | select(($chains | has($name)) | not)
       | $name ] | join(",")
-' /home/devuser/.config/opencode/opencode.json 2>/dev/null || echo "read_error")
+' 2>/dev/null || echo "read_error")
 assert_eq "no inline agents outside native routing chains" "" "$STALE_INLINE_AGENTS"
 
 # --------------------------------------------------
