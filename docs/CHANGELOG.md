@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 
+## [2.0.25] - 2026-11-19
+
+### Changed
+- Upgrade Docker Compose from 5.7.1 to 5.8.0.
+- Upgrade OpenCode CLI from 2.3.0 to 2.3.2.
+- Upgrade GitLab CLI from 1.130.0 to 1.131.0.
+- Upgrade @playwright/mcp from 0.0.85 to 0.0.86.
+- Upgrade GitHub CLI from 2.104.0 to 2.105.0.
+- Upgrade OpenSpec from 2.0.0 to 2.1.0.
+- Upgrade CodeGraph from 1.6.2 to 1.6.3.
+
+
 ## [2.0.24] - 2026-11-17
 
 ### Fixed
@@ -2568,7 +2580,8 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.25...HEAD
+[2.0.25]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...v2.0.25
 [2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
