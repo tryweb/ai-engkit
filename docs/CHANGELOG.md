@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 
+## [1.24.9] - 2026-11-23
+
+### Added
+- Bump lean-ctx 3.12.6 → 3.12.7
+- Bump Docker Buildx 0.39.0 → 0.39.1, OpenSpec 2.1.0 → 2.1.1, CodeGraph 1.6.3 → 1.6.4
+
+### Changed
+- Retire redundant dependency-update workflow and consolidate release verification on existing CI/check-updates paths.
+
 ## [1.24.8] - 2026-11-19
 
 ### Changed
@@ -2488,7 +2497,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.9...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2692,3 +2701,4 @@
 [1.24.6]: https://github.com/tryweb/ai-engkit/compare/v1.24.5...v1.24.6
 [1.24.7]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...v1.24.7
 [1.24.8]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...v1.24.8
+[1.24.9]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...v1.24.9
