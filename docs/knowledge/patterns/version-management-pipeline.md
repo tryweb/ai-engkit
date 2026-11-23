@@ -1,5 +1,10 @@
 # Local Version Management Pipeline
 
+> Status note: `.github/workflows/dependency-update.yml` was retired in 2026-11
+> because it duplicated the local version/scan gates with divergent semantics.
+> This document is retained for the local pipeline design; references to the
+> retired workflow below are historical, not current guidance.
+
 ## Context
 
 ai-engkit pins all dependency versions in `Dockerfile` as ARGs (DOCKER_VERSION,
@@ -50,14 +55,11 @@ Extended with 4 flags:
 
 #### Dockerfile pin registration rule
 
-Every versioned `ARG` in `Dockerfile` must be registered in both:
-
-1. `.opencode/scripts/check-versions.sh`: `lookup`, `source_label`, and
-   `collect_rows`, so `check`, `outdated`, and `json` compare the pin with its
-   upstream source.
-2. `.github/workflows/dependency-update.yml`: `PINNED_NAMES`, its source
-   lookup, expected pin count, and snapshot generation, so scheduled CI can
-   build, test, and propose the Dockerfile update.
+Every versioned `ARG` in `Dockerfile` must be registered in
+`.opencode/scripts/check-versions.sh`: `lookup`, `source_label`, and
+`collect_rows`, so `check`, `outdated`, and `json` compare the pin with its
+upstream source. The retired `dependency-update.yml` used to require a parallel
+registration; that second registry is gone.
 
 Do not put a Dockerfile pin in `--latest`; that path only snapshots packages
 without a Dockerfile pin. `OH_MY_OPENAGENT_VERSION` is the reference example:
@@ -75,16 +77,20 @@ requires, read from the `packageManager` field (`"bun@X.Y.Z"`) of
 - Local: `check-versions.sh` derives the target from the `OPENCHAMBER_VERSION`
   pinned in `Dockerfile`, so the Bun requirement must be rechecked whenever
   OpenChamber changes.
-- CI: `dependency-update.yml` expects exactly 15 pinned ARGs and derives the
-  Bun target from the candidate OpenChamber version when both pins update in
-  the same run (pinned version as fallback).
+- Historical CI behavior: the retired `dependency-update.yml` derived the Bun
+  target from the candidate OpenChamber version, including blocked candidates,
+  which diverged from the local pinned-derived target. The local derivation is
+  now the only supported one.
 - Drift is exact-equality: pinned ahead OR behind the required version both
   count as outdated, because the image must ship the Bun version OpenChamber
   declares.
 
-#### Auto-release gate
+#### Auto-release gate (historical)
 
-`dependency-update.yml` Job 4 (handle-updates) has an auto-release path that
+> The workflow described here was retired; the guard now lives only in
+> `.github/workflows/ci.yml`.
+
+`dependency-update.yml` Job 4 (handle-updates) had an auto-release path that
 tags a dependency-only patch release directly against the tip of `main`
 (no PR). Because it tags HEAD as-is, any human commit merged since the last
 release would be silently bundled into that "dependency updates" release —
@@ -257,7 +263,7 @@ Two gaps closed:
 - `.github/scripts/release-line-tag.sh` — Release-line-scoped tag resolution (single source of truth for previous/latest release tags)
 - `test/test-release-line-tag.sh` — Regression test for same-line previous-tag resolution
 - `.opencode/skills/check-updates/SKILL.md` — New update workflow skill
-- `.github/workflows/dependency-update.yml` — Scheduled pinned-version updates
+- `.github/workflows/ci.yml` — Build/scan verification (retired `dependency-update.yml` removed)
 - `test/run-tests.sh` — Verifies generated OMO plugin pin matches runtime env
 - `.opencode/skills/release/SKILL.md` — Enhanced release skill (3 sections updated)
 - `.opencode/skills/vuln-scan/SKILL.md` — Quick reference updated for new flags

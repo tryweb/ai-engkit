@@ -8,6 +8,11 @@ description: Check upstream versions, update Dockerfile pins, build, test, and c
 One-shot workflow: check pinned versions against upstream, apply updates to Dockerfile,
 rebuild the image, run integration tests, and commit.
 
+> Scope: this skill shares `check-versions.sh` and `test/run-tests.sh` with CI,
+> but it is not a full CI mirror. `ci.yml` additionally runs the Compose isolation
+> guard, admin unit tests, admin typechecks, admin UI tests, and the Grype release
+> gate. A green run here does not replace CI.
+
 ## Triggers
 
 - "Check for upstream updates"
@@ -95,8 +100,9 @@ Ordering matters when `OPENCHAMBER_VERSION` is also outdated: update it first,
 then re-run `check-versions.sh json`. The Bun target derives from the
 `OPENCHAMBER_VERSION` pinned in the Dockerfile, so the recheck reads the new
 OpenChamber tag and reports the correct `BUN_VERSION` target. If it drifted,
-apply the same `sed` flow. (CI already derives the Bun target from the
-candidate OpenChamber version when both pins update in the same run.)
+apply the same `sed` flow. The retired `dependency-update.yml` used to derive
+the Bun target from the candidate OpenChamber version; the pinned-derived
+target here is now the single source of truth.
 
 **Playwright pair: `PLAYWRIGHT_VERSION` + `PLAYWRIGHT_MCP_VERSION`.** These are
 independent pins. `PLAYWRIGHT_MCP_VERSION` depends on an *alpha* playwright
@@ -199,4 +205,4 @@ Tell the user they can now run `/release` to tag and publish.
 - Never skip the test step
 - Never commit without user confirmation
 - If build or tests fail, stop — do not proceed to commit
-- Use the exact `sed` patterns from the CI workflow for consistency
+- Edit `Dockerfile` ARG lines directly; `check-versions.sh` is the only version source

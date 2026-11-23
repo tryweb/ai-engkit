@@ -371,8 +371,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Same guard as dependency-update.yml's scheduled auto-release path:
-      # auto-tagging main tip would bundle unreleased human commits
+      # Auto-tagging main tip would bundle unreleased human commits
       # (feat/fix/style/ci/...) into a dependency-only patch release.
       - name: Check unreleased commits
         id: gate

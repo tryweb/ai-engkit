@@ -1,5 +1,9 @@
 # OpenCode V2 Migration Watch
 
+> Status note: `.github/workflows/dependency-update.yml` was retired in 2026-11;
+> cross-major pin-source support now belongs to `check-versions.sh` and the
+> `check-updates` skill only. Workflow references below are historical.
+
 ## Context
 
 - AI-EngKit pins OpenCode V1 (`Dockerfile: ARG OPENCODE_VERSION=1.18.31`, installed via `bun install -g opencode-ai@${OPENCODE_VERSION}`) with `oh-my-openagent@4.19.4` as the only `plugin[]` entry, plus `OPENCHAMBER_VERSION=1.24.2` (`bun install -g @openchamber/web@${OPENCHAMBER_VERSION}`). Upstream V1 `latest` is `1.18.32` (2026-09-21); the pin trails by one patch.
@@ -34,7 +38,7 @@ Watch stance (revalidated 2026-09-24; V2 GA reached — prep items are now sched
 2. Centralize the curl-based Server API calls behind one shim now (V1/V2-agnostic), so migration is a single rewrite to `@opencode/client@2.0.15` (`latest` as of 2026-09-24; re-check at migration time) (`OpenCode.make({baseUrl})` → `session.create/prompt` → `event.subscribe()`; service via `Service.discover/ensure/stop`).
 3. Dual-track watch is closed (cutover won — see Problem/OpenChamber dual-track). The npm gate is met (`@openchamber/web@2.0.0`). Remaining trial-entry criteria: continuation-engine readiness (item 6) + Server API shim (item 2) + release-line decision (item 4); do not trial against PR #3007's dual-runtime shape.
 4. Decide the AI-EngKit v2.x release line now: v1.18.x tags mirror opencode minor versions; plan a separate v2.x line (major = breaking) coexisting with v1.x — mirroring opencode V1/V2 coexistence — so the eventual flip is a release-strategy change, not a scramble.
-5. Extend `.opencode/scripts/check-versions.sh` + `.github/workflows/dependency-update.yml` to support cross-major pin-source switches (`opencode-ai` → `@opencode/cli`) — the v2 flip is then a config change, not a pipeline rewrite.
+5. Extend `.opencode/scripts/check-versions.sh` to support cross-major pin-source switches (`opencode-ai` → `@opencode/cli`) — the v2 flip is then a config change, not a pipeline rewrite.
 6. Design the continuation engine now (the OMO feature V2 lacks) on v2-native surfaces: `session.hook("prompt"/"context")` for routing, `event.subscribe` on `session.idle`/`session.status`, `session.synthetic`/`session.interrupt` for idle-continuation. Community port #7903 proves the surface works (11 agents + 12 `team_*` tools + 17 skills registered via transforms on real `opencode2`). Decide: own thin v2 plugin vs consume OMO's extracted Core layer (ROADMAP: 19 harness-agnostic Core packages + Adapter layer) — do **not** wait on OMO publishing a V2 line.
 
 ### Migration steps (gated on continuation-engine readiness, item 6)
@@ -83,7 +87,7 @@ Watch stance (revalidated 2026-09-24; V2 GA reached — prep items are now sched
 - `Dockerfile` (OPENCODE_VERSION, OPENCHAMBER_VERSION, OH_MY_OPENAGENT_VERSION, baked superpowers, `lsp.json.default`)
 - `entrypoint.d/02-init-config.sh` (runtime opencode.json generation)
 - `.opencode/omo.jsonc.default` (OMO agent/model/tool schema)
-- `.opencode/scripts/check-versions.sh` (pin source mappings — needs cross-major switch support for `opencode-ai` → `@opencode/cli`), `.github/workflows/dependency-update.yml`
+- `.opencode/scripts/check-versions.sh` (pin source mappings — needs cross-major switch support for `opencode-ai` → `@opencode/cli`)
 - `src/admin/lib/model-probe.ts`, `src/admin/lib/agent-model-live.ts`, `src/admin/lib/agent-model-history.ts`, `src/admin/lib/agent-model-reconciler.ts`
 - `src/admin/agent/commands.ts` (OPENCODE_SESSION_PROBE_SCRIPT, pgrep fallback)
 - `scripts/agent-model-health.sh`, `scripts/reconcile-agent-models.sh`, `test/test-agent-model-e2e.sh`

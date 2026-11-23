@@ -1,5 +1,9 @@
 # OpenChamber Upgrades Require a Pinned Bun Toolchain
 
+> Status: the retired `.github/workflows/dependency-update.yml` was removed in
+> 2026-11. The derived `BUN_VERSION` contract below now applies only to
+> `.opencode/scripts/check-versions.sh` and `test/test-check-versions.sh`.
+
 ## Context
 
 The ai-engkit image installs Bun before globally installing `opencode-ai` and
@@ -38,10 +42,9 @@ rollback comparisons meaningful.
 - Tracking `latest` may work for disposable experiments, but is unsuitable for
   release or persistent development images without automated rebuild and full
   smoke-test coverage.
-- `BUN_VERSION` is now a Dockerfile pin and must be registered in both
-  `.opencode/scripts/check-versions.sh` and
-  `.github/workflows/dependency-update.yml`; otherwise automated version checks
-  will not monitor it.
+- `BUN_VERSION` is a Dockerfile pin registered in
+  `.opencode/scripts/check-versions.sh`; that is the single source of truth for
+  monitoring it.
 
 ## Evidence
 
@@ -56,7 +59,7 @@ rollback comparisons meaningful.
 
 - `Dockerfile`
 - `.opencode/scripts/check-versions.sh`
-- `.github/workflows/dependency-update.yml`
+- `test/test-check-versions.sh`
 - `docs/knowledge/patterns/version-management-pipeline.md`
 
 ## Tags

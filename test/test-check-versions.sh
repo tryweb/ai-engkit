@@ -18,16 +18,14 @@
 #   * packageManager missing / not a bun pin => status "check_failed"
 #   * bare-tag fetch fails, v-tag succeeds   => row resolves (not check_failed)
 #
-# Also asserts .github/workflows/dependency-update.yml tracks BUN_VERSION and
-# expects 15 pins (14 existing + BUN_VERSION).
+# The retired dependency-update workflow is no longer asserted here; version
+# checking has a single source of truth in check-versions.sh.
 #
-# Exits 0 when all cases pass, 1 otherwise. Currently RED: the checker has no
-# BUN_VERSION support yet, and the workflow has 12 pins / no BUN_VERSION.
+# Exits 0 when all cases pass, 1 otherwise.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHECKER="$REPO_ROOT/.opencode/scripts/check-versions.sh"
-WORKFLOW="$REPO_ROOT/.github/workflows/dependency-update.yml"
 FIXTURES="$REPO_ROOT/test/fixtures/check-versions"
 MOCK_BIN="$FIXTURES/bin"
 
@@ -104,18 +102,6 @@ assert_eq "omo-version-check-is-blocked" "blocked" \
   "$(json_field "$aligned_out" '.OH_MY_OPENAGENT_VERSION.status // "absent"')"
 assert_eq "omo-upstream-is-not-queried" "blocked" \
   "$(json_field "$aligned_out" '.OH_MY_OPENAGENT_VERSION.latest // "absent"')"
-
-echo "== CI workflow contract =="
-
-if grep -q 'BUN_VERSION' "$WORKFLOW"; then
-  pass "ci-workflow-tracks-BUN_VERSION"
-else
-  fail "ci-workflow-tracks-BUN_VERSION (BUN_VERSION not found in $WORKFLOW)"
-fi
-
-# Count pinned case arms of the form:  NAME_VERSION)   source='...'
-pin_count="$(grep -cE '^[[:space:]]+[A-Z_]+_VERSION\)[[:space:]]+source=' "$WORKFLOW")"
-assert_eq "ci-workflow-expects-15-pins" "15" "$pin_count"
 
 echo ""
 echo "passed: $PASS    failed: $FAIL"

@@ -451,4 +451,4 @@ After push, inform the user:
 - If `git log` is empty since last tag, warn the user
 - Use semver format: `v{MAJOR}.{MINOR}.{PATCH}`
 - If no previous tag exists, use `v0.0.0` as the calculation base and create
-  the first release as `v0.0.1`, matching CI and dependency-update automation.
+  the first release as `v0.0.1`, matching CI automation.

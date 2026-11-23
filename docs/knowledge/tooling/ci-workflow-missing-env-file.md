@@ -1,5 +1,8 @@
 # CI Workflow Missing .env File Causes docker compose Failure
 
+> Status: the dependency-update workflow was retired in 2026-11. The `.env`
+> fix remains relevant to `ci.yml`; workflow-specific references are historical.
+
 ## Context
 
 ai-engkit uses `docker-compose.dev.yml` for both CI integration tests and the dependency-update workflow. The `ai-admin` service in `docker-compose.dev.yml` has:

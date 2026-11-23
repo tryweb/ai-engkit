@@ -101,14 +101,13 @@ Report vulnerabilities privately by email:
 
 ## Security maintenance
 
-Security-related updates are supported by CI/CD automation, including:
+Security-related updates are supported by local skills and CI/CD automation:
 
-- dependency update checks
-- build verification
-- vulnerability scanning
-- release gating for risky changes
+- `/check-updates` for upstream version inspection and Dockerfile pin updates
+- `ci.yml` build verification and Grype scanning via `.github/scripts/grype-release-check.sh`
+- `/release` gating for risky changes
 
-The repository workflow `.github/workflows/dependency-update.yml` performs regular update and scan checks.
+The retired `dependency-update.yml` workflow was removed: it duplicated version and scan checks with divergent semantics and created maintenance burden without adding coverage.
 
 ## Scope and limitations
 

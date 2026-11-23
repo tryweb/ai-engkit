@@ -1,5 +1,9 @@
 # OMO v5.x Upgrade Impact (assessed at 5.0.0-beta.50)
 
+> Status: `.github/workflows/dependency-update.yml` was retired in 2026-11;
+> version-pipeline references to it below are historical. Current checks run
+> through `check-versions.sh`.
+
 ## Context
 
 ai-engkit consumes oh-my-openagent (OMO) exclusively as an **OpenCode npm plugin** — never as a CLI:

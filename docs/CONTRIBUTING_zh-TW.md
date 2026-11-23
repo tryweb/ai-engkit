@@ -394,9 +394,18 @@ skill 會：
 
 > GitHub Actions 接著會自動 build、test、推送到 `ghcr.io/{owner}/ai-engkit:{version}`、建立 GitHub Release。
 
-#### 例外：Dockerfile pinned 版本
+#### Dockerfile pinned 版本
 
-`Dockerfile` 中的 `OPENCODE_VERSION`、`OPENCHAMBER_VERSION` 等 ARG 升版**不需要**手動發布 tag — `.github/workflows/dependency-update.yml` 每週日 21:30 UTC 自動偵測上游版本，自動跑 build / test / Grype scan，通過後自動開 PR（破壞性變更）或 auto-release（patch 安全更新）。auto-release 前會檢查自上次 stable release 以來是否存在未釋出的 `feat`/`fix`/`ci` 等 commit：若存在則**跳過** auto-release 並開 issue，改以 `/release` skill 手動發布，避免依賴更新把人類 commit 一起打包成 dependency-only patch release。
+`Dockerfile` 中的 `OPENCODE_VERSION`、`OPENCHAMBER_VERSION` 等 ARG 升版走手動流程：
+
+1. `/check-updates` — 比對上游版本、更新 ARG、重建 image、跑整合測試
+2. `/release` — 更新 CHANGELOG、計算 semver、打 tag 並推送
+
+原本的 `dependency-update.yml` 排程工作流已移除：它自建了一套與
+`ci.yml` / `check-versions.sh` 不同的驗證邏輯（不同的 Grype delta key、
+在整合測試後的容器內重跑 admin unit tests、從被封鎖的 OpenChamber
+候選版本推導 `BUN_VERSION`），其失敗無法由現有驗證體系自動收斂，
+只會累積 issue 與維護成本。版本檢查現在只有單一來源。
 
 ## 授權
 

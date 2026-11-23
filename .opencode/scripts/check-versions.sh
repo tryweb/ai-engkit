@@ -16,7 +16,7 @@
 #   --all       enable --latest + --apt + --snapshot
 #   --snapshot-save  write version-snapshot.json after check
 #
-# Sources (kept in sync with .github/workflows/dependency-update.yml):
+# Sources (single source of truth; the retired dependency-update.yml no longer exists):
 #   DOCKER_VERSION         → github:docker/docker             (strip "docker-" prefix)
 #   COMPOSE_VERSION        → github:docker/compose
 #   BUILDX_VERSION         → github:docker/buildx

@@ -278,19 +278,17 @@ sequenceDiagram
 
 > 本文件**不再**硬編碼版本表 — 任何列出特定版本號的段落都會在 CI 升版後過時。
 
-### 自動化更新流程
+### 版本更新與掃描
 
-版本監控與升級由 `.github/workflows/dependency-update.yml` **每週日 21:30 UTC** 自動執行：
+版本監控走單一來源：
 
-1. 對比 `Dockerfile` pinned 與上游 GitHub Release / npm registry
-2. 對比 `lean-ctx` snapshot 與當前 latest
-3. 對比 `ubuntu:24.04` base image 內 apt 套件 snapshot
-4. 跑 build + test + Grype 掃描（與上一個 stable release 做 critical CVE delta）
-5. 依決策樹自動動作：
-   - Dockerfile 變更 + 全過 → 開 PR（人工 review 破壞性變更）
-   - 只 latest / apt 變更 + 全過 → 自動 release（push GHCR + tag + GitHub Release）
-   - 自上次 release 以來存在未釋出的非 chore/docs commit → 跳過 auto-release 並開 issue（避免把人類 commit 打包成 dependency-only patch release）
-   - 任一失敗 → 開 issue
+1. `/check-updates` — 用 `.opencode/scripts/check-versions.sh` 比對 `Dockerfile` pinned 與上游 GitHub Release / npm registry（`BUN_VERSION` 由鎖定的 OpenChamber 版本推導）
+2. 更新後跑 build + 整合測試
+3. `/release` — CHANGELOG、semver、tag、GHCR / GitHub Release
+
+CI (`ci.yml`) 負責 build verification 與 Grype 掃描，並用 `.github/scripts/grype-release-check.sh` 阻擋新增 Critical/High findings。
+
+> 原本的 `dependency-update.yml` 已移除：它自建另一套版本檢查與 Grype delta（key 為 id + name + version + path，與共用腳本的 id + package 不同），且在整合測試後的容器重跑 admin unit tests 造成 45 個誤失敗；其結果無法由現有驗證體系自動收斂。
 
 > Grype 結果同時上傳到 GitHub Security tab，與 dependency graph 整合追蹤。
 
