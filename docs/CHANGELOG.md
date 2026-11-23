@@ -1,6 +1,20 @@
 ## [Unreleased]
 
 
+## [2.0.26] - 2026-11-23
+
+### Fixed
+- Preserve managed-update refusal guards with OpenChamber 2.8.0's relocated compiled server modules.
+
+### Changed
+- Upgrade Docker Buildx from 0.39.0 to 0.39.1.
+- Upgrade Bun from 1.4.4 to 1.4.5.
+- Upgrade lean-ctx from 3.12.6 to 3.12.7.
+- Upgrade OpenSpec from 2.1.0 to 2.1.1.
+- Upgrade CodeGraph from 1.6.3 to 1.6.4.
+- Upgrade OpenChamber from 2.7.2 to 2.8.0.
+- Upgrade OpenCode CLI from 2.3.2 to 2.4.0.
+
 ## [2.0.25] - 2026-11-19
 
 ### Changed
@@ -2580,9 +2594,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.25...HEAD
-[2.0.25]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...v2.0.25
-[2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.26...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2785,3 +2797,6 @@
 [2.0.21]: https://github.com/tryweb/ai-engkit/compare/v2.0.20...v2.0.21
 [2.0.22]: https://github.com/tryweb/ai-engkit/compare/v2.0.21...v2.0.22
 [2.0.23]: https://github.com/tryweb/ai-engkit/compare/v2.0.22...v2.0.23
+[2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
+[2.0.25]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...v2.0.25
+[2.0.26]: https://github.com/tryweb/ai-engkit/compare/v2.0.25...v2.0.26
