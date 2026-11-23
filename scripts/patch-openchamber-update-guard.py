@@ -267,6 +267,112 @@ PATCHES_V2: tuple[Patch, ...] = (
     ),
 )
 
+# v2.8.0 relocates the web update route into self-update/ and ships compiled
+# files under build/server. The guarded operations are unchanged; these exact
+# anchors are verified against the published @openchamber/web@2.8.0 tarball.
+PATCHES_V2_8_0: tuple[Patch, ...] = (
+    Patch(
+        rel_path="build/server/lib/self-update/openchamber-routes.js",
+        anchor=(
+            "export const registerOpenChamberRoutes = (app, dependencies) => {\n"
+        ),
+        patched=(
+            "export const registerOpenChamberRoutes = (app, dependencies) => {\n"
+            "    // AI-ENGKIT-UPDATE-GUARD: begin - the AI-EngKit core is image-managed; refuse web self-update.\n"
+            "    app.post('/api/openchamber/update-install', (_req, res) => {\n"
+            "        res.status(409).json({\n"
+            "            success: false,\n"
+            "            code: 'CORE_UPDATE_MANAGED_BY_IMAGE',\n"
+            f"            error: '{MANAGED_ERROR}',\n"
+            "        });\n"
+            "    });\n"
+            "    // AI-ENGKIT-UPDATE-GUARD: end\n"
+        ),
+    ),
+    Patch(
+        rel_path="build/server/lib/package-manager.js",
+        anchor=(
+            "export function executeUpdate(pm = detectPackageManager(), options = {}) {\n"
+            "    const command = getUpdateCommand(pm, { targetVersion: options.targetVersion });\n"
+            "    if (!options?.silent) {\n"
+            "        console.log(`Updating ${PACKAGE_NAME} using ${pm}...`);\n"
+            "        console.log(`Running: ${command}`);\n"
+            "    }\n"
+            "    const result = spawnSync(command, {\n"
+            "        stdio: 'inherit',\n"
+            "        shell: true,\n"
+            "        ...getSpawnSyncBaseOptions(),\n"
+            "    });\n"
+            "    if (result.status !== 0) {\n"
+            "        return {\n"
+            "            success: false,\n"
+            "            exitCode: result.status,\n"
+            "            error: `Package manager exited with code ${result.status}`,\n"
+            "        };\n"
+            "    }\n"
+            "    const targetVersion = normalizeTargetVersion(options.targetVersion);\n"
+            "    if (!targetVersion) {\n"
+            "        return {\n"
+            "            success: true,\n"
+            "            exitCode: result.status,\n"
+            "            installedVersion: null,\n"
+            "        };\n"
+            "    }\n"
+            "    const installedVersion = getInstalledGlobalVersion(pm);\n"
+            "    if (!installedVersion) {\n"
+            "        return {\n"
+            "            success: false,\n"
+            "            exitCode: result.status,\n"
+            "            error: `Could not determine the globally installed ${PACKAGE_NAME} version after the update; not reporting success`,\n"
+            "        };\n"
+            "    }\n"
+            "    if (compareVersions(installedVersion, targetVersion) !== 0) {\n"
+            "        return {\n"
+            "            success: false,\n"
+            "            exitCode: result.status,\n"
+            "            error: `Installed ${PACKAGE_NAME} version ${installedVersion} does not match target ${targetVersion}. The package manager may have resolved different metadata or filtered the release.`,\n"
+            "        };\n"
+            "    }\n"
+            "    return {\n"
+            "        success: true,\n"
+            "        exitCode: result.status,\n"
+            "        installedVersion,\n"
+            "    };\n"
+            "}\n"
+        ),
+        patched=(
+            "export function executeUpdate(_pm = detectPackageManager(), _options = {}) {\n"
+            "    // AI-ENGKIT-UPDATE-GUARD: begin - the AI-EngKit core is image-managed; refuse CLI self-update.\n"
+            "    console.error('This OpenChamber core is image-managed by AI-EngKit; self-update is refused. Deploy a new AI-EngKit image to upgrade.');\n"
+            "    return {\n"
+            "        success: false,\n"
+            "        exitCode: 1,\n"
+            "    };\n"
+            "}\n"
+        ),
+    ),
+    Patch(
+        rel_path="build/server/lib/opencode/routes.js",
+        anchor=(
+            "    let upgradeInFlight = null;\n"
+            "    app.post('/api/opencode/upgrade', async (_req, res) => {\n"
+        ),
+        patched=(
+            "    let upgradeInFlight = null;\n"
+            "    // AI-ENGKIT-UPDATE-GUARD: begin - the AI-EngKit core is image-managed; refuse managed OpenCode upgrade.\n"
+            "    app.post('/api/opencode/upgrade', (_req, res) => {\n"
+            "        res.status(409).json({\n"
+            "            success: false,\n"
+            "            code: 'CORE_UPDATE_MANAGED_BY_IMAGE',\n"
+            f"            error: '{MANAGED_ERROR}',\n"
+            "        });\n"
+            "    });\n"
+            "    // AI-ENGKIT-UPDATE-GUARD: end\n"
+            "    app.post('/api/opencode/upgrade', async (_req, res) => {\n"
+        ),
+    ),
+)
+
 # Default alias for backwards compat (v1)
 PATCHES = PATCHES_V1
 
@@ -331,6 +437,7 @@ VERSION_PATCHES: dict[str, tuple[Patch, ...]] = {
     # 2.7.2: expected to keep the v2 line's guarded seams/anchors; build-time
     # anchor checks remain fail-closed if the published tarball drifts.
     "2.7.2": PATCHES_V2,
+    "2.8.0": PATCHES_V2_8_0,
 }
 
 

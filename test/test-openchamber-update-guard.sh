@@ -2,9 +2,9 @@
 # test-openchamber-update-guard.sh — regression harness for the AI-EngKit core
 # update guard patcher (scripts/patch-openchamber-update-guard.py).
 #
-# Exercises the real patcher against a disposable copy of the exact pinned
-# OpenChamber v1.24.2 sources (test/fixtures/openchamber-update-guard/web).
-# No package install, no network, no installer spawn.
+# Exercises the real patcher against a disposable copy of pinned OpenChamber
+# sources. The v1 fixture is offline; optional package-dir inputs verify current
+# published package layouts without making the default test network-dependent.
 #
 # Covered contract:
 #   * happy path applies all three guards and the patched routes refuse
@@ -69,6 +69,7 @@ patcher = runpy.run_path(sys.argv[1])
 assert patcher['patches_for_version']('2.7.0') is patcher['PATCHES_V2']
 assert patcher['patches_for_version']('2.6.1') is patcher['PATCHES_V2']
 assert patcher['patches_for_version']('2.7.1') is patcher['PATCHES_V2']
+assert patcher['patches_for_version']('2.8.0') is patcher['PATCHES_V2_8_0']
 try:
     patcher['patches_for_version']('9.9.9')
 except patcher['PatchError']:
@@ -213,6 +214,37 @@ if [ -n "${OPENCHAMBER_270_PACKAGE_DIR:-}" ]; then
   out8="$(run_patch "$PKG6" "2.7.0" 2>&1)"; rc8=$?
   assert_eq "2.7.0-second-run-succeeds" "0" "$rc8"
   assert_eq "2.7.0-second-run-byte-identical" "$SNAP6" "$(snapshot "$PKG6")"
+fi
+
+# Optionally exercise the published 2.8.0 package, whose compiled output moved
+# under build/server and whose self-update route moved into lib/self-update.
+if [ -n "${OPENCHAMBER_280_PACKAGE_DIR:-}" ]; then
+  echo "== 2.8.0 published package =="
+  PKG7="$(mktemp -d "$WORK/pkg.XXXXXX")"
+  cp -R "$OPENCHAMBER_280_PACKAGE_DIR/." "$PKG7/" || exit 2
+  TARGET_280=(
+    "build/server/lib/self-update/openchamber-routes.js"
+    "build/server/lib/package-manager.js"
+    "build/server/lib/opencode/routes.js"
+  )
+  snapshot_280() {
+    local f
+    for f in "${TARGET_280[@]}"; do sha256sum "$PKG7/$f"; done
+  }
+  out9="$(run_patch "$PKG7" "2.8.0" 2>&1)"; rc9=$?
+  assert_eq "2.8.0-patcher-succeeds" "0" "$rc9"
+  [ "$rc9" -ne 0 ] && echo "$out9" | sed 's/^/    | /'
+  for f in "${TARGET_280[@]}"; do
+    if grep -q 'AI-ENGKIT-UPDATE-GUARD: begin' "$PKG7/$f"; then
+      pass "2.8.0-guard-marker-present: $f"
+    else
+      fail "2.8.0-guard-marker-present: $f"
+    fi
+  done
+  SNAP7="$(snapshot_280)"
+  out10="$(run_patch "$PKG7" "2.8.0" 2>&1)"; rc10=$?
+  assert_eq "2.8.0-second-run-succeeds" "0" "$rc10"
+  assert_eq "2.8.0-second-run-byte-identical" "$SNAP7" "$(snapshot_280)"
 fi
 
 echo ""
