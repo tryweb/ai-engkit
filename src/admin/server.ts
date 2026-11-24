@@ -46,6 +46,8 @@ import { isOpenCodeV2 } from "./lib/opencode-v2";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
 import { createLspReconciler } from "./lib/lsp-reconciler";
 import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
+import { createHostMaintenanceScheduler } from "./lib/host-maintenance-scheduler";
+import { createHostMaintenanceRoutes } from "./routes/host-maintenance";
 import { createGitHostingAuthScheduler } from "./lib/git-hosting-auth-scheduler";
 import { loadGitHostingAuthState } from "./lib/git-hosting-auth-state";
 
@@ -150,6 +152,10 @@ app.route("/", lspRoutes);
 app.route("/", dbHealthRoutes);
 // Live scheduler instance (not the module default): otherwise /schedule always reports Stopped.
 app.route("/", createDbMaintenanceRoutes({ getSchedulerStatus: () => maintenanceScheduler.getStatus() }));
+app.route("/", createHostMaintenanceRoutes({
+  getSchedulerStatus: () => hostMaintenanceScheduler.getStatus(),
+  onPolicySaved: () => hostMaintenanceScheduler.reschedule(),
+}));
 
 // Dashboard main page — gathers data directly instead of HTTP loopback
 app.get("/", async (c) => {
@@ -414,10 +420,14 @@ export default {
 };
 
 export const maintenanceScheduler = createMaintenanceScheduler();
+export const hostMaintenanceScheduler = createHostMaintenanceScheduler({
+  isUpgradeRunning: () => getUpgradeStatus().state === "running",
+});
 export const gitHostingAuthScheduler = createGitHostingAuthScheduler();
 
 const stopSchedulers = (): void => {
   gitHostingAuthScheduler.stop();
+  hostMaintenanceScheduler.stop();
 };
 
 process.once("SIGTERM", stopSchedulers);
@@ -434,6 +444,11 @@ setTimeout(() => {
     maintenanceScheduler.start();
   } catch (error: unknown) {
     console.error("Maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
+  }
+  try {
+    hostMaintenanceScheduler.start();
+  } catch (error: unknown) {
+    console.error("Host maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
   }
   try {
     gitHostingAuthScheduler.start();

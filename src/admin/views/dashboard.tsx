@@ -321,6 +321,16 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <p class="text-sm text-muted">Health data unavailable — probe failed or timed out.</p>
         )}
       </section>
+      <section class="db-health card" aria-label="Host Storage">
+        <div class="db-health__header">
+          <h3>Host Storage</h3>
+          <div class="db-health__header-actions">
+            <span id="host-storage-pill" class="status-pill status-pill--neutral">loading</span>
+            <a href="/host-maintenance" class="db-health__link">Manage cleanup →</a>
+          </div>
+        </div>
+        <div id="host-storage-detail" class="text-sm text-muted">Loading host storage…</div>
+      </section>
       <section class="insights card" aria-label="LeanCTX Insights">
         <h3>LeanCTX Insights</h3>
         <div class="insights__grid">
@@ -687,6 +697,35 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
                 setCard("metric-db-events", fmtInt(h.rowCounts.event), undefined, undefined);
                 setCard("metric-db-messages", fmtInt(h.rowCounts.message), undefined, undefined);
                 setCard("metric-db-parts", fmtInt(h.rowCounts.part), undefined, undefined);
+              }
+            }
+          } catch (_) {}
+          try {
+            var sres = await fetch("/api/admin/host-maintenance/status");
+            if (sres.ok) {
+              var sdata = await sres.json();
+              var pill = document.getElementById("host-storage-pill");
+              var detail = document.getElementById("host-storage-detail");
+              var wm = (sdata && sdata.watermark) || "unknown";
+              var tone = wm === "ok" ? "success" : wm === "warn" ? "warning" : wm === "crit" ? "danger" : "neutral";
+              var rootAvail = sdata && sdata.storage && sdata.storage.root ? sdata.storage.root.availBytes : null;
+              if (pill) {
+                pill.className = "status-pill status-pill--" + tone;
+                pill.textContent = typeof rootAvail === "number" ? fmtBytes(rootAvail) + " free" : wm;
+              }
+              if (detail) {
+                var dockerInfo = sdata && sdata.storage && sdata.storage.docker;
+                var text = typeof rootAvail === "number" ? fmtBytes(rootAvail) + " free on /" : "free space unknown";
+                if (dockerInfo && dockerInfo.images && typeof dockerInfo.images.reclaimableBytesApprox === "number") {
+                  text += " · ~" + fmtBytes(dockerInfo.images.reclaimableBytesApprox) + " reclaimable images";
+                }
+                if (dockerInfo && dockerInfo.buildCache && typeof dockerInfo.buildCache.reclaimableBytesApprox === "number" && dockerInfo.buildCache.reclaimableBytesApprox > 0) {
+                  text += " · ~" + fmtBytes(dockerInfo.buildCache.reclaimableBytesApprox) + " build cache";
+                }
+                if (wm === "warn" || wm === "crit") {
+                  text += wm === "crit" ? " — cleanup recommended before next upgrade" : " — consider running cleanup";
+                }
+                detail.textContent = text;
               }
             }
           } catch (_) {}
