@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 
+## [2.0.27] - 2026-11-24
+
+### Added
+- Add Admin uptime and health dashboard probes.
+- Add safe scheduled host storage maintenance.
+
+### Changed
+- Remove OMO runtime behavior from V2; retain only the explicitly invoked, partial settings importer, with no automatic V1 configuration import.
+- Convert Admin model routing and upgrade coverage to native V2 APIs and routing configuration.
+
+### Fixed
+- Isolate Admin test fixtures and reconciliation locks to prevent cross-test interference.
+
 ## [2.0.26] - 2026-11-23
 
 ### Fixed
@@ -2800,3 +2813,5 @@
 [2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
 [2.0.25]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...v2.0.25
 [2.0.26]: https://github.com/tryweb/ai-engkit/compare/v2.0.25...v2.0.26
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.27...HEAD
+[2.0.27]: https://github.com/tryweb/ai-engkit/releases/tag/v2.0.27
