@@ -1,5 +1,9 @@
 # OpenChamber New-Session Default Model Not Applied (kimi-k3 instead of big-pickle)
 
+> **Historical incident:** This diagnosis was captured on the legacy OMO
+> runtime. Fresh installs now use Native agents/routing and do not load OMO;
+> use it only when investigating an existing installation still on that line.
+
 ## Context
 
 ai-engkit v1.9.0 seeds OpenChamber settings with `"defaultModel": "opencode/big-pickle"` so new sessions default to Big Pickle. OpenChamber 1.17.1 resolves the new-session default model in `@openchamber/web/server/lib/openchamber-sessions/routes.js` (`resolveDefaultSelection`). Deployed installs keep their settings in the persistent `openchamber-data` Docker volume at `/home/devuser/.config/openchamber/settings.json`.

@@ -1,5 +1,10 @@
 # CI Plugin Removal Cleanup Pattern
 
+> **Historical note:** The plugin-default details below describe the former
+> OMO-default setup. Fresh installs now set `NATIVE_AGENTS=1`, generate a
+> plugin-free OpenCode config, and do not use OMO. Keep this page only for
+> understanding older CI/plugin migrations.
+
 ## Context
 PR #63 moved SuperPower from a global baked plugin to a per-project feature managed from the admin Projects drawer. CI integration tests failed (exit code 1) because test scripts still asserted global superpowers presence.
 
@@ -38,7 +43,7 @@ The `.env.example` → `.env` → `env_file` → `OPENCODE_PLUGINS` → entrypoi
 - `test/run-tests.sh` — Integration tests, section 8.4 (rewritten assertions)
 - `entrypoint.d/02-init-config.sh` — Entrypoint, `link_superpowers_skills` function (removed)
 - `Dockerfile` — Baked plugin source at `/opt/opencode/baked-plugins/superpowers/`
-- `.env.example` — Default `OPENCODE_PLUGINS=oh-my-openagent`
+- `.env.example` — Native default; legacy plugin settings are ignored when `NATIVE_AGENTS=1`
 - `docker-compose.dev.yml` — Uses `env_file: .env` for plugin config
 
 ## Tags

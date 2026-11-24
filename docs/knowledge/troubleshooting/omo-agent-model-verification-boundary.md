@@ -1,5 +1,9 @@
 # OMO Agent Model Verification Boundary
 
+> **Legacy runtime note:** This investigation describes OMO model behavior.
+> Fresh installs use Native agents and routing; apply these checks only when
+> diagnosing an existing installation explicitly running the legacy OMO line.
+
 ## Context
 
 ai-engkit runs OpenCode with oh-my-openagent 4.19.4 and persists agent selections in `~/.omo/omo.jsonc`.

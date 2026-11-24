@@ -3,6 +3,9 @@
 > Status: `.github/workflows/dependency-update.yml` was retired in 2026-11;
 > version-pipeline references to it below are historical. Current checks run
 > through `check-versions.sh`.
+>
+> **Runtime status:** The OMO plugin integration below is legacy compatibility
+> research. Fresh installs use Native agents and do not load OMO.
 
 ## Context
 

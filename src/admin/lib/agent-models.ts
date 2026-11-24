@@ -70,7 +70,11 @@ export function createAgentModelsLib(deps: AgentModelsDeps = REAL_DEPS) {
   // long-lived and the flag can land after boot (migrate, upgrade, manual
   // edit), so a frozen value would pin the wrong backend until restart.
   function readUsesRoutingConfig(): boolean {
-    return deps.readEnv()["OMO_ENABLED"] === "0" || process.env.OMO_ENABLED === "0";
+    const env = deps.readEnv();
+    return env["NATIVE_AGENTS"] === "1"
+      || env["OMO_ENABLED"] === "0"
+      || process.env.NATIVE_AGENTS === "1"
+      || process.env.OMO_ENABLED === "0";
   }
 
   async function readAgentModelsConfig(): Promise<Record<string, AgentModelConfig>> {

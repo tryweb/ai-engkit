@@ -7,16 +7,20 @@ import { listHandlers, stubDeps } from "./agent-models-test-support";
 const { createAgentModelsRoutes } = await import("./agent-models");
 
 const originalOmoEnabled = process.env.OMO_ENABLED;
+const originalNativeAgents = process.env.NATIVE_AGENTS;
 
 beforeEach(() => {
   // Legacy endpoint cases below use OMO config fixtures. Native routing cases
   // opt in explicitly through their injected environment.
+  delete process.env.NATIVE_AGENTS;
   process.env.OMO_ENABLED = "1";
 });
 
 afterEach(() => {
   if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
   else process.env.OMO_ENABLED = originalOmoEnabled;
+  if (originalNativeAgents === undefined) delete process.env.NATIVE_AGENTS;
+  else process.env.NATIVE_AGENTS = originalNativeAgents;
 });
 
 beforeEach(() => {

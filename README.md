@@ -14,6 +14,7 @@ It is for people who want a ready-to-run AI coding workspace without assembling 
 
 - **Browser-based AI workspace** — OpenChamber provides a full-featured web UI; the OpenCode CLI runs inside the container for advanced users who `docker exec` in.
 - **Pre-wired engineering tools** — CodeGraph, lean-ctx, Playwright, GitHub/GitLab CLI, Docker, and everyday build utilities are included.
+- **Native agents by default** — fresh installs use AI-EngKit's baked-in OpenCode agents and Native routing; the legacy OMO plugin path is not loaded by default.
 - **Persistent by default** — configuration, sessions, caches, credentials, workspace files, and knowledge data live in separate Docker volumes.
 - **Operationally manageable** — the Admin Dashboard handles environment settings, authentication, project initialization, version inspection, and upgrades; optional center-agent connection enables remote management of multiple instances.
 - **Extensible without rebuilding** — add apt, Homebrew, or bun packages through environment variables at startup.
@@ -36,7 +37,7 @@ Install the current production channel from `main`:
 curl -fsSL https://raw.githubusercontent.com/tryweb/ai-engkit/refs/heads/main/install.sh | bash
 ```
 
-The installer checks system requirements, asks for the OpenChamber and Admin passwords when they are not already set, creates the persistent volumes, and starts the services.
+The installer checks system requirements, asks for the OpenChamber and Admin passwords when they are not already set, creates the persistent volumes, and starts the services. A fresh `.env` defaults to Native agents and Native routing; OMO is not used by the default runtime.
 
 After installation:
 
@@ -124,7 +125,8 @@ Copy `.env.example` to `.env` when configuring a checkout manually. The installe
 | `OPENCHAMBER_UI_PASSWORD` | `chamber` in example | OpenChamber password; installer prompts for it |
 | `ADMIN_PASSWORD` | **required** | Admin Dashboard password; installer prompts for it |
 | `AI_ENGKIT_COMPOSE_OVERLAY` | unset (disabled) | One local overlay for the `ai-dev` service |
-| `OPENCODE_PLUGINS` | bundled plugin list | Comma-separated OpenCode plugins |
+| `NATIVE_AGENTS` | `1` | Use the baked-in Native agents and routing configuration; set to `0` only for the legacy OMO line |
+| `OPENCODE_PLUGINS` | ignored by Native default | Legacy OMO-line plugin list; Native mode generates a plugin-free OpenCode config |
 | `OPENCODE_PROVIDER` | unset | Custom provider JSON injected into `opencode.json` |
 | `WORKSPACE_PATH` | named volume | Set a host path for a bind-mounted workspace |
 | `BACKUP_RETENTION` | `5` | Number of upgrade backups to retain |
@@ -133,6 +135,12 @@ Copy `.env.example` to `.env` when configuring a checkout manually. The installe
 | `BUN_PACKAGES` | unset | Extra global bun packages installed at startup |
 | `CENTER_URL` | unset | WebSocket URL for center-agent remote management |
 | `CENTER_TOKEN` | unset | Registration token for center authentication |
+
+The legacy OMO runtime is retained for existing installations. Upgrading an
+existing `.env` does not silently change its agent runtime; use the Admin
+Dashboard's one-way OMO-to-Native migration to move an existing installation.
+New installs should keep `NATIVE_AGENTS=1`; do not set `OMO_ENABLED=1` alongside
+Native mode.
 
 ### Workspace and persistent data
 
@@ -184,6 +192,7 @@ The Admin Dashboard **Providers** page (`/providers`) edits `OPENCODE_PROVIDER` 
 - [Managed Core](./docs/MANAGED_CORE.md) — core isolation, integrity baseline, and offline recovery
 - [Domain Compose Overlay](./docs/DOMAIN_COMPOSE_OVERLAY.md) — one local overlay for domain `ai-dev` integrations
 - [Tooling](./docs/TOOLING.md) — MCP servers, CLI tools, package managers, and extension points
+- [Native agent routing](./docs/V1_AGENT_ROUTING.md) — Native agent model-chain configuration and runtime behavior
 - [Security policy](./SECURITY.md) — threat model, trust assumptions, and reporting
 - [Troubleshooting](./docs/TROUBLESHOOTING.md) — known issues and fixes
 - [Git authentication](./docs/GIT_AUTHENTICATION.md) — HTTPS, SSH, `gh`, and `glab`

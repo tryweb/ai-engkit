@@ -1,9 +1,13 @@
 # V1 Agent Routing Configuration
 
-The V1 routing proof of concept stores fallback chains in
-`~/.config/opencode/routing.json`. The future V1 routing plugin consumes this
-file; this document defines the migration-facing subset and is not a plugin
-implementation.
+Fresh installs use Native agents. The Admin Agent Models feature stores model
+chains in `~/.config/opencode/routing.json`; this is the authoritative Native
+configuration. OMO is not loaded on the Native line.
+
+OpenCode's generated native agent config is synchronized to the first model in
+each chain. The remaining entries are retained in `routing.json`, but are not
+automatically tried as failover models by OpenCode itself; a separate routing
+consumer would be needed for runtime fallback behavior.
 
 ## Schema
 
@@ -41,7 +45,7 @@ Native startup does not use, migrate, or synchronize model values from
 `~/.omo/omo.jsonc`. `routing.json` is the sole source for native routing
 chains. After regenerating `opencode.json`, entrypoint seeds each non-empty chain's head into
 `agent.<name>.model` and, when present, `agent.<name>.variant` so OpenCode's
-native `/agent` assignments match the routing configuration after a restart.
+native `/agent` assignments match the primary model in routing configuration after a restart.
 
 If `routing.json` is absent, startup leaves the generated agent assignments
 unchanged. Native startup reconciliation does not auto-select or replace

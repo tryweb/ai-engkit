@@ -380,7 +380,7 @@ graph TB
 
         subgraph "Application Layer"
             OC_SERVER["OpenCode Server"]
-            OC_PLUGINS["Plugin System<br/>oh-my-openagent"]
+            OC_PLUGINS["Optional plugin system<br/>Native default: plugin-free"]
             CH_SERVER["OpenChamber Server"]
         end
 
@@ -715,23 +715,26 @@ graph LR
     style DOCKER fill:#e3f2fd
 ```
 
-### Plugin System
+### Native agents and plugin compatibility
 
-| Plugin | Purpose | Description | Version Management |
-| `oh-my-openagent` | Core framework | Extends baseline OpenCode functionality | Build-time pin via `OH_MY_OPENAGENT_VERSION` |
+Fresh installs set `NATIVE_AGENTS=1`. The entrypoint writes the baked-in Native
+agent definitions and generates a plugin-free `opencode.json`; model chains are
+stored in `~/.config/opencode/routing.json`. The legacy `oh-my-openagent` plugin
+path remains for installations that explicitly opt out of Native mode, but it
+is not part of the default runtime.
 
-### Plugin Version Management (Development)
+### Legacy OMO plugin version management (Development)
 
 `AI_ENGKIT_VERSION` and `OH_MY_OPENAGENT_VERSION` control different things:
 `AI_ENGKIT_VERSION` selects the deployed AI-EngKit image and remains `latest`
-by default in the production Compose file. `OH_MY_OPENAGENT_VERSION` selects
-the OMO plugin version baked into a development image's default OpenCode
-configuration; the Dockerfile default is `4.19.4`.
+by default in the production Compose file. `OH_MY_OPENAGENT_VERSION` pins the
+legacy OMO plugin for compatibility-mode development images; it is not loaded
+in Native mode. The Dockerfile pins the compatibility plugin version.
 
 You can override the OMO version when building the development image:
 
 ```bash
-# Use the Dockerfile default (`4.19.4`)
+# Use the Dockerfile's pinned compatibility version
 docker compose -p dev -f docker-compose.dev.yml build
 
 # Pin a specific OMO version

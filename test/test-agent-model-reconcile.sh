@@ -16,7 +16,19 @@ assert_eq() { # assert_eq <name> <expected> <actual>
   if [ "$2" = "$3" ]; then ok "$1"; else bad "$1 (expected [$2] got [$3])"; fi
 }
 
-unset NATIVE_AGENTS OPENCODE_SERVER_PASSWORD
+unset NATIVE_AGENTS OMO_ENABLED OPENCODE_SERVER_PASSWORD
+if grep -q '^NATIVE_AGENTS=1$' "${SCRIPT_DIR}/.env.example"; then
+  ok "fresh-install env defaults to Native agents"
+else
+  bad "fresh-install env defaults to Native agents"
+fi
+
+if grep -q 'env\["NATIVE_AGENTS"\] === "1"' "${SCRIPT_DIR}/src/admin/lib/agent-models.ts"; then
+  ok "Admin selects Native routing from NATIVE_AGENTS"
+else
+  bad "Admin selects Native routing from NATIVE_AGENTS"
+fi
+
 skip_log="$(reconcile 2>&1)"
 assert_eq "unset password skips reconciliation" \
   "0" "$?"

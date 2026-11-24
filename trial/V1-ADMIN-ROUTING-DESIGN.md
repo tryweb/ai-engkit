@@ -1,5 +1,11 @@
 # V1 Admin Agent Models: OMO to Native Routing
 
+> **Historical design/trial plan — superseded.** Native routing has since been
+> implemented and is the default for fresh installs (`NATIVE_AGENTS=1`). This
+> document records the original opt-in plan and must not be treated as the
+> current setup instructions. See [V1 Agent Routing](../docs/V1_AGENT_ROUTING.md)
+> and the root [README](../README.md) for current behavior.
+
 **Branch:** `trial/v1-native-agents-poc`  
 **Scope:** Admin backend design and minimum implementation sequence for 12 native agents.  
 **Compatibility constraint:** Do not change the existing Admin UI or the JSON response shape of `GET /api/agent-models`.  

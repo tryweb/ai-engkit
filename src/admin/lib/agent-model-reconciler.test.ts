@@ -12,16 +12,20 @@ type Fixture = {
 };
 
 const originalOmoEnabled = process.env.OMO_ENABLED;
+const originalNativeAgents = process.env.NATIVE_AGENTS;
 
 beforeEach(() => {
   // Reconciliation is currently an OMO-backend operation; isolate these
   // behavior tests from the runner's Native-mode environment.
+  delete process.env.NATIVE_AGENTS;
   process.env.OMO_ENABLED = "1";
 });
 
 afterEach(() => {
   if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
   else process.env.OMO_ENABLED = originalOmoEnabled;
+  if (originalNativeAgents === undefined) delete process.env.NATIVE_AGENTS;
+  else process.env.NATIVE_AGENTS = originalNativeAgents;
 });
 
 function fixture(config: string, provider: string, agents: string, probes: Record<string, string> = {}): Fixture {

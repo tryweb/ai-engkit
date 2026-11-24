@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Changed
+- Default fresh installs to Native agents and routing without loading OMO plugins; existing `.env` files are not silently migrated during upgrades.
+- Document Native agent routing as the current default and clarify that OMO findings apply only to legacy installations.
 
 ## [1.24.9] - 2026-11-23
 

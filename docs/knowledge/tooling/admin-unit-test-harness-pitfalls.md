@@ -10,11 +10,11 @@
 Three independent harness quirks each produced misleading red tests that
 looked like product bugs:
 
-1. **`OMO_ENABLED` env flips the backend under test.** `createAgentModelsLib`
-   picks the routing backend when `deps.readEnv()["OMO_ENABLED"] === "0"` **or**
-   `process.env.OMO_ENABLED === "0"`. A shell with `OMO_ENABLED=0` (normal in
-   this dev container) silently switches 18 tests to the routing backend and
-   they fail. Canonical invocation: `env -u OMO_ENABLED bun test <path>`.
+1. **Backend env flags select the backend under test.** Native routing is
+   selected by `NATIVE_AGENTS=1` or `OMO_ENABLED=0`; the legacy OMO path is
+   selected when neither is set. Agent-model suites now pin the backend needed
+   by each fixture and restore environment state, so run the tests normally
+   (`bun test src/admin`) rather than depending on `env -u OMO_ENABLED`.
 2. **bun 1.4.2 `toMatchObject` mishandles nested asymmetric matchers.**
    `expect(obj).toMatchObject({ error: expect.stringContaining("x") })` fails
    even when the string contains `x` (verified in isolation). Use two-step
@@ -52,15 +52,16 @@ full-tree runs catch shared-path fallout before CI does.
 
 ## Side Effects / Tradeoffs
 
-- `env -u OMO_ENABLED` is tribal knowledge until the harness defaults it;
-  changing the harness default is out of scope here.
+- The legacy OMO branch remains covered for compatibility, but it is not the
+  default backend for new installations.
 - The counting wrapper must match the exact number of pre-reads
   (batch PUT: 1 pre-read; single PUT via `applyAgent`: 2); miscounts fail
   loudly, which is preferable to silent staleness.
 
 ## Evidence
 
-- 18 failures with `OMO_ENABLED=0` in shell vs 36/36 pass with `env -u`.
+- Earlier runs showed false backend selection when inheriting `OMO_ENABLED=0`;
+  backend pinning in the test harness removes that environment dependency.
 - Isolated `toMatchObject` + nested `stringContaining` repro failed on
   bun 1.4.2; `toContain` on the same string passed.
 - CI job `Build Image → Admin unit tests` failed on 4 route tests after a

@@ -98,7 +98,7 @@ case "$url" in
     base="${FAKE_BASE_YML:-}"
     [ -n "$base" ] || base='services: {}'
     printf '%s' "$base" > "$dest" ;;
-  *.env.example) printf '# noop\n' > "$dest" ;;
+  *.env.example) printf 'NATIVE_AGENTS=1\nOPENCODE_PLUGINS=\n' > "$dest" ;;
   *) : > "$dest" ;;
 esac
 exit 0
@@ -274,6 +274,11 @@ if run_upgrade "$D"; then
     pass "no overlay: upgrade exits successfully"
 else
     fail "no overlay: upgrade failed ($(tail -3 "$D/out.log" | tr '\n' ' '))"
+fi
+if ! grep -q '^NATIVE_AGENTS=' "$D/.env"; then
+    pass "existing install: upgrade does not silently switch OMO to Native"
+else
+    fail "existing install: upgrade unexpectedly added NATIVE_AGENTS"
 fi
 [ "$(cmp -s "$WORK/expected-base.yml" "$D/docker-compose.yml"; echo $?)" = "0" ] \
     && pass "no overlay: docker-compose.yml updated as before" \

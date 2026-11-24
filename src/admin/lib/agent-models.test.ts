@@ -5,16 +5,20 @@ import type { ExecResult as DockerExecResult } from "./docker";
 type ExecResponse = { match?: RegExp; stdout: string; stderr?: string; exitCode?: number };
 const SNAPSHOT_FILE = "/tmp/omo.jsonc.snapshot-test";
 const originalOmoEnabled = process.env.OMO_ENABLED;
+const originalNativeAgents = process.env.NATIVE_AGENTS;
 
 beforeEach(() => {
   // These compatibility tests exercise the OMO backend; do not inherit the
   // host's Native-mode setting when running the suite.
+  delete process.env.NATIVE_AGENTS;
   process.env.OMO_ENABLED = "1";
 });
 
 afterEach(() => {
   if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
   else process.env.OMO_ENABLED = originalOmoEnabled;
+  if (originalNativeAgents === undefined) delete process.env.NATIVE_AGENTS;
+  else process.env.NATIVE_AGENTS = originalNativeAgents;
 });
 type StubOptions = {
   readonly password?: string | null;
@@ -48,6 +52,21 @@ function stubDeps(responses: ExecResponse[] = [], options: StubOptions = {}) {
 }
 
 describe("readAgentModelsConfig", () => {
+  test("uses Native routing config when NATIVE_AGENTS is enabled", async () => {
+    const { deps, calls } = stubDeps([
+      { stdout: '{"version":1,"chains":{"plan":{"chain":[{"model":"opencode/big-pickle"}]}}}' },
+    ]);
+    const nativeDeps: AgentModelsDeps = {
+      ...deps,
+      readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass", NATIVE_AGENTS: "1" }),
+    };
+
+    const config = await createAgentModelsLib(nativeDeps).readAgentModelsConfig();
+
+    expect(config.plan?.models).toEqual([{ model: "opencode/big-pickle" }]);
+    expect(calls[0]).toContain("routing.json");
+  });
+
   test("parses model primary plus fallback_models chain from stdout", async () => {
     const { deps } = stubDeps([
       {

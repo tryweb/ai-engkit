@@ -6,14 +6,18 @@ import { listHandlers, stubDeps } from "./agent-models-test-support";
 import { CONFIGURABLE_NATIVE_AGENTS } from "../lib/agent-model-types";
 
 const originalOmoEnabled = process.env.OMO_ENABLED;
+const originalNativeAgents = process.env.NATIVE_AGENTS;
 
 beforeEach(() => {
+  delete process.env.NATIVE_AGENTS;
   process.env.OMO_ENABLED = "1";
 });
 
 afterEach(() => {
   if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
   else process.env.OMO_ENABLED = originalOmoEnabled;
+  if (originalNativeAgents === undefined) delete process.env.NATIVE_AGENTS;
+  else process.env.NATIVE_AGENTS = originalNativeAgents;
 });
 
 describe("createAgentModelsRoutes — GET /api/agent-models", () => {

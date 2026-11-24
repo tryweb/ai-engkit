@@ -1,5 +1,9 @@
 # OMO Unified Agent Permission Defaults
 
+> **Legacy compatibility reference:** Fresh installs use baked-in Native
+> agents and do not load OMO. The OMO-specific permissions described below
+> apply only to existing installations running the legacy OMO line.
+
 ## Context
 
 ai-engkit uses oh-my-openagent (OMO) which registers 11 agents (explore, oracle, librarian, sisyphus, etc.). Each agent needs explicit permission configuration to access lean-ctx tools (`ctx_shell`, `ctx_search`, `ctx_read`). Previously, agent permissions were embedded inline in the Dockerfile and entrypoint script's jq templates, making maintenance difficult — any permission change required a full image rebuild.

@@ -90,12 +90,16 @@ AI-EngKit is designed for Docker socket passthrough, so containerized workflows 
 - `vim`, `nano`, `less`, `htop`, `lsof`
 - `comment-checker`
 
-## OpenCode Plugins and Skills
+## Native Agents, OpenCode Plugins, and Skills
 
-Default plugin setup:
+Fresh installs use AI-EngKit's baked-in Native agents. The Native line generates
+a plugin-free `opencode.json`; it does not load or depend on the OMO plugin.
+`OPENCODE_PLUGINS` is ignored in Native mode.
 
-- `oh-my-openagent`
-- `superpowers@git+https://github.com/obra/superpowers.git`
+The legacy OMO line is retained for compatibility with existing installations
+that explicitly set `NATIVE_AGENTS=0`. Its entrypoint default loads
+`oh-my-openagent` when no plugin list is provided; this is not the fresh-install
+default.
 
 AI-EngKit also bakes in project-visible skills such as:
 

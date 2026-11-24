@@ -1,5 +1,10 @@
 # OMO Fallback Model Config (v4.19.4 and v5 migration note)
 
+> **Legacy runtime research:** Fresh installations now use Native agents and
+> do not load OMO. The findings below apply only to existing installations that
+> explicitly run the legacy OMO line; Native chains are documented in
+> [V1 Agent Routing](../../V1_AGENT_ROUTING.md).
+
 ## Context
 
 ai-engkit uses oh-my-openagent (OMO) 4.19.4. The plugin assigns default models to its 11+ registered agents via built-in fallback chains. To steer `plan` and `prometheus` toward the desired models and provide fallbacks on provider saturation, the config file needs a `fallback_models` key per agent.

@@ -332,7 +332,11 @@ merge_env() {
         key="${line%%=*}"
         key="${key## }"; key="${key%% }"
 
-        if grep -qE "^(export[[:space:]]+)?${key}=" .env 2>/dev/null; then
+        # NATIVE_AGENTS is a new-install default, not a silent backend migration
+        # for existing .env files. Existing OMO installs migrate explicitly.
+        if [[ "$key" == "NATIVE_AGENTS" ]] && ! grep -qE "^(export[[:space:]]+)?${key}=" .env 2>/dev/null; then
+            info "Leaving NATIVE_AGENTS unset in existing .env; use the Admin migration to switch agent runtimes"
+        elif grep -qE "^(export[[:space:]]+)?${key}=" .env 2>/dev/null; then
             :
         else
             echo "$line" >> .env
