@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.25.1] - 2026-11-24
+
+### Fixed
+- Fix Admin UI self-restart by using the configured local helper image and a detached Compose runner; retain bounded helper diagnostics and show the helper name on timeout.
+
 ## [1.25.0] - 2026-11-24
 
 ### Added
@@ -2509,7 +2514,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.25.0...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.25.1...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2715,3 +2720,4 @@
 [1.24.8]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...v1.24.8
 [1.24.9]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...v1.24.9
 [1.25.0]: https://github.com/tryweb/ai-engkit/compare/v1.24.9...v1.25.0
+[1.25.1]: https://github.com/tryweb/ai-engkit/compare/v1.25.0...v1.25.1
