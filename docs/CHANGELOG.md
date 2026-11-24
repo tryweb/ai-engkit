@@ -1,8 +1,17 @@
 ## [Unreleased]
 
+## [1.25.0] - 2026-11-24
+
+### Added
+- Add host storage maintenance with safe P0 image and builder-cache pruning, dry-run planning, and shared SSE progress logs.
+- Default fresh installs to Native agents and routing without loading OMO plugins.
+
 ### Changed
-- Default fresh installs to Native agents and routing without loading OMO plugins; existing `.env` files are not silently migrated during upgrades.
+- Preserve existing `.env` backend selection during upgrades; use the Admin migration to move existing OMO installations to Native.
 - Document Native agent routing as the current default and clarify that OMO findings apply only to legacy installations.
+
+### Fixed
+- Refresh dashboard uptime and improve the host-space estimate.
 
 ## [1.24.9] - 2026-11-23
 
@@ -2500,7 +2509,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.24.9...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.25.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2705,3 +2714,4 @@
 [1.24.7]: https://github.com/tryweb/ai-engkit/compare/v1.24.6...v1.24.7
 [1.24.8]: https://github.com/tryweb/ai-engkit/compare/v1.24.7...v1.24.8
 [1.24.9]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...v1.24.9
+[1.25.0]: https://github.com/tryweb/ai-engkit/compare/v1.24.9...v1.25.0
