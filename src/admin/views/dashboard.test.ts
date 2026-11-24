@@ -401,4 +401,24 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     expect(html.includes('href="/env"')).toBe(true);
     expect(html.includes('class="dashboard__ops-row"')).toBe(true);
   });
+
+  test("renders two uptime targets and places the space estimate outside the five-column metric grid", () => {
+    const html = String(DashboardPage(baseData({
+      dbHealth: {
+        fileSizeBytes: 1024,
+        freelistCount: 0,
+        rowCounts: { session: 1, event: 2, message: 3, part: 4 },
+        freeSpaceBytes: 4096,
+        freeSpacePath: "/data",
+        dbPath: "/data/opencode.db",
+        collectedAt: "2026-01-01T00:00:00.000Z",
+        inspectionCopyEstimate: { status: "may-fit", needBytes: 263168, freeBytes: 4096, tempPath: "/tmp" },
+      },
+    })));
+
+    expect(html.includes('id="site-ai-dev-uptime"')).toBe(true);
+    expect(html.includes('id="container-ai-dev-uptime"')).toBe(true);
+    expect(html.includes('class="db-health__estimate db-health__estimate--may-fit"')).toBe(true);
+    expect(html.includes("60000")).toBe(true);
+  });
 });

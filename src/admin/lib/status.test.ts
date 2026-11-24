@@ -35,6 +35,7 @@ function makeDeps(overrides: DepOverrides = {}): StatusDeps {
       return ok(subcommand.includes("self-ref") ? adminDigest : aiDevDigest);
     },
     execInAiDev: async (command: string) => {
+      if (command.includes("127.0.0.1:3000/health")) return ok("200 0.012");
       if (command.startsWith("gh auth")) return ok("Logged in to github.com");
       if (command.includes("config.yml")) return ok("gitlab.example.com\n");
       if (command.startsWith("glab auth status")) return ok("Logged in to gitlab.example.com as tester");
@@ -43,6 +44,7 @@ function makeDeps(overrides: DepOverrides = {}): StatusDeps {
       if (command.startsWith("cat /opt/ai-engkit/VERSION")) return ok("1.2.3");
       return ok("");
     },
+    probeAiDevService: async () => ({ httpCode: 200, latencyMs: 12 }),
     getGlabAuthStatus: async () => ({
       authenticated: overrides.glabAuthenticated ?? true,
       output: "Logged in to gitlab.example.com as tester",
@@ -93,11 +95,17 @@ describe("collectStatus", () => {
     expect(status.containers).toEqual({
       "ai-dev": {
         status: "running",
+        service_status: "healthy",
+        service_http_code: 200,
+        service_latency_ms: 12,
         uptime_seconds: 3600,
         version: "1.2.3",
       },
       "ai-admin": {
         status: "running",
+        service_status: "unknown",
+        service_http_code: null,
+        service_latency_ms: null,
         uptime_seconds: expect.any(Number),
         version: status.admin_version,
       },

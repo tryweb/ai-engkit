@@ -370,6 +370,9 @@ pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: var(--radius); 
 .db-health__metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; min-width: 0; }
 .db-health__metrics .metric-card { padding: 12px 16px; }
 .db-health__metrics .metric-card__value { font-size: var(--text-xl); }
+.db-health__estimate { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-top: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+.db-health__estimate-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.db-health__estimate p { flex: 1 1 360px; margin: 0; line-height: 1.5; }
 
 /* Status pill neutral */
 .status-pill--neutral { background: rgba(161,161,170,0.15); color: var(--text-muted); border: 1px solid var(--border); }

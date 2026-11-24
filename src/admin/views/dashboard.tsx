@@ -109,8 +109,9 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
       <section class="site-summary" aria-label="Site summary">
         <span class="site-summary__item">
           <StatusPill tone={isRunning ? "success" : "danger"} label={data.container_status} />
-          {uptime && <span class="site-summary__value">{uptime} uptime</span>}
+          <span id="site-ai-dev-uptime" class="site-summary__value">{uptime ? `${uptime} uptime` : "uptime unknown"}</span>
         </span>
+        <span class="site-summary__item" id="ai-dev-service-status" role="status">Service health loading</span>
         <a href="/projects" class="site-summary__item site-summary__item--link" aria-label={`Projects ${data.project_count} workspace projects`}>
           <span class="site-summary__label">Projects</span>
           <strong class="site-summary__value">{data.project_count}</strong>
@@ -234,7 +235,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <h3>Container Status</h3>
           <div class="flex items-center gap-2">
             <span class={`badge ${isRunning ? "badge-success" : "badge-danger"}`}>{data.container_status}</span>
-            {data.uptime_seconds != null && <span class="text-sm text-muted">Uptime: {Math.floor(data.uptime_seconds / 60)}m</span>}
+            <span id="container-ai-dev-uptime" class="text-sm text-muted">Uptime: {data.uptime_seconds != null ? `${Math.floor(data.uptime_seconds / 60)}m` : "unknown"}</span>
           </div>
           {isRunning && (
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
@@ -295,6 +296,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           </div>
         </div>
         {data.dbHealth ? (
+          <>
           <div class="db-health__metrics">
             <MetricCard id="metric-db-size" title="DB File Size" value={formatBytesEnUs(data.dbHealth.fileSizeBytes)} />
             <MetricCard id="metric-db-sessions" title="Sessions" value={formatIntEnUs(data.dbHealth.rowCounts.session)} />
@@ -302,6 +304,24 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             <MetricCard id="metric-db-messages" title="Messages" value={formatIntEnUs(data.dbHealth.rowCounts.message)} />
             <MetricCard id="metric-db-parts" title="Parts" value={formatIntEnUs(data.dbHealth.rowCounts.part)} />
           </div>
+          {data.dbHealth.inspectionCopyEstimate && (
+            <div class={`db-health__estimate db-health__estimate--${data.dbHealth.inspectionCopyEstimate.status}`} role="status">
+              <div class="db-health__estimate-heading">
+                <strong>Restart-space estimate</strong>
+                <StatusPill
+                  tone={data.dbHealth.inspectionCopyEstimate.status === "insufficient" ? "danger" : data.dbHealth.inspectionCopyEstimate.status === "may-fit" ? "warning" : "neutral"}
+                  label={data.dbHealth.inspectionCopyEstimate.status === "may-fit" ? "May fit" : data.dbHealth.inspectionCopyEstimate.status}
+                />
+              </div>
+              <p class="text-sm text-muted">
+                {data.dbHealth.inspectionCopyEstimate.status === "unknown"
+                  ? "Unable to estimate temporary space from the current DB probe."
+                  : `DB-only estimate: at least ${formatBytesEnUs(data.dbHealth.inspectionCopyEstimate.needBytes ?? 0)} needed; ${formatBytesEnUs(data.dbHealth.inspectionCopyEstimate.freeBytes ?? 0)} free in ${data.dbHealth.inspectionCopyEstimate.tempPath}.`}
+                {" Sidecars and concurrent disk usage can change the result; the compatibility gate is authoritative."}
+              </p>
+            </div>
+          )}
+          </>
         ) : (
           <p class="text-sm text-muted">Health data unavailable — probe failed or timed out.</p>
         )}
@@ -561,6 +581,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             var res = await fetch("/api/env/restart", { method: "POST" });
             if (res.ok) {
               status.textContent = "Restarted ✔";
+              refreshAiDevUptime();
               setTimeout(function () { status.textContent = ""; btn.disabled = false; }, 3000);
             } else {
               var d = await res.json();
@@ -625,6 +646,25 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           };
         }
         function fmtInt(n) { try { return new Intl.NumberFormat("en-US").format(n); } catch (_) { return String(n); } }
+        async function refreshAiDevUptime() {
+          if (document.hidden) return;
+          try {
+            var res = await fetch("/api/admin/ai-dev-uptime", { cache: "no-store" });
+            if (!res.ok) return;
+            var data = await res.json();
+            var label = typeof data.uptime_seconds === "number" && isFinite(data.uptime_seconds)
+              ? Math.floor(data.uptime_seconds / 60) + "m"
+              : "unknown";
+            var summary = document.getElementById("site-ai-dev-uptime");
+            var card = document.getElementById("container-ai-dev-uptime");
+            if (summary) summary.textContent = label === "unknown" ? "uptime unknown" : label + " uptime";
+            if (card) card.textContent = "Uptime: " + label;
+          } catch (_) {}
+        }
+        setInterval(refreshAiDevUptime, 60000);
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden) refreshAiDevUptime();
+        });
         function fmtBytes(n) {
           try {
             var v = Number(n);
@@ -650,6 +690,17 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             var res = await fetch("/api/status");
             if (res.ok) {
               var s = await res.json();
+              var serviceStatus = document.getElementById("ai-dev-service-status");
+              if (serviceStatus) {
+                var service = s && s.containers && s.containers["ai-dev"];
+                var state = service && service.service_status;
+                serviceStatus.textContent = state === "healthy"
+                  ? "Service healthy (HTTP " + service.service_http_code + ")"
+                  : state === "degraded"
+                    ? "Container up; service unhealthy (HTTP " + (service.service_http_code || "no response") + ")"
+                    : "Service health unknown";
+                serviceStatus.className = "site-summary__item status-pill status-pill--" + (state === "healthy" ? "success" : state === "degraded" ? "warning" : "neutral");
+              }
               if (s.gain) {
                 setCard("metric-savings", fmtInt(s.gain.netTokensSaved), "$" + Number(s.gain.netUsdSaved).toFixed(2) + " net saved", Number(s.gain.compressionPct).toFixed(1) + "% compression");
               }

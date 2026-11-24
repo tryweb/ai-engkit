@@ -305,3 +305,23 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     expect(state.scheduleCalls[0].delay).toBe(2000);
   });
 });
+
+describe("GET /api/admin/ai-dev-uptime", () => {
+  test("returns the current ai-dev uptime from the injected lightweight probe", async () => {
+    const app = createAdminRoutes({ ...createDeps().deps, getAiDevUptime: async () => 1234 });
+
+    const res = await app.request("http://localhost/api/admin/ai-dev-uptime");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ uptime_seconds: 1234 });
+  });
+
+  test("returns null when the uptime probe fails", async () => {
+    const app = createAdminRoutes({ ...createDeps().deps, getAiDevUptime: async () => { throw new Error("docker unavailable"); } });
+
+    const res = await app.request("http://localhost/api/admin/ai-dev-uptime");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ uptime_seconds: null });
+  });
+});

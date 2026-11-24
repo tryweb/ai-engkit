@@ -19,6 +19,9 @@ export type AuthStatus = "authenticated" | "not authenticated";
 
 export interface ContainerInfo {
   status: "running" | "stopped";
+  service_status?: "healthy" | "degraded" | "unknown";
+  service_http_code?: number | null;
+  service_latency_ms?: number | null;
   uptime_seconds: number | null;
   version: string;
 }
@@ -65,6 +68,7 @@ export interface StatusDeps {
   getSelfContainerRef: () => Promise<string>;
   dockerCommand: (subcommand: string, timeoutMs: number) => Promise<ExecResult>;
   execInAiDev: (command: string, timeoutMs: number) => Promise<ExecResult>;
+  probeAiDevService: () => Promise<{ httpCode: number | null; latencyMs: number | null }>;
   loadGitHostingAuthState: () => GitHostingAuthState;
   /** Per-host glab probe (token-bearing hosts only); defaults to the shared helper bound to execInAiDev. */
   getGlabAuthStatus: () => Promise<GlabAuthStatusSummary>;
@@ -81,6 +85,23 @@ const DEFAULT_DEPS: StatusDeps = {
   getSelfContainerRef,
   dockerCommand,
   execInAiDev,
+  probeAiDevService: async () => {
+    try {
+      const result = await execInAiDev(
+        "curl -sS -o /dev/null -w '%{http_code} %{time_total}' --max-time 5 http://127.0.0.1:3000/health",
+        7_000,
+      );
+      const [codeRaw, secondsRaw] = result.stdout.trim().split(/\s+/);
+      const code = Number(codeRaw);
+      const seconds = Number(secondsRaw);
+      return {
+        httpCode: result.exitCode === 0 && Number.isInteger(code) && code > 0 ? code : null,
+        latencyMs: result.exitCode === 0 && Number.isFinite(seconds) ? Math.round(seconds * 1000) : null,
+      };
+    } catch {
+      return { httpCode: null, latencyMs: null };
+    }
+  },
   loadGitHostingAuthState,
   getGlabAuthStatus: () => getGlabAuthStatus(execInAiDev),
 };
@@ -142,10 +163,11 @@ function getGitHostingAuthStatus(deps: StatusDeps): GitHostingAuthStatus {
 
 export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promise<StatusResponse> {
   const deps: StatusDeps = { ...DEFAULT_DEPS, ...overrides };
-  const [containerRunning, uptime, ghResult, glabAuthSummary, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime, gitHostingAuth] =
+  const [containerRunning, uptime, serviceProbe, ghResult, glabAuthSummary, gitResult, projectsResult, leanctx, gain, valueReport, proveReport, savingsReport, adminVersion, adminDigest, aiDevDigest, aiDevVersion, selfUptime, gitHostingAuth] =
     await Promise.all([
       deps.isAiDevRunning(),
       deps.getAiDevUptime(),
+      deps.probeAiDevService(),
       deps.execInAiDev("gh auth status 2>&1 || true", 10_000),
       (deps.getGlabAuthStatus ?? (() => getGlabAuthStatus(deps.execInAiDev)))(),
       deps.execInAiDev("git config --global user.name 2>/dev/null || echo ''", 10_000),
@@ -179,11 +201,17 @@ export async function collectStatus(overrides: Partial<StatusDeps> = {}): Promis
     containers: {
       "ai-dev": {
         status: containerRunning ? "running" : "stopped",
+        service_status: !containerRunning ? "unknown" : serviceProbe.httpCode === 200 ? "healthy" : "degraded",
+        service_http_code: serviceProbe.httpCode,
+        service_latency_ms: serviceProbe.latencyMs,
         uptime_seconds: uptime,
         version: aiDevVersion,
       },
       "ai-admin": {
         status: adminStatus,
+        service_status: "unknown",
+        service_http_code: null,
+        service_latency_ms: null,
         uptime_seconds: selfUptime,
         version: adminVersion,
       },

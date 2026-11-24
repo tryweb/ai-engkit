@@ -318,6 +318,12 @@ export interface DbHealthSummary {
   readonly freeSpacePath: string;
   readonly dbPath: string;
   readonly collectedAt: string;
+  readonly inspectionCopyEstimate?: {
+    readonly status: "may-fit" | "insufficient" | "unknown";
+    readonly needBytes: number | null;
+    readonly freeBytes: number | null;
+    readonly tempPath: string | null;
+  };
 }
 
 export function formatBytesEnUs(n: number): string {

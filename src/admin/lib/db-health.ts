@@ -20,6 +20,27 @@ export interface DbHealth {
   readonly freeSpacePath: string;
   readonly dbPath: string;
   readonly collectedAt: string;
+  /** Conservative estimate only; the compatibility gate remains authoritative. */
+  readonly inspectionCopyEstimate: {
+    readonly status: "may-fit" | "insufficient" | "unknown";
+    readonly needBytes: number | null;
+    readonly freeBytes: number | null;
+    readonly tempPath: string | null;
+  };
+}
+
+const INSPECTION_MARGIN_BYTES = 256 * 1024;
+
+function estimateInspectionCopy(
+  fileSizeBytes: number | null,
+  freeBytes: number | null,
+  tempPath: string | null,
+): DbHealth["inspectionCopyEstimate"] {
+  if (fileSizeBytes === null || freeBytes === null || tempPath === null) {
+    return { status: "unknown", needBytes: null, freeBytes, tempPath };
+  }
+  const needBytes = fileSizeBytes + INSPECTION_MARGIN_BYTES;
+  return { status: freeBytes >= needBytes ? "may-fit" : "insufficient", needBytes, freeBytes, tempPath };
 }
 
 type ExecFn = (command: string, timeoutMs?: number) => Promise<ExecResult>;
@@ -109,6 +130,7 @@ export async function probeLocalDbHealth(
     freeSpacePath: opts.freeSpacePath ?? DEFAULT_FREE_SPACE_PATH,
     dbPath,
     collectedAt: new Date().toISOString(),
+    inspectionCopyEstimate: estimateInspectionCopy(fileSizeBytes, freeSpaceBytes, null),
   };
 }
 
@@ -126,15 +148,20 @@ export async function collectHostDbHealth(
     `sqlite3 "file:${dbPath}?mode=ro" "${sql.replace(/"/g, '\\"')}"`;
 
   const tables: (keyof DbHealthRowCounts)[] = ["session", "event", "message", "part"];
-  const [fileSizeRaw, freelistRaw, countRaws, dfRaw] = await Promise.all([
+  const [fileSizeRaw, freelistRaw, countRaws, dfRaw, tempPathRaw, tempDfRaw] = await Promise.all([
     execFn(`stat -c %s "${dbPath}" 2>/dev/null || stat -f %z "${dbPath}" 2>/dev/null || echo ""`),
     execFn(sqliteRo("PRAGMA freelist_count;")),
     Promise.all(tables.map((t) => execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`)))),
     execFn(
       `df -B1 --output=avail "${freeSpacePath}" 2>/dev/null | tail -n1 | tr -d ' ' | tr -d '\\n' || df -B1 "${freeSpacePath}" 2>/dev/null | awk 'NR==2{print $4}' | tr -d ' '`,
     ),
+    execFn("python3 -c 'import tempfile; print(tempfile.gettempdir())'"),
+    execFn("tmp_path=$(python3 -c 'import tempfile; print(tempfile.gettempdir())') && df -B1 --output=avail \"$tmp_path\" 2>/dev/null | tail -n1 | tr -d ' ' | tr -d '\\n'"),
   ]);
-  const fileSizeBytes = parseCount(fileSizeRaw.stdout);
+  const parsedFileSize = fileSizeRaw.exitCode === 0 && /^\d+$/.test(fileSizeRaw.stdout.trim())
+    ? Number(fileSizeRaw.stdout.trim())
+    : null;
+  const fileSizeBytes = parsedFileSize ?? 0;
   const freelistCount = freelistRaw.exitCode === 0 ? parseCount(freelistRaw.stdout) : 0;
   const rowCounts: DbHealthRowCounts = {
     session: countRaws[0].exitCode === 0 ? parseCount(countRaws[0].stdout) : 0,
@@ -147,6 +174,9 @@ export async function collectHostDbHealth(
     const n = parseInt(dfRaw.stdout.trim(), 10);
     if (!Number.isNaN(n) && n >= 0) freeSpaceBytes = n;
   }
+  const tempPath = tempPathRaw.exitCode === 0 && tempPathRaw.stdout.trim() ? tempPathRaw.stdout.trim() : null;
+  let tempFreeBytes: number | null = null;
+  if (tempDfRaw.exitCode === 0 && /^\d+$/.test(tempDfRaw.stdout.trim())) tempFreeBytes = Number(tempDfRaw.stdout.trim());
 
   return {
     fileSizeBytes,
@@ -156,6 +186,7 @@ export async function collectHostDbHealth(
     freeSpacePath,
     dbPath,
     collectedAt: new Date().toISOString(),
+    inspectionCopyEstimate: estimateInspectionCopy(parsedFileSize, tempFreeBytes, tempPath),
   };
 }
 

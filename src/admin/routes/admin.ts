@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSelfContainerRef } from "../lib/docker";
+import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSelfContainerRef, getAiDevUptime } from "../lib/docker";
 import type { ExecResult } from "../lib/docker";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -17,6 +17,7 @@ export interface AdminRoutesDeps {
   readonly runCommand: (args: string[], timeoutMs: number) => Promise<ExecResult>;
   readonly schedule: (fn: () => void, delayMs: number) => void;
   readonly resolveEffectiveAiAdmin: () => EffectiveCompose;
+  readonly getAiDevUptime?: () => Promise<number | null>;
 }
 
 const REAL_DEPS: AdminRoutesDeps = {
@@ -70,6 +71,15 @@ async function getAdminUptime(): Promise<number | null> {
 export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hono {
   const deps: AdminRoutesDeps = { ...REAL_DEPS, ...overrides };
   const admin = new Hono();
+
+  admin.get("/api/admin/ai-dev-uptime", async (c) => {
+    try {
+      const uptimeSeconds = await (deps.getAiDevUptime ?? getAiDevUptime)();
+      return c.json({ uptime_seconds: uptimeSeconds });
+    } catch {
+      return c.json({ uptime_seconds: null });
+    }
+  });
 
   admin.get("/api/admin/status", async (c) => {
     const [version, imageDigest, uptime] = await Promise.all([

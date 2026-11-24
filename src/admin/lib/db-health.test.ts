@@ -133,6 +133,8 @@ describe("collectHostDbHealth via execInAiDev", () => {
       if (cmd.includes("event") && cmd.includes("SELECT COUNT")) return { stdout: "7", stderr: "", exitCode: 0 };
       if (cmd.includes("message") && cmd.includes("SELECT COUNT")) return { stdout: "3", stderr: "", exitCode: 0 };
       if (cmd.includes("part") && cmd.includes("SELECT COUNT")) return { stdout: "11", stderr: "", exitCode: 0 };
+      if (cmd.startsWith("python3 -c")) return { stdout: "/tmp\n", stderr: "", exitCode: 0 };
+      if (cmd.startsWith("tmp_path=")) return { stdout: "1000000", stderr: "", exitCode: 0 };
       if (cmd.includes("df -B1")) return { stdout: "987654321", stderr: "", exitCode: 0 };
       return { stdout: "", stderr: "", exitCode: 0 };
     };
@@ -143,6 +145,12 @@ describe("collectHostDbHealth via execInAiDev", () => {
     expect(health.freeSpaceBytes).toBe(987654321);
     expect(health.dbPath).toBe("/fake/opencode.db");
     expect(health.freeSpacePath).toBe("/fake");
+    expect(health.inspectionCopyEstimate).toEqual({
+      status: "may-fit",
+      needBytes: 8192 + 256 * 1024,
+      freeBytes: 1_000_000,
+      tempPath: "/tmp",
+    });
   });
 
   test("Given exec uses mode=ro URI, Then commands are read-only", async () => {
