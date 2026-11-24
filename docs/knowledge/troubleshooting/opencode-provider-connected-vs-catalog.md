@@ -1,5 +1,7 @@
 # OpenCode Provider Catalog Is Not the Connected Provider Set
 
+> Historical V1/OMO context below; V2 no longer loads the OMO plugin.
+
 ## Context
 
 OpenCode exposes provider information through the managed server `GET /provider` API. The response contains both `connected` provider IDs and an `all` provider/model catalog.

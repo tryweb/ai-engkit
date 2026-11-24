@@ -6,7 +6,7 @@ The V1 line runs the `oh-my-openagent` plugin, which injects three remote MCP
 servers at runtime: `websearch` (Exa), `context7`, and `grep_app`. They never
 appear in `opencode mcp list` and are not present in `~/.config/opencode/opencode.json`.
 
-The V2 line (`OMO_ENABLED=0`) runs no plugin, so all three silently disappear.
+The V2 runtime does not load OMO, so those plugin-injected servers are absent.
 This matters whenever an agent needs current third-party library documentation —
 the V1 habit of "ask context7" has no counterpart unless one is added.
 
@@ -26,7 +26,7 @@ formats *inside one agent* silently drops one of them.
 
 ## Solution
 
-1. `entrypoint.d/02-init-config.sh` registers context7 **on the V2 line only**,
+1. `entrypoint.d/02-init-config.sh` registers context7 in the V2 config,
    as a V2-shape remote server, plus a global permission allow:
 
    ```json

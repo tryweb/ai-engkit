@@ -1,5 +1,8 @@
 # OMO Model-Default Migration Is Inert Against the Plugin
 
+> Historical V1-only investigation; the V2 runtime does not load this plugin.
+> Keep for migration archaeology, not as current V2 operational guidance.
+
 > **Status (2026-07-31): the feature was removed from the repo.** `apply_omo_model_defaults`, `.opencode/omo-model-defaults.json`, the `AI_ENGKIT_APPLY_OMO_MODEL_DEFAULTS` flag, and `test/test-omo-model-default-migration.sh` were deleted because the mechanism cannot work with plugin 4.19.3. This entry documents why, and what actually controls agent models.
 
 > **Update (2026-08-15):** ai-engkit now supports the OpenCode-native `general` agent through an explicit startup bridge from `~/.omo/omo.jsonc` to generated `opencode.json → agent.general`. This does not revive the removed generic migration. See `../patterns/native-agent-model-override-bridge.md`.

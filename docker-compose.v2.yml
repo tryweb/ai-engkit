@@ -42,8 +42,6 @@ services:
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
-      # V2 line carries no OMO runtime (D1).
-      OMO_ENABLED: 0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -67,9 +65,7 @@ services:
     environment:
       - ADMIN_PORT=8080
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
-      # Same no-OMO gate as ai-dev: without this, Admin TS takes V1 (omo.jsonc)
-      # paths even on the V2 line.
-      - OMO_ENABLED=0
+      # V2 runtime path is unconditional (no OMO).
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 30s

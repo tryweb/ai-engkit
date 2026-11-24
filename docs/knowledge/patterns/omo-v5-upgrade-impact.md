@@ -1,5 +1,7 @@
 # OMO v5.x Upgrade Impact (assessed at 5.0.0-beta.50)
 
+> Historical V1 dependency assessment; V2 does not ship or load this plugin.
+
 ## Context
 
 ai-engkit consumes oh-my-openagent (OMO) exclusively as an **OpenCode npm plugin** — never as a CLI:

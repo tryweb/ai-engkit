@@ -1,5 +1,9 @@
 # OpenCode V2 Migration Watch
 
+> This is a dated migration record, not current runtime guidance. V2 is now
+> native-only and does not install or invoke OMO; its one-time legacy-data
+> importer is documented in `scripts/migrate-omo-to-native.sh`.
+
 ## Release and migration revalidation — 2026-11-05
 
 - V2 is released and actively updated: [v2.2.5](https://github.com/anomalyco/opencode/releases/tag/v2.2.5) was published on 2026-10-30. A release is not, by itself, evidence of an LTS commitment or suitability for every workflow.

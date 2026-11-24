@@ -1,5 +1,8 @@
 # Dockerfile VOLUME Leaks Anonymous Volumes in Production
 
+> Historical V2 OMO volume investigation; the V2 image no longer installs or
+> runs OMO.
+
 ## Context
 
 The ai-engkit image declared persistent paths with `VOLUME` in `Dockerfile`,

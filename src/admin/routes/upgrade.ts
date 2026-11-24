@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { runUpgrade, getState, getStatus, subscribe, getEventLog } from "../lib/upgrade";
 import { readEnvFile, writeEnvFile, deleteEnvVar } from "../lib/env";
 import { discoverGhcrVersions, isFormalReleaseTag, parseFormalVersion, type GhcrDiscoveryResult } from "../lib/ghcr-versions";
-import { isNativeV2Enabled } from "../lib/agent-model-types";
 import { UpgradePage } from "../views/upgrade";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,7 +40,7 @@ const REAL_DEPS: UpgradeRoutesDeps = {
   readEnvFile,
   writeEnvFile,
   deleteEnvVar,
-  discoverVersions: () => discoverGhcrVersions({ stableTag: isNativeV2Enabled() ? "v2" : "latest" }),
+  discoverVersions: () => discoverGhcrVersions({ stableTag: "v2" }),
 };
 
 function isDevBuild(version: string): boolean {
@@ -53,7 +52,7 @@ function isRollingTarget(target: string): boolean {
 }
 
 function getCurrentMajor(): number {
-  return isNativeV2Enabled() ? 2 : 1;
+  return 2;
 }
 
 function filterVersionsToCurrentMajor(versions: readonly string[]): string[] {

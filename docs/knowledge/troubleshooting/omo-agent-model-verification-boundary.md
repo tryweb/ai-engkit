@@ -1,5 +1,8 @@
 # OMO Agent Model Verification Boundary
 
+> Historical V1-only investigation; the V2 runtime does not load this plugin.
+> Keep for migration archaeology, not as current V2 operational guidance.
+
 ## Context
 
 ai-engkit runs OpenCode with oh-my-openagent 4.19.4 and persists agent selections in `~/.omo/omo.jsonc`.

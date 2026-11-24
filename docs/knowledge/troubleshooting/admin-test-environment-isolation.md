@@ -1,5 +1,10 @@
 # Admin test environment isolation
 
+> **Superseded for V2 verification.** This note describes the former shared
+> V1/V2 `OMO_ENABLED` test split. V2 Admin no longer supports the OMO/V1 runtime
+> path; do not set `OMO_ENABLED=1` for current V2 tests. See
+> `../patterns/admin-test-isolation.md` for current guidance.
+
 ## Context
 
 Admin contains both V1 compatibility tests and native V2 tests. The dev container

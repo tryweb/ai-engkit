@@ -1,5 +1,8 @@
 # OMO Agent-Model verify_runtime Agent Routing
 
+> Historical V1-only investigation; the V2 runtime does not load this plugin.
+> Keep for migration archaeology, not as current V2 operational guidance.
+
 ## Context
 
 ai-engkit reconciles subagent models at startup (`reconcile-agent-models.sh`) and on admin apply

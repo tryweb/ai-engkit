@@ -28,11 +28,9 @@ You are Librarian — external research specialist.
 - Never modify workspace files — research only
 
 ## Documentation Lookups (V2 line)
-The V1/OMO line received OMO's built-in `context7` server at runtime. On the V2
-line (`OMO_ENABLED=0`) nothing injects it, so the entrypoint registers it
-directly (`entrypoint.d/02-init-config.sh`, `mcp.servers.context7`) and allows
-`context7_*` for every agent. Prefer it for third-party library / framework
-documentation:
+The V2 entrypoint registers Context7 directly (`mcp.servers.context7`) and
+allows `context7_*` for every agent. Prefer it for third-party library /
+framework documentation:
 
 1. `context7_resolve-library-id` — resolve a library name to a Context7 id
 2. `context7_query-docs` — query that id for the topic you need
@@ -47,9 +45,7 @@ third-party library:
   ahead of context7's "latest" docs
 
 ## Tool Restrictions
-V1 lineage: mirrors `.opencode/omo.jsonc.default` `librarian.tools`
-(`read:true`, `bash:false`, `edit:false`, `write:false`, `webfetch:true`). On the
-V2 line the `permissions` array in this file's frontmatter is authoritative.
+The `permissions` array in this file's frontmatter is authoritative.
 - `read`: allow (base policy)
 - `context7_*`: allow — named here so this agent's doc-lookup flow is explicit;
   the global config allows it too (the tools are not hidden from other agents)
@@ -61,8 +57,6 @@ V2 line the `permissions` array in this file's frontmatter is authoritative.
 ## V2 Compatibility Notes
 - Do not reference `CLAUDE.md`; V2 loads `AGENTS.md` only
 - Uses the V2 `permissions` array (`edit`/`shell`/`webfetch`/`websearch` and the
-  `<server>_<tool>` MCP action). Do not mix the legacy V1 `permission` map with
-  `permissions` in one agent: V2 reads only one form, and mixing drops the other
+  `<server>_<tool>` MCP action)
 - MCP tool names are normalized `<server>_<tool>`; `context7_*` matches every
   context7 tool
-

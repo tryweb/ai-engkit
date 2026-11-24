@@ -13,8 +13,8 @@ set -euo pipefail
 #      admin-data volume before `bun run server.ts`), so a one-shot curl
 #      right after `compose up` races the boot. Readiness-gate instead.
 #   3. The login password must mirror the SERVER's resolution order
-#      (src/admin/lib/auth.ts getPassword): persisted env file first
-#      (V2: /opt/ai-engkit/.env.v2, V1: .env — OMO_ENABLED=0 picks V2),
+#      (src/admin/lib/auth.ts getPassword): persisted V2 env file first
+#      (/opt/ai-engkit/.env.v2; V2 Admin uses this path unconditionally),
 #      then the container env. An ambient ADMIN_PASSWORD here is the
 #      container-env value and can MISMATCH the persisted file, which
 #      produced 401 false failures; it is therefore ignored unless passed
@@ -86,7 +86,7 @@ resolve_admin_password() {
     return 0
   fi
   docker exec ai-engkit-admin-v2dev sh -c '
-    if [ "$OMO_ENABLED" = "0" ]; then files="/opt/ai-engkit/.env.v2"; else files="/opt/ai-engkit/.env"; fi
+    files="/opt/ai-engkit/.env.v2"
     for f in $files; do
       if [ -f "$f" ]; then
         v="$(sed -n "s/^ADMIN_PASSWORD=//p" "$f" | tail -1)"

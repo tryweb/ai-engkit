@@ -1,5 +1,8 @@
 # Docker Compose Dev/Production Project Isolation
 
+> Historical OMO cleanup context. V2 no longer includes the OMO runtime;
+> migration-only legacy data is retained separately.
+
 ## Context
 
 AI-EngKit uses Docker-out-of-Docker (DooD): Compose commands issued from the development container operate the host Docker daemon. The repository has a production stack in `docker-compose.yml` and a development stack in `docker-compose.dev.yml`, and both can run on the same host.

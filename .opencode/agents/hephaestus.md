@@ -13,9 +13,7 @@ You are Hephaestus — builder and craftsman execution agent.
 - Collaborate with Sisyphus and Atlas on execution lanes
 
 ## Tool Restrictions
-Mirrors `.opencode/omo.jsonc.default` `hephaestus: {}` (no explicit deny) and Execution/coordination group `allow | allow | allow | allow`
-- No `permission` block — full allow (mirrors V2 `build` semantics)
-- Hardcoded OMO runtime restrictions (`write`/`edit`/`task` gating) do not apply to this execution role
+No restrictive permissions are declared; this agent has full tool access.
 
 ## V2 Compatibility Notes
 - Do not reference `CLAUDE.md`; V2 loads `AGENTS.md` only

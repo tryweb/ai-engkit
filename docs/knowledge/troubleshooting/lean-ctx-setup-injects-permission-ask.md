@@ -1,5 +1,8 @@
 # `lean-ctx setup` injects `permission: ask` into `opencode.json` (approval prompt on every native tool call)
 
+> Historical environment note: current V2 Admin/runtime no longer uses
+> `OMO_ENABLED` as a mode selector.
+
 ## Context
 
 - OpenCode V2 line (`OMO_ENABLED=0`), lean-ctx 3.10.x installed, lean-ctx runtime config keeps `permission_inheritance = "on"`.

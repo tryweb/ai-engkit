@@ -341,7 +341,7 @@ describe("runUpgrade compose fetch failure", () => {
       expect(getState()).toBe("failed");
       const failure = getEventLog().find((e) => e.status === "failure");
       expect(failure?.step).toBe("recreate");
-      expect(failure?.message).toContain("Failed to fetch latest docker-compose.yml");
+      expect(failure?.message).toContain("Failed to fetch latest docker-compose.v2.yml");
       // No forward progress: the fetched-null path throws before the compose
       // file is written, so the live compose content and .env stay
       // byte-identical and no cleanup runs. The single composeUp call (and its

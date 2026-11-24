@@ -1,1059 +1,218 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { collectAgentModelState, createAgentModelsLib, type AgentModelStateSource } from "./agent-models";
+import { V2_SUBAGENT_AGENTS, type AgentModelsDeps, type FallbackModelEntry, type RoutingConfig } from "./agent-model-types";
 
-let previousOmoEnabled: string | undefined;
-beforeEach(() => {
-  previousOmoEnabled = process.env.OMO_ENABLED;
-  process.env.OMO_ENABLED = "1";
-});
-
-afterEach(() => {
-  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
-  else process.env.OMO_ENABLED = previousOmoEnabled;
-});
-import { collectAgentModelState, createAgentModelsLib, type AgentModelStateSource, type AgentModelsDeps } from "./agent-models";
-import type { ExecResult as DockerExecResult } from "./docker";
-import { V2_SUBAGENT_AGENTS, type ResolvedModel } from "./agent-model-types";
-
-type ExecResponse = { match?: RegExp; stdout: string; stderr?: string; exitCode?: number };
-const SNAPSHOT_FILE = "/tmp/omo.jsonc.snapshot-test";
-type StubOptions = {
-  readonly password?: string | null;
-  readonly restart?: AgentModelsDeps["restart"];
-};
-
-function stubDeps(responses: ExecResponse[] = [], options: StubOptions = {}) {
+function fixture(options: {
+  password?: string | null;
+  routing?: RoutingConfig;
+  requestModel?: string | null;
+  connected?: string[];
+  assigned?: string | null;
+  fail?: "snapshot" | "write" | "restore" | "agents";
+  restartFails?: boolean;
+  providerDelayMs?: number;
+} = {}) {
   const calls: string[] = [];
-  let restartCount = 0;
+  let restarts = 0;
+  const model = options.assigned === undefined ? "openai/assigned" : options.assigned;
   const deps: AgentModelsDeps = {
-    exec: async (command: string, _timeoutMs?: number): Promise<DockerExecResult> => {
+    exec: async (command) => {
       calls.push(command);
-      if (command.includes(".native-agent-overrides.tmp")) {
-        return { stdout: "", stderr: "", exitCode: 0 };
+      const result = (stdout = "", exitCode = 0) => ({ stdout, stderr: exitCode ? `${options.fail} failed` : "", exitCode });
+      if (command.includes("snap_r=")) return result("/tmp/routing-snap:/tmp/opencode-snap", options.fail === "snapshot" ? 1 : 0);
+      if (command.includes("cat '/tmp/routing-snap'")) return result("", options.fail === "restore" ? 1 : 0);
+      if (command.includes("jq -c '.'")) return result(JSON.stringify(options.routing ?? { version: 1, chains: {} }));
+      if (command.includes("routing.json")) return result("", options.fail === "write" ? 1 : 0);
+      if (command.includes("/api/provider")) {
+        if (options.providerDelayMs) await Bun.sleep(options.providerDelayMs);
+        return result(JSON.stringify({ data: (options.connected ?? ["openai"]).map((id) => ({ id })) }));
       }
-      const index = responses.findIndex((response) => response.match === undefined || response.match.test(command));
-      const next = index >= 0 ? responses.splice(index, 1)[0] ?? { stdout: "", exitCode: 0 } : { stdout: "", exitCode: 0 };
-      return { stdout: next.stdout, stderr: next.stderr ?? "", exitCode: next.exitCode ?? 0 };
+      if (command.includes("/api/model")) return result(JSON.stringify({ data: [{ id: "primary", providerID: "openai", enabled: true, status: "active" }] }));
+      if (command.includes("/api/agent")) {
+        if (options.fail === "agents") return result("", 2);
+        return result(JSON.stringify({ data: model === null ? [] : [{ id: "librarian", mode: "subagent", model: { providerID: model.split("/")[0], id: model.split("/").slice(1).join("/") } }] }));
+      }
+      if (command.includes("/api/session")) {
+        const request = options.requestModel === undefined ? "openai/primary" : options.requestModel;
+        return result(request === null ? "{}" : JSON.stringify({ data: { type: "assistant", model: { providerID: request.split("/")[0], id: request.split("/").slice(1).join("/") } } }));
+      }
+      return result("", 1);
     },
-    restart: options.restart ?? (async () => { restartCount += 1; return { ok: true }; }),
-    readEnv: (): Record<string, string> => options.password === null ? {} : { OPENCODE_SERVER_PASSWORD: options.password ?? "testpass" },
-  };
-  return {
-    deps,
-    calls,
-    get restartCount() {
-      return restartCount;
+    restart: async () => {
+      restarts++;
+      return options.restartFails ? { ok: false, error: "restart failed" } : { ok: true };
     },
-    cleanup: () => {},
+    readEnv: () => options.password === null ? {} : { OPENCODE_SERVER_PASSWORD: options.password ?? "testpass" },
   };
+  return { lib: createAgentModelsLib(deps), calls, get restarts() { return restarts; } };
 }
 
-describe("readAgentModelsConfig", () => {
-  test("parses model primary plus fallback_models chain from stdout", async () => {
-    const { deps } = stubDeps([
-      {
-        stdout:
-          '{"plan":{"model":"opencode-go/kimi-k3","variant":"max","fallback_models":[{"model":"opencode-go/qwen3.7-plus"}]}}',
-      },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    const config = await lib.readAgentModelsConfig();
-    expect(config.plan?.models).toEqual([
-      { model: "opencode-go/kimi-k3", variant: "max" },
-      { model: "opencode-go/qwen3.7-plus" },
-    ]);
-    expect(config.plan?.invalid).toBe(false);
+describe("native V2 model configuration", () => {
+  test("reads routing chains without reading legacy agent config", async () => {
+    const routing = { version: 1, chains: { librarian: { chain: [{ model: "openai/primary", variant: "high" }, { model: "other/fallback" }] } } };
+    const ctx = fixture({ routing });
+    expect(await ctx.lib.readRoutingConfig()).toMatchObject(routing);
+    expect(ctx.calls).toHaveLength(1);
+    expect(ctx.calls[0]).toContain("routing.json");
+    expect(ctx.calls[0]).not.toContain(".omo");
   });
 
-  test("flags entries with unrecognized keys (e.g. legacy permission) as invalid", async () => {
-    const { deps } = stubDeps([
-      { stdout: '{"explore":{"permission":{"bash":"allow"},"model":"opencode-go/kimi-k3"}}' },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    const config = await lib.readAgentModelsConfig();
-    expect(config.explore?.invalid).toBe(true);
-    expect(config.explore?.models?.[0]).toEqual({ model: "opencode-go/kimi-k3" });
+  test.each([null, "  ", ""])("missing password %j is unavailable", (password) => {
+    expect(fixture({ password }).lib.getServerPassword()).toBeNull();
   });
 
-  test("returns empty map when jq fails", async () => {
-    const { deps } = stubDeps([{ stdout: "", exitCode: 1 }]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.readAgentModelsConfig()).toEqual({});
+  test("trims the server password", () => {
+    expect(fixture({ password: " testpass " }).lib.getServerPassword()).toBe("testpass");
   });
-});
 
-describe("snapshot / restore round-trip", () => {
-  test("snapshot and restore execute entirely inside ai-dev", async () => {
-    const { deps, calls } = stubDeps([{ stdout: `${SNAPSHOT_FILE}\n` }]);
-    const lib = createAgentModelsLib(deps);
-    const snapshot = await lib.snapshotAgentModelsConfig();
-    expect(snapshot).toBe(SNAPSHOT_FILE);
-    expect(calls[0]).toContain("mktemp");
-    expect(calls[0]).toContain("~/.omo/omo.jsonc");
+  test("fetches wrapped agent models with Basic authentication", async () => {
+    const ctx = fixture();
+    expect((await ctx.lib.fetchResolvedAgentModels("testpass"))?.get("librarian")).toEqual({ providerID: "openai", modelID: "assigned" });
+    expect(ctx.calls[0]).toContain(Buffer.from("opencode:testpass").toString("base64"));
+    expect(ctx.calls[0]).toContain("/api/agent");
+  });
 
-    const restore = await lib.restoreAgentModelsConfig(SNAPSHOT_FILE);
-    expect(restore.ok).toBe(true);
-    const restoreCmd = calls[1];
-    expect(restoreCmd).toBeDefined();
-    if (restoreCmd === undefined) return;
-    expect(restoreCmd).toContain(`cat '${SNAPSHOT_FILE}'`);
-    expect(restoreCmd).not.toContain("base64");
-    expect(restoreCmd).toContain("~/.omo/omo.jsonc");
+  test("agent fetch failure returns null", async () => {
+    expect(await fixture({ fail: "agents" }).lib.fetchResolvedAgentModels("testpass")).toBeNull();
+  });
+
+  test("reads provider and model catalog from separate native endpoints", async () => {
+    const ctx = fixture();
+    expect(await ctx.lib.fetchProviderSnapshot("testpass")).toMatchObject({ connectedProviders: ["openai"], catalog: ["openai/primary"], source: "live" });
+    expect(ctx.calls).toHaveLength(2);
   });
 });
 
-describe("getServerPassword", () => {
-  test("returns the env value when present", () => {
-    const { deps } = stubDeps();
-    expect(createAgentModelsLib(deps).getServerPassword()).toBe("testpass");
+describe("V2 apply and verification", () => {
+  const entries = [{ model: "openai/primary" }];
+
+  test("readiness reports configured, not inference-verified, despite a different assigned model", async () => {
+    const ctx = fixture();
+    expect(await ctx.lib.applyAndVerify("librarian", entries)).toMatchObject({ ok: true, status: "configured", requestVerified: null });
+    expect(ctx.restarts).toBe(1);
+    expect(ctx.calls.some((c) => c.includes("/api/session"))).toBe(false);
+    expect(ctx.calls.some((c) => c.includes(".omo"))).toBe(false);
   });
 
-  test("returns null when absent", async () => {
-    const { deps } = stubDeps([], { password: null });
-    expect(createAgentModelsLib(deps).getServerPassword()).toBeNull();
-  });
-});
-
-describe("fetchResolvedAgentModels", () => {
-  test("builds Basic auth header and parses name → model", async () => {
-    const agentsJson = JSON.stringify([
-      { name: "Sisyphus - ultraworker", model: { modelID: "kimi-k3", providerID: "opencode-go" } },
-      { name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } },
-      { name: "build", model: null },
-    ]);
-    const { deps, calls } = stubDeps([{ stdout: agentsJson }]);
-    const lib = createAgentModelsLib(deps);
-    const map = await lib.fetchResolvedAgentModels("testpass");
-    expect(map?.get("Sisyphus - ultraworker")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
-    expect(map?.get("explore")?.modelID).toBe("gpt-5.6-luna-fast");
-    expect(map?.has("build")).toBe(false);
-    const script = calls[0];
-    expect(script).toBeDefined();
-    if (script === undefined) return;
-    const expectedAuth = Buffer.from("opencode:testpass").toString("base64");
-    expect(script).toContain(`Authorization: Basic ${expectedAuth}`);
-    expect(script).toContain("/agent");
-    expect(script).toContain("for attempt in");
-    expect(script.indexOf("for attempt in")).toBeLessThan(script.indexOf("for f in $HOME/.config/openchamber/managed-opencode"));
-    expect(script).not.toContain(`[ -n "$PORT" ] || exit 3`);
+  test("native writes mirror the routing head into opencode.json", async () => {
+    const ctx = fixture();
+    await ctx.lib.applyAndVerify("librarian", entries);
+    const write = ctx.calls.find((c) => c.includes(".chains[$agent].chain"));
+    expect(write).toContain("opencode.json");
+    expect(write).toContain(".agent[$agent].model");
   });
 
-  test("returns null on curl failure", async () => {
-    const { deps } = stubDeps([{ stdout: "", exitCode: 2 }]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchResolvedAgentModels("testpass")).toBeNull();
+  test("a batch writes both agents with one snapshot and one restart", async () => {
+    const ctx = fixture();
+    const result = await ctx.lib.applyAndVerifyBatch(["librarian", "explore"].map((agent) => ({ agent, entries })));
+    expect(result.size).toBe(2);
+    expect(ctx.calls.filter((c) => c.includes("snap_r="))).toHaveLength(1);
+    expect(ctx.calls.filter((c) => c.includes(".chains[$agent].chain"))).toHaveLength(2);
+    expect(ctx.restarts).toBe(1);
   });
 
-  test("Given empty then populated V2 agent data, When fetching resolved models Then retries and returns the map", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "kimi-k3", providerID: "opencode-go" } }],
-      });
-      const { deps, calls } = stubDeps([
-        { stdout: '{"data":[]}' },
-        { stdout: '{"data":[]}' },
-        { stdout: agentsJson },
-      ]);
-      const map = await createAgentModelsLib(deps).fetchResolvedAgentModels("testpass");
-      expect(map?.get("librarian")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
-      expect(calls).toHaveLength(3);
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
+  test("empty batches do not execute commands or restart", async () => {
+    const ctx = fixture();
+    expect((await ctx.lib.applyAndVerifyBatch([])).size).toBe(0);
+    expect(ctx.calls).toHaveLength(0);
+    expect(ctx.restarts).toBe(0);
   });
 
-  test("Given V2 agent data, When fetching resolved models Then scopes the request to the managed workspace", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [
-          { id: "plan", name: "Plan", mode: "primary", model: { id: "kimi-k3", providerID: "opencode-go" } },
-          { id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } },
-          { id: "build", name: "Build", mode: "primary" },
-        ],
-      });
-      const { deps, calls } = stubDeps([{ stdout: agentsJson }]);
-
-      const map = await createAgentModelsLib(deps).fetchResolvedAgentModels("testpass");
-
-      expect(map?.get("plan")).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
-      expect(map?.get("librarian")).toEqual({ modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" });
-      expect(map?.has("build")).toBe(false);
-      expect(calls[0]).toContain("/api/agent");
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-});
-
-describe("fetchConnectedCatalog", () => {
-  test("returns unique provider/model ids across connected providers", async () => {
-    const { deps, calls } = stubDeps([
-      {
-        stdout: JSON.stringify({
-          connected: ["opencode"],
-          all: [{ id: "opencode", models: { "big-pickle": {}, "hy3-free": {} } }],
-        }),
-      },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchConnectedCatalog("testpass")).toEqual([
-      "opencode/big-pickle",
-      "opencode/hy3-free",
-    ]);
-    expect(calls).toHaveLength(1);
+  test("clearing removes routing and native head overrides", async () => {
+    const ctx = fixture();
+    expect(await ctx.lib.applyAndVerify("librarian", [])).toMatchObject({ ok: true, status: "cleared" });
+    expect(ctx.calls[1]).toContain("del(.chains[$agent])");
+    expect(ctx.calls[1]).toContain(".agent[$agent]");
   });
 
-  test("uses opencode models cache when live provider is unavailable", async () => {
-    const { deps } = stubDeps([
-      { match: /\/provider\b/, stdout: "", exitCode: 1 },
-      { match: /connected-providers\.json/, stdout: JSON.stringify({ connected: ["opencode"] }) },
-      {
-        match: /models\.json/, stdout: JSON.stringify({
-          opencode: { models: { "big-pickle": {} } },
-          openai: { models: { "gpt-5.6-luna": {} } },
-        }),
-      },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchConnectedCatalog("testpass")).toEqual(["opencode/big-pickle"]);
+  test.each(["snapshot", "write"] as const)("%s failure prevents restart", async (fail) => {
+    const ctx = fixture({ fail });
+    expect(await ctx.lib.applyAndVerify("librarian", entries)).toMatchObject({ ok: false, status: "write_failed" });
+    expect(ctx.restarts).toBe(0);
   });
 
-  test("returns no cached models when no provider is connected", async () => {
-    const { deps } = stubDeps([
-      { match: /\/provider\b/, stdout: "", exitCode: 1 },
-      { match: /connected-providers\.json/, stdout: JSON.stringify({ connected: [] }) },
-      { match: /models\.json/, stdout: JSON.stringify({ opencode: { models: { "big-pickle": {} } } }) },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchConnectedCatalog("testpass")).toEqual([]);
+  test.each([{ fail: undefined, status: "restart_failed" }, { fail: "restore" as const, status: "rollback_failed" }])("restart failure reports $status", async ({ fail, status }) => {
+    const ctx = fixture({ fail, restartFails: true });
+    expect(await ctx.lib.applyAndVerify("librarian", entries)).toMatchObject({ ok: false, status });
+    expect(ctx.calls.some((c) => c.includes("cat '/tmp/routing-snap'"))).toBe(true);
+    expect(ctx.restarts).toBe(1);
   });
 
-  test("filters provider snapshot cache by connected providers", async () => {
-    const { deps } = stubDeps([
-      { match: /\/provider\b/, stdout: "", exitCode: 1 },
-      { match: /connected-providers\.json/, stdout: JSON.stringify({ connected: ["opencode"] }) },
-      {
-        match: /models\.json/, stdout: JSON.stringify({
-          opencode: { models: { "big-pickle": {} } },
-          openai: { models: { "gpt-5.6-luna": {} } },
-        }),
-      },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchProviderSnapshot("testpass")).toEqual({
-      connectedProviders: ["opencode"],
-      catalog: ["opencode/big-pickle"],
-      source: "cache",
-    });
+  test("invalid model references fail before writing or restarting", async () => {
+    const ctx = fixture();
+    expect(await ctx.lib.applyAndVerify("librarian", [{ model: "invalid" }])).toMatchObject({ ok: false, status: "write_failed" });
+    expect(ctx.restarts).toBe(0);
   });
 
-  test("returns an empty catalog without falling back to resolved agents", async () => {
-    const { deps } = stubDeps([
-      { match: /\/provider\b/, stdout: "", exitCode: 1 },
-      { match: /connected-providers\.json/, stdout: "", exitCode: 1 },
-      { match: /models\.json/, stdout: "", exitCode: 1 },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    expect(await lib.fetchConnectedCatalog("testpass")).toEqual([]);
-  });
-});
-
-describe("applyAndVerify", () => {
-  test("writes a batch and restarts managed OpenCode once", async () => {
-    const agentsJson = JSON.stringify([
-      { name: "explore", model: { modelID: "mimo-v2.5-free", providerID: "opencode" } },
-      { name: "librarian", model: { modelID: "mimo-v2.5-free", providerID: "opencode" } },
-    ]);
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: agentsJson },
-      { stdout: agentsJson },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerifyBatch([
-      { agent: "explore", entries: [] },
-      { agent: "librarian", entries: [] },
-    ]);
-    expect(ctx.restartCount).toBe(1);
-    expect(ctx.calls.filter((command) => command.includes(".agents[$agent]")).length).toBe(1);
-    expect(result.get("explore")).toMatchObject({ ok: true, status: "cleared" });
-    expect(result.get("librarian")).toMatchObject({ ok: true, status: "cleared" });
+  test.each([
+    { requestModel: "openai/primary", status: "verified" },
+    { requestModel: "other/fallback", status: "verified" },
+    { requestModel: "openai/unexpected", status: "runtime_mismatch" },
+    { requestModel: null, status: "unverified" },
+  ])("inference with $requestModel returns $status", async ({ requestModel, status }) => {
+    const ctx = fixture({ requestModel });
+    expect(await ctx.lib.applyAndVerify("librarian", [...entries, { model: "other/fallback" }], "inference")).toMatchObject({ status });
+    expect(ctx.restarts).toBe(1);
+    expect(ctx.calls.some((c) => c.includes("cat '/tmp/routing-snap'"))).toBe(false);
   });
 
-  test("does not log successful request response bodies", async () => {
-    const { deps } = stubDeps([
-      {
-        stdout: JSON.stringify({ info: { role: "assistant", modelID: "kimi-k3", providerID: "opencode-go" } }),
-      },
-    ]);
-    const originalError = console.error;
-    const calls: unknown[][] = [];
-    console.error = (...args: unknown[]) => {
-      calls.push(args);
-    };
-    try {
-      const result = await createAgentModelsLib(deps).fetchSuccessfulRequestModel("testpass", "librarian");
-      expect(result).toEqual({ modelID: "kimi-k3", providerID: "opencode-go" });
-      expect(calls).toEqual([]);
-    } finally {
-      console.error = originalError;
-    }
+  test("a disconnected chain is unverified and issues no inference", async () => {
+    const ctx = fixture({ connected: [] });
+    expect(await ctx.lib.applyAndVerify("librarian", entries, "inference")).toMatchObject({ ok: false, status: "unverified" });
+    expect(ctx.calls.some((c) => c.includes("/api/session"))).toBe(false);
   });
 
-  test("refuses to apply when the config snapshot cannot be created", async () => {
-    const ctx = stubDeps([{ stdout: "", exitCode: 1 }]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("librarian", []);
-    expect(result).toMatchObject({ ok: false, status: "write_failed" });
-    expect(ctx.restartCount).toBe(0);
-    ctx.cleanup();
-  });
-
-  test("reports remote snapshot failure as write_failed", async () => {
-    const ctx = stubDeps([{ stdout: "", exitCode: 1, stderr: "snapshot failed" }]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("librarian", []);
-    expect(result).toMatchObject({ ok: false, status: "write_failed" });
-    expect(ctx.restartCount).toBe(0);
-    ctx.cleanup();
-  });
-
-  test("clears the configured model and verifies automatic resolution", async () => {
-    const agentsJson = JSON.stringify([
-      { name: "librarian", model: { modelID: "qwen3.7-plus", providerID: "opencode-go" } },
-    ]);
-    const ctx = stubDeps([
-      { stdout: '{"agents":{"librarian":{"model":"opencode/nemotron-3.5-lightning-free"}}}' },
-      { stdout: "" },
-      { stdout: agentsJson },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("librarian", []);
-    expect(result).toEqual({
-      ok: true,
-      status: "cleared",
-      resolved: { modelID: "qwen3.7-plus", providerID: "opencode-go" },
-      requestVerified: null,
-    });
-    expect(ctx.calls[1]).toContain("del(.agents[$agent].model");
-    expect(ctx.calls.some((command) => command.includes("model availability probe"))).toBe(false);
-    ctx.cleanup();
-  });
-
-  test("resolves decorated live names while clearing a config key", async () => {
-    const ctx = stubDeps([
-      { stdout: '{"agents":{"librarian":{"model":"opencode/nemotron-3.5-lightning-free"}}}' },
-      { stdout: "" },
-      { stdout: JSON.stringify([
-        { name: "Librarian - research assistant", model: { modelID: "qwen3.7-plus", providerID: "opencode-go" } },
-      ]) },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("librarian", []);
-    expect(result).toMatchObject({ ok: true, status: "cleared", resolved: { modelID: "qwen3.7-plus", providerID: "opencode-go" } });
-    ctx.cleanup();
-  });
-
-  test("reports rollback_failed when restart failure cannot restore the snapshot", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: "", exitCode: 1, stderr: "restore failed" },
-    ], { restart: async () => ({ ok: false, error: "restart failed" }) });
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("librarian", []);
-    expect(result).toEqual({ ok: false, status: "rollback_failed", error: "restart failed; restore failed" });
-    ctx.cleanup();
-  });
-
-  test("success: verified when write, restart and /agent reachability succeed", async () => {
-    const agentsJson = JSON.stringify([
-      { name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } },
-    ]);
-    const { deps, calls, cleanup } = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" }, // write: jq ok
-      { stdout: agentsJson }, // fetch
-      {
-        match: /\/provider\b/,
-        stdout: JSON.stringify({ connected: ["openai"], all: [{ id: "openai", models: { "gpt-5.6-luna-fast": {} } }] }),
-      },
-      {
-        match: /\/session/,
-        stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }),
-      },
-      {
-        match: /title:\"model availability probe\"/,
-        stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }),
-      },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    const result = await lib.applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({
-      ok: true,
-      status: "verified",
-      resolved: { modelID: "gpt-5.6-luna-fast", providerID: "openai" },
-    });
-    expect(calls.some((command) => command.includes("docker") || command.includes("compose"))).toBe(false);
-    cleanup();
-  });
-
-  test("probe unavailable restores the snapshot and performs a recovery restart", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", error: "404 unavailable" } }) },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "probe_failed" });
-    expect(ctx.restartCount).toBe(2);
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
-    ctx.cleanup();
-  });
-
-  test("probe retryable keeps the applied config and reports unverified", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", error: "temporary" } }) },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "unverified" });
-    expect(ctx.restartCount).toBe(1);
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
-    ctx.cleanup();
-  });
-
-  test("probe retired restores the snapshot and reports probe_failed", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", error: "410 retired" } }) },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "probe_failed" });
-    expect(ctx.restartCount).toBe(2);
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
-    ctx.cleanup();
-  });
-
-  test("probe mismatch keeps the applied config and reports runtime_mismatch", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "other", providerID: "openai" } }) },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "runtime_mismatch" });
-    expect(ctx.restartCount).toBe(1);
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
-    ctx.cleanup();
-  });
-
-  test("probe rollback reports rollback_failed when recovery restart fails", async () => {
-    let restartCount = 0;
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", error: "410 retired" } }) },
-    ], { restart: async () => {
-      restartCount += 1;
-      return restartCount === 1 ? { ok: true } : { ok: false, error: "recovery failed" };
-    } });
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "rollback_failed" });
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
-    ctx.cleanup();
-  });
-
-  test("probe rollback reports rollback_failed when snapshot restore fails", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]) },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      { match: /\/session\b/, stdout: JSON.stringify({ info: { role: "assistant", modelID: "gpt-5.6-luna-fast", providerID: "openai" } }) },
-      { match: /title:\"model availability probe\"/, stdout: JSON.stringify({ info: { role: "assistant", error: "404 unavailable" } }) },
-      { match: /cat.*omo\.jsonc/, stdout: "", stderr: "restore failed", exitCode: 1 },
-    ]);
-    const result = await createAgentModelsLib(ctx.deps).applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "rollback_failed" });
-    expect(ctx.restartCount).toBe(1);
-    ctx.cleanup();
-  });
-
-  test("write failure reports write_failed without restarting", async () => {
-    const { deps, restartCount, cleanup } = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "", exitCode: 1, stderr: "jq: parse error" }, // write fails
-    ]);
-    const lib = createAgentModelsLib(deps);
-    const result = await lib.applyAndVerify("explore", [{ model: "claude-opus-5" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "write_failed", error: "jq: parse error" });
-    expect(restartCount).toBe(0);
-    cleanup();
-  });
-
-  test("restart failure rolls back the snapshot without a second restart", async () => {
-    const { deps, calls, restartCount, cleanup } = stubDeps(
-      [
-        { stdout: SNAPSHOT_FILE },
-        { stdout: "" }, // write
-      ],
-      { restart: async () => ({ ok: false, error: "compose failed" }) },
-    );
-    const lib = createAgentModelsLib(deps);
-    const result = await lib.applyAndVerify("explore", [{ model: "claude-opus-5" }], "inference");
-    expect(result).toMatchObject({ ok: false, status: "restart_failed", error: "compose failed" });
-    expect(restartCount).toBe(0);
-    // snapshot restored back into the container
-    expect(calls.some((c) => c.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
-    cleanup();
-  });
-
-  test("fetch failure does not roll back: reports unverified", async () => {
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" }, // write
-      { stdout: "", exitCode: 2 }, // fetch fails
-    ]);
-    const lib = createAgentModelsLib(ctx.deps);
-    const result = await lib.applyAndVerify("explore", [{ model: "claude-opus-5" }], "inference");
-    expect(result.ok).toBe(false);
-    expect(result).toMatchObject({ status: "unverified" });
-    expect(ctx.restartCount).toBe(1); // no rollback restart
-    expect(ctx.calls.some((c) => c.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
-    ctx.cleanup();
-  });
-
-  test("reports runtime_mismatch without restoring the applied model", async () => {
-    const agentsJson = JSON.stringify([
-      { name: "librarian", model: { modelID: "qwen3.7-plus", providerID: "opencode-go" } },
-    ]);
-    const ctx = stubDeps([
-      { stdout: SNAPSHOT_FILE },
-      { stdout: "" },
-      { stdout: agentsJson },
-      {
-        match: /\/provider\b/,
-        stdout: JSON.stringify({ connected: ["opencode-go"], all: [{ id: "opencode-go", models: { "qwen3.7-plus": {} } }] }),
-      },
-      {
-        match: /\/session/,
-        stdout: JSON.stringify({ info: { role: "assistant", modelID: "qwen3.7-plus", providerID: "opencode-go" } }),
-      },
-    ]);
-    const lib = createAgentModelsLib(ctx.deps);
-    const result = await lib.applyAndVerify("librarian", [
-      { model: "opencode/nemotron-3.5-lightning-free" },
-    ], "inference");
-    expect(result).toMatchObject({
-      ok: false,
-      status: "runtime_mismatch",
-      configured: "opencode/nemotron-3.5-lightning-free",
-      resolved: { modelID: "qwen3.7-plus", providerID: "opencode-go" },
-      requestVerified: { modelID: "qwen3.7-plus", providerID: "opencode-go" },
-      error: "Configured model opencode/nemotron-3.5-lightning-free did not match assigned opencode-go/qwen3.7-plus and request-verified opencode-go/qwen3.7-plus",
-    });
-    expect(ctx.calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(false);
-    ctx.cleanup();
-  });
-
-  test("retries request verification with the runtime display name", async () => {
-    const runtimeAgents = JSON.stringify([
-      { name: "Metis - Plan Consultant", model: { modelID: "big-pickle", providerID: "opencode" } },
-    ]);
-    const requestResult = JSON.stringify({ info: { role: "assistant", modelID: "big-pickle", providerID: "opencode" } });
-    const ctx = stubDeps([
-      { stdout: "" },
-      { stdout: runtimeAgents },
-      { stdout: requestResult },
-    ]);
-
-    const result = await createAgentModelsLib(ctx.deps).fetchSuccessfulRequestModel("testpass", "metis");
-
-    expect(result).toEqual({ modelID: "big-pickle", providerID: "opencode" });
-    expect(ctx.calls).toHaveLength(3);
-    expect(ctx.calls[0]).toContain(Buffer.from("metis").toString("base64"));
-    expect(ctx.calls[2]).toContain(Buffer.from("Metis - Plan Consultant").toString("base64"));
-  });
-
-  test("syncs native overrides before restarting managed OpenCode", async () => {
-    const calls: string[] = [];
-    const deps: AgentModelsDeps = {
-      exec: async (command) => {
-        calls.push(command);
-        if (command.includes("mktemp")) return { stdout: SNAPSHOT_FILE, stderr: "", exitCode: 0 };
-        if (command.includes(".agents[$agent]")) return { stdout: "", stderr: "", exitCode: 0 };
-        if (command.includes(".native-agent-overrides.tmp")) return { stdout: "", stderr: "", exitCode: 0 };
-        return { stdout: JSON.stringify([{ name: "explore", model: { modelID: "mimo-v2.5-free", providerID: "opencode" } }]), stderr: "", exitCode: 0 };
-      },
-      restart: async () => { calls.push("RESTART"); return { ok: true }; },
-      readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass" }),
-    };
-    await createAgentModelsLib(deps).applyAndVerifyBatch([{ agent: "explore", entries: [] }]);
-    const restartIndex = calls.indexOf("RESTART");
-    const syncIndex = calls.findIndex((command) => command.includes(".native-agent-overrides.tmp"));
-    expect(syncIndex).toBeGreaterThanOrEqual(0);
-    expect(calls[syncIndex]).toContain('"$HOME/.omo/omo.jsonc"');
-    expect(calls[syncIndex]).not.toContain('"~/.omo/omo.jsonc"');
-    expect(calls[syncIndex]).toContain('code=$?; rm -f "$tmp"; exit "$code"');
-    expect(calls[syncIndex]).toContain('^[^/[:space:]]+/[^[:space:]]+$');
-    expect(restartIndex).toBeGreaterThan(syncIndex);
-  });
-
-  test("does not report Apply success when native override synchronization fails", async () => {
-    const calls: string[] = [];
-    let restartCount = 0;
-    const deps: AgentModelsDeps = {
-      exec: async (command) => {
-        calls.push(command);
-        if (command.includes("mktemp")) return { stdout: SNAPSHOT_FILE, stderr: "", exitCode: 0 };
-        if (command.includes(".agents[$agent]")) return { stdout: "", stderr: "", exitCode: 0 };
-        if (command.includes(".native-agent-overrides.tmp")) return { stdout: "", stderr: "native sync failed", exitCode: 1 };
-        if (command.includes(`cat '${SNAPSHOT_FILE}'`)) return { stdout: "", stderr: "", exitCode: 0 };
-        return { stdout: "", stderr: "", exitCode: 0 };
-      },
-      restart: async () => { restartCount += 1; return { ok: true }; },
-      readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "testpass" }),
-    };
-
-    const result = await createAgentModelsLib(deps).applyAndVerify("general", [{ model: "opencode/mimo-v2.5-free" }]);
-
-    expect(result).toEqual({ ok: false, status: "write_failed", error: "native sync failed" });
-    expect(restartCount).toBe(0);
-    expect(calls.some((command) => command.includes(`cat '${SNAPSHOT_FILE}'`))).toBe(true);
-  });
-
-  test("readiness verification issues zero model-message calls", async () => {
-    const agentsJson = JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]);
-    const { deps, calls } = stubDeps([
-      { stdout: "/tmp/snap" },
-      { stdout: "" },
-      { stdout: agentsJson },
-      { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-    ]);
-    const lib = createAgentModelsLib(deps);
-    const result = await lib.applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "readiness");
-    expect(result.ok).toBe(true);
-    expect(result.status).toBe("verified");
-    expect(calls.some((c) => c.includes("/session/") && c.includes("message"))).toBe(false);
-    expect(calls.some((c) => c.includes("title:\"model availability probe\""))).toBe(false);
-  });
-
-  test("full-operation timeout returns unverified, clears timer, and does not continue probe", async () => {
+  test.each(["readiness", "inference"] as const)("%s timeout clears its timer and stops further verification", async (verification) => {
     const originalSetTimeout = globalThis.setTimeout;
     const originalClearTimeout = globalThis.clearTimeout;
-    let clearCalled = false;
-    let timeoutFired = false;
-    const mockSetTimeout = (cb: () => void, ms: number): ReturnType<typeof originalSetTimeout> => {
-      if (ms === 180000 || ms === 300000) {
-        timeoutFired = true;
-        return originalSetTimeout(cb, 10);
-      }
-      return originalSetTimeout(cb, ms);
-    }
-    const mockClearTimeout = (id: ReturnType<typeof originalSetTimeout>): void => {
-      clearCalled = true;
-      originalClearTimeout(id);
-    }
-    Object.defineProperty(globalThis, "setTimeout", { value: mockSetTimeout, writable: true, configurable: true });
-    Object.defineProperty(globalThis, "clearTimeout", { value: mockClearTimeout, writable: true, configurable: true });
+    let cleared = false;
+    globalThis.setTimeout = ((callback: TimerHandler, ms?: number, ...args: unknown[]) =>
+      originalSetTimeout(callback, ms === 180_000 || ms === 300_000 ? 5 : ms, ...args)) as typeof setTimeout;
+    globalThis.clearTimeout = ((timer) => { cleared = true; originalClearTimeout(timer); }) as typeof clearTimeout;
     try {
-      const fixture = stubDeps([
-        { stdout: "/tmp/snap" },
-        { stdout: "" },
-        { stdout: JSON.stringify([{ name: "explore", model: { modelID: "gpt-5.6-luna-fast", providerID: "openai" } }]), },
-        { match: /\/provider\b/, stdout: JSON.stringify({ connected: ["openai"], all: [] }) },
-      ]);
-      const execOriginal = fixture.deps.exec;
-      const callsRef = fixture.calls;
-      const trackingExec: AgentModelsDeps["exec"] = async (command, timeoutMs) => {
-        if (command.includes("/agent") || command.includes("/provider")) {
-          await Bun.sleep(50);
-          return execOriginal(command, timeoutMs);
-        }
-        return execOriginal(command, timeoutMs);
-      };
-      const deps2 = { exec: trackingExec, restart: fixture.deps.restart, readEnv: fixture.deps.readEnv };
-      const lib = createAgentModelsLib(deps2);
-      const result = await lib.applyAndVerify("explore", [{ model: "openai/gpt-5.6-luna-fast" }], "readiness");
-      expect(timeoutFired).toBe(true);
-      expect(result.status).toBe("unverified");
-      if (!("error" in result)) throw new Error("expected timeout result");
-      expect(result.error).toContain("timed out");
-      expect(clearCalled).toBe(true);
-      expect(callsRef.some((c) => c.includes("title:\"model availability probe\""))).toBe(false);
+      const ctx = fixture({ providerDelayMs: 30 });
+      expect(await ctx.lib.applyAndVerify("librarian", entries, verification)).toMatchObject({ ok: false, status: "unverified", error: expect.stringContaining("timed out") });
+      await Bun.sleep(50);
+      expect(cleared).toBe(true);
+      expect(ctx.calls.some((c) => c.includes("/api/agent") || c.includes("/api/session"))).toBe(false);
+      expect(ctx.restarts).toBe(1);
     } finally {
-      Object.defineProperty(globalThis, "setTimeout", { value: originalSetTimeout, writable: true, configurable: true });
-      Object.defineProperty(globalThis, "clearTimeout", { value: originalClearTimeout, writable: true, configurable: true });
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
     }
   });
 });
 
-describe("collectAgentModelState — V2 NATIVE12 roster regression", () => {
-  test("Given V2 routing with stale internal chains, When collecting state Then returns only the NATIVE12 roster", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const fakeLib: AgentModelStateSource = {
-        readRoutingConfig: async () => ({
-          version: 1 as const,
-          chains: {
-            build: { chain: [{ model: "opencode/big-pickle" }] },
-            general: { chain: [{ model: "opencode/big-pickle" }] },
-          },
-        }),
-        readAgentModelsConfig: async () => ({}),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
-        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
-        fetchSubagentNames: async () => ["general", "explore"],
-        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
-      };
-      const state = await collectAgentModelState(fakeLib, "testpass");
-      const expected = [...V2_SUBAGENT_AGENTS].sort();
-      const actual = state.agents.map((entry) => entry.name);
-      expect(actual).toEqual(expected);
-      expect(actual).toHaveLength(8);
-      expect(actual).not.toContain("build");
-      expect(actual).not.toContain("compaction");
-      expect(actual).not.toContain("title");
-      expect(actual).not.toContain("summary");
-      expect(actual).toContain("general");
-      for (const entry of state.agents) {
-        if (entry.name !== "general") expect(entry.configured).toEqual([]);
-        expect(entry.invalid).toBe(false);
-      }
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
+describe("native V2 model state", () => {
+  function stateSource(chain: FallbackModelEntry[], requestModel: string | null = null): AgentModelStateSource {
+    return {
+      readRoutingConfig: async () => ({ version: 1, chains: { librarian: { chain }, build: { chain: [{ model: "openai/internal" }] } } }),
+      fetchResolvedAgentModels: async () => new Map([["librarian", { providerID: "openai", modelID: "markdown-default" }]]),
+      fetchProviderSnapshot: async () => ({ connectedProviders: ["openai"], catalog: ["openai/primary"] }),
+      fetchSubagentNames: async () => ["librarian", "build"],
+      fetchRecentRequestModels: async () => ({ models: requestModel === null ? [] : [{ agent: "librarian", providerID: requestModel.split("/")[0]!, modelID: requestModel.split("/").slice(1).join("/"), completedAt: 123 }], truncated: false }),
+      readPinnedAgents: async () => new Set(["librarian"]),
+    };
+  }
+
+  test.each([
+    { request: null, effectiveness: "awaiting_request" },
+    { request: "openai/primary", effectiveness: "effective" },
+    { request: "openai/fallback", effectiveness: "effective" },
+    { request: "openai/old", effectiveness: "runtime_mismatch" },
+  ])("request $request yields $effectiveness without comparing the Markdown default", async ({ request, effectiveness }) => {
+    const source = stateSource([{ model: "openai/primary" }, { model: "openai/fallback" }], request);
+    const state = await collectAgentModelState(source, "pw");
+    expect(state.agents.map((a) => a.name)).toEqual([...V2_SUBAGENT_AGENTS].sort());
+    expect(state.agents.find((a) => a.name === "librarian")).toMatchObject({ effectiveness, pinned: true, providerConnected: true });
+    expect(state.agents.some((a) => a.name === "build")).toBe(false);
   });
 
-  test("Given OMO_ENABLED=0 with a primary-agent chain, When collecting state Then excludes the primary agent", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const fakeLib: AgentModelStateSource = {
-        readRoutingConfig: async () => ({
-          version: 1 as const,
-          chains: { plan: { chain: [{ model: "openai/gpt-5.6-luna-fast" }] } },
-        }),
-        readAgentModelsConfig: async () => ({}),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
-        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
-        fetchSubagentNames: async () => ["general", "explore"],
-        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
-      };
-      const state = await collectAgentModelState(fakeLib, "testpass");
-      const expected = [...V2_SUBAGENT_AGENTS].sort();
-      expect(state.agents.map((e) => e.name)).toEqual(expected);
-      expect(state.agents.find((e) => e.name === "plan")).toBeUndefined();
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given a pinned agents source, When collecting state Then marks pinned agents", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const base = {
-        readRoutingConfig: async () => ({
-          version: 1 as const,
-          chains: { plan: { chain: [{ model: "openai/gpt-5.6-luna-fast" }] } },
-        }),
-        readAgentModelsConfig: async () => ({}),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
-        fetchProviderSnapshot: async () => ({ connectedProviders: [], catalog: [] }),
-        fetchSubagentNames: async () => ["general", "explore"],
-        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
-      };
-      const withPins: AgentModelStateSource = {
-        ...base,
-        readPinnedAgents: async () => new Set(["general"]),
-      };
-      const pinned = await collectAgentModelState(withPins, "testpass");
-      expect(pinned.agents.find((e) => e.name === "general")?.pinned).toBe(true);
-      expect(pinned.agents.find((e) => e.name === "explore")?.pinned).toBe(false);
-      const withoutPins: AgentModelStateSource = { ...base };
-      const unpinned = await collectAgentModelState(withoutPins, "testpass");
-      for (const entry of unpinned.agents) expect(entry.pinned).toBe(false);
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-});
-
-describe("V2 readiness honors canonical JSON head without Markdown comparison", () => {
-  test("Given V2 librarian configured gemma-4-31b and Markdown reports gemma-4-26b, When verifying readiness Then configured not runtime_mismatch", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
-      });
-      const ctx = stubDeps([
-        { stdout: SNAPSHOT_FILE },
-        { stdout: "" },
-        {
-          match: /\/api\/provider/,
-          stdout: JSON.stringify({ data: [{ id: "openrouter" }] }),
-        },
-        {
-          match: /\/api\/model/,
-          stdout: JSON.stringify({ data: [
-            { id: "google/gemma-4-31b-a4b", providerID: "openrouter", enabled: true, status: "active" },
-            { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter", enabled: true, status: "active" },
-          ] }),
-        },
-        { match: /\/api\/agent/, stdout: agentsJson },
-      ]);
-      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
-        "librarian",
-        [{ model: "openrouter/google/gemma-4-31b-a4b" }],
-        "readiness",
-      );
-      expect(result.ok).toBe(true);
-      expect(`${result.status}`).toBe("configured");
-      if (!result.ok) throw new Error(`expected configured result, got ${result.status}`);
-      expect(result.resolved).not.toBeNull();
-      ctx.cleanup();
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V2 readiness with disconnected provider Then unverified", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
-      });
-      const ctx = stubDeps([
-        { stdout: SNAPSHOT_FILE },
-        { stdout: "" },
-        {
-          match: /\/api\/provider/,
-          stdout: JSON.stringify({ data: [{ id: "openai" }] }),
-        },
-        {
-          match: /\/api\/model/,
-          stdout: JSON.stringify({ data: [{ id: "gpt-4o", providerID: "openai", enabled: true, status: "active" }] }),
-        },
-        { match: /\/api\/agent/, stdout: agentsJson },
-      ]);
-      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
-        "librarian",
-        [{ model: "openrouter/google/gemma-4-31b-a4b" }],
-        "readiness",
-      );
-      expect(result.ok).toBe(false);
-      expect(result.status).toBe("unverified");
-      if (!("error" in result)) throw new Error(`expected unverified result, got ${result.status}`);
-      expect(result.error).toContain("not connected");
-      ctx.cleanup();
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V2 collect state with configured head differing from Markdown Then awaiting_request not runtime_mismatch and keeps static metadata", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const fakeLib: AgentModelStateSource = {
-        readRoutingConfig: async () => ({
-          version: 1 as const,
-          chains: { librarian: { chain: [{ model: "openrouter/google/gemma-4-31b-a4b" }] } },
-        }),
-        readAgentModelsConfig: async () => ({}),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>([
-          ["librarian", { modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }],
-        ]),
-        fetchProviderSnapshot: async () => ({ connectedProviders: ["openrouter"], catalog: ["openrouter/google/gemma-4-31b-a4b", "openrouter/google/gemma-4-26b-a4b-it:free"] }),
-        fetchSubagentNames: async () => [],
-        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
-      };
-      const state = await collectAgentModelState(fakeLib, "testpass");
-      const librarian = state.agents.find((e) => e.name === "librarian");
-      expect(librarian).toBeDefined();
-      expect(librarian?.configured).toEqual([{ model: "openrouter/google/gemma-4-31b-a4b" }]);
-      expect(librarian?.resolved).toEqual({ modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" });
-      expect(librarian?.providerConnected).toBe(true);
-      expect(librarian?.effectiveness).toBe("awaiting_request");
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V2 request used a configured fallback, When collecting state Then the agent is effective", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const fakeLib: AgentModelStateSource = {
-        readRoutingConfig: async () => ({
-          version: 1 as const,
-          chains: { librarian: { chain: [{ model: "nvidia/primary" }, { model: "openrouter/fallback" }] } },
-        }),
-        readAgentModelsConfig: async () => ({}),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>(),
-        fetchProviderSnapshot: async () => ({ connectedProviders: ["nvidia", "openrouter"], catalog: ["nvidia/primary", "openrouter/fallback"] }),
-        fetchSubagentNames: async () => [],
-        fetchRecentRequestModels: async () => ({
-          models: [{ agent: "librarian", modelID: "fallback", providerID: "openrouter", completedAt: 10 }],
-          truncated: false,
-        }),
-      };
-
-      const state = await collectAgentModelState(fakeLib, "testpass");
-
-      expect(state.agents.find((entry) => entry.name === "librarian")?.effectiveness).toBe("effective");
-      expect(state.agents.find((entry) => entry.name === "librarian")?.lastSuccessfulRequestAt).toBe(10);
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V2 inference with a matching agent-routed request, When verifying Then verified with requestVerified", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
-      });
-      const requestJson = JSON.stringify({
-        data: [{ type: "assistant", agent: "librarian", model: { id: "longcat-2.5-preview-free", providerID: "opencode" }, error: null }],
-      });
-      const ctx = stubDeps([
-        { stdout: SNAPSHOT_FILE },
-        { stdout: "" },
-        {
-          match: /\/api\/provider/,
-          stdout: JSON.stringify({ data: [{ id: "opencode" }] }),
-        },
-        {
-          match: /\/api\/model/,
-          stdout: JSON.stringify({ data: [
-            { id: "longcat-2.5-preview-free", providerID: "opencode", enabled: true, status: "active" },
-          ] }),
-        },
-        { match: /\/api\/agent/, stdout: agentsJson },
-        { match: /\/api\/session/, stdout: requestJson },
-      ]);
-      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
-        "librarian",
-        [{ model: "opencode/longcat-2.5-preview-free" }],
-        "inference",
-      );
-      expect(result.ok).toBe(true);
-      expect(result.status).toBe("verified");
-      if (!result.ok) throw new Error(`expected verified result, got ${result.status}`);
-      expect(result.requestVerified).toEqual({ modelID: "longcat-2.5-preview-free", providerID: "opencode" });
-      const requestCall = ctx.calls.find((command) => command.includes("/api/session/${SESSION}/prompt"));
-      expect(requestCall).toBeDefined();
-      expect(requestCall).not.toContain(Buffer.from("longcat-2.5-preview-free").toString("base64"));
-      expect(requestCall).not.toContain(Buffer.from("opencode").toString("base64"));
-      expect(requestCall).toContain("{agent:$agent,text:");
-      ctx.cleanup();
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V2 inference with mismatched request model, When verifying Then runtime_mismatch", async () => {
-    const previous = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-    try {
-      const agentsJson = JSON.stringify({
-        location: { directory: "/home/devuser/workspace" },
-        data: [{ id: "librarian", name: "librarian", mode: "subagent", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" } }],
-      });
-      const requestJson = JSON.stringify({
-        data: [{ type: "assistant", agent: "librarian", model: { id: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }, error: null }],
-      });
-      const ctx = stubDeps([
-        { stdout: SNAPSHOT_FILE },
-        { stdout: "" },
-        {
-          match: /\/api\/provider/,
-          stdout: JSON.stringify({ data: [{ id: "opencode" }] }),
-        },
-        {
-          match: /\/api\/model/,
-          stdout: JSON.stringify({ data: [
-            { id: "longcat-2.5-preview-free", providerID: "opencode", enabled: true, status: "active" },
-          ] }),
-        },
-        { match: /\/api\/agent/, stdout: agentsJson },
-        { match: /\/api\/session/, stdout: requestJson },
-      ]);
-      const result = await createAgentModelsLib(ctx.deps).applyAndVerify(
-        "librarian",
-        [{ model: "opencode/longcat-2.5-preview-free" }],
-        "inference",
-      );
-      expect(result.ok).toBe(false);
-      expect(result.status).toBe("runtime_mismatch");
-      if (!("error" in result)) throw new Error(`expected mismatch error, got ${result.status}`);
-      expect(result.error).toContain("did not include request-verified");
-      ctx.cleanup();
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
-  });
-
-  test("Given V1 with same Markdown difference Then runtime_mismatch is preserved", async () => {
-    const previous = process.env.OMO_ENABLED;
-    delete process.env.OMO_ENABLED;
-    try {
-      const fakeLib: AgentModelStateSource = {
-        readRoutingConfig: async () => ({ version: 1, chains: {} }),
-        readAgentModelsConfig: async () => ({
-          librarian: { model: "openrouter/google/gemma-4-31b-a4b", models: [{ model: "openrouter/google/gemma-4-31b-a4b" }], invalid: false },
-        }),
-        fetchResolvedAgentModels: async () => new Map<string, ResolvedModel>([
-          ["librarian", { modelID: "google/gemma-4-26b-a4b-it:free", providerID: "openrouter" }],
-        ]),
-        fetchProviderSnapshot: async () => ({ connectedProviders: ["openrouter"], catalog: ["openrouter/google/gemma-4-31b-a4b"] }),
-        fetchSubagentNames: async () => ["librarian"],
-        fetchRecentRequestModels: async () => ({ models: [], truncated: false }),
-      };
-      const state = await collectAgentModelState(fakeLib, "testpass");
-      const librarian = state.agents.find((e) => e.name === "librarian");
-      expect(librarian?.effectiveness).toBe("runtime_mismatch");
-    } finally {
-      if (previous === undefined) delete process.env.OMO_ENABLED;
-      else process.env.OMO_ENABLED = previous;
-    }
+  test("without a password state does not call authenticated endpoints", async () => {
+    const source = stateSource([{ model: "openai/primary" }]);
+    const forbidden = async (): Promise<never> => { throw new Error("authenticated call"); };
+    const state = await collectAgentModelState({ ...source, fetchResolvedAgentModels: forbidden, fetchSubagentNames: forbidden, fetchRecentRequestModels: forbidden, readPinnedAgents: forbidden }, null);
+    expect(state.hasPassword).toBe(false);
+    expect(state.agents.every((a) => a.resolved === null && a.requestVerified === null)).toBe(true);
   });
 });

@@ -25,7 +25,6 @@ import { basename, join } from "node:path";
 import { readEnvFile, writeEnvFile, resolveEnvPath, type EnvVars } from "./env";
 import { KEYS_PATH } from "./provider-keys";
 import { resolveImageRef } from "./image-ref";
-import { isNativeV2Enabled } from "./agent-model-types";
 import {
   UPGRADE_BASE_FILE,
   UPGRADE_STAGING_FILE,
@@ -56,7 +55,7 @@ const V2_ASSET_REF = "v2";
 function upstreamRef(version = readEnvFile().AI_ENGKIT_VERSION?.trim()): string {
   if (version === "v2-dev") return V2_ASSET_REF;
   if (version) return version;
-  return isNativeV2Enabled() ? V2_ASSET_REF : "main";
+  return V2_ASSET_REF;
 }
 
 // Exported for tests: the line-aware asset resolution is the guard that keeps a
@@ -68,11 +67,11 @@ export function upstreamBase(version?: string): string {
 // The two lines ship differently-named assets. Fetching the other line's compose
 // would overwrite the running one with an incompatible file.
 export function upstreamComposePath(): string {
-  return isNativeV2Enabled() ? "docker-compose.v2.yml" : "docker-compose.yml";
+  return "docker-compose.v2.yml";
 }
 
 export function upstreamEnvExamplePath(): string {
-  return isNativeV2Enabled() ? ".env.v2.example" : ".env.example";
+  return ".env.v2.example";
 }
 
 /** BACKUP_RETENTION from .env: positive integer, default 5 (mirrors upgrade.sh). */

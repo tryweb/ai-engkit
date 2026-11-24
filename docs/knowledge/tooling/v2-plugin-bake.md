@@ -2,7 +2,7 @@
 
 ## Context
 
-The V2 line (`OMO_ENABLED=0`) carries no `oh-my-openagent`. Its two behavioral
+The V2 runtime carries no `oh-my-openagent`. Its two behavioral
 plugins are self-built: `b1-routing` (per-agent fallback chain + head
 enforcement) and `m3-enforcer` (todo continuation on idle). Sources live under
 `src/v2-plugins/b1-routing/` and `src/v2-plugins/m3-enforcer/`; verification
@@ -38,16 +38,16 @@ form with a matching `@opencode/plugin` version.
 
 ## Solution
 
-Build the bundles at image build time and deploy them at boot, V2-gated:
+Build the bundles at image build time and deploy them at boot:
 
 - **Dockerfile**: `bun add @opencode/plugin@${OPENCODE_CLI_VERSION}` in a
   throwaway build dir that contains the plugin sources, then
   `bun build ./src/<id>/index.ts --outfile /opt/opencode/v2-plugins/<id>.js
   --target bun --format esm` (no `--external`, so it inlines the API). The build
   dir is deleted; only the two `.js` files ship, owned by the app user.
-- **`entrypoint.d/08-deploy-v2-plugins.sh`**: when `OMO_ENABLED=0`, `install`
-  each `/opt/opencode/v2-plugins/*.js` into
-  `$HOME/.config/opencode/plugins/`. On the V1/OMO line it exits immediately.
+- **`entrypoint.d/08-deploy-v2-plugins.sh`**: `install` each
+  `/opt/opencode/v2-plugins/*.js` into `$HOME/.config/opencode/plugins/`;
+  this V2 branch has no V1/OMO runtime.
 
 The build dir must contain the entry file so `bun`'s resolver finds the
 `node_modules` it just created (a build run from outside the source tree fails
@@ -60,8 +60,7 @@ with `Could not resolve "@opencode/plugin"`).
 - Building against `@opencode/plugin@${OPENCODE_CLI_VERSION}` keeps the inlined
   API in lockstep with the installed CLI (the version gate already asserts the
   CLI major).
-- Gating on `OMO_ENABLED=0` keeps the plugin surface mutually exclusive with the
-  OMO line: V1 never loads native-V2 plugins.
+- The V2 branch always deploys native plugins; it has no OMO mode gate.
 
 ## Side Effects / Tradeoffs
 

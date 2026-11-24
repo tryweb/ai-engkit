@@ -9,13 +9,12 @@ import {
 } from "../lib/agent-models";
 import { parseVerificationMode, type VerificationMode } from "../lib/agent-model-types";
 import { createAgentModelReconciler } from "../lib/agent-model-reconciler";
-import { listUnhealthyModels, parseModelReference, probeModel, type ProbeResult } from "../lib/model-probe";
+import { listUnhealthyModels, parseModelReference, probeModel } from "../lib/model-probe";
 import { AgentModelsPage } from "../views/agent-models";
 import { validateAgentChain } from "../lib/agent-model-config";
 import { readAgentModelPolicy, writeAgentModelPolicy } from "../lib/agent-model-policy";
 import { setPinnedAgent } from "../lib/agent-model-pinned";
 
-function isV2(): boolean { return process.env.OMO_ENABLED === "0"; }
 function normalizeChainEntries(raw: Record<string, unknown>): Array<{ model: string; variant?: string }> | null {
   const chain = (raw.chain ?? raw.entries) as unknown;
   if (!Array.isArray(chain)) return null;
@@ -62,14 +61,9 @@ function validateBatchBody(body: unknown): { changes: Array<{ agent: string; ent
     if (typeof agent !== "string" || !AGENT_KEY_PATTERN.test(agent.trim())) return "each change requires a valid agent name";
     const entries = normalizeChainEntries(change);
     if (entries === null) return `agent ${agent}: entries must be an array of { model, variant? }`;
-    if (isV2()) {
-      if (entries.length !== 0) {
-        const err = validateAgentChain(entries);
-        if (err !== null) return `agent ${agent}: ${err}`;
-      }
-    } else {
-      const error = validateFallbackModels({ entries });
-      if (error !== null) return `agent ${agent}: ${error}`;
+    if (entries.length !== 0) {
+      const err = validateAgentChain(entries);
+      if (err !== null) return `agent ${agent}: ${err}`;
     }
   }
   if (record.verification !== undefined) {
@@ -87,20 +81,6 @@ function parseSingleVerification(body: unknown): VerificationMode | string {
   const verification = parseVerificationMode(record.verification);
   if (verification === null) return "verification must be \"readiness\" or \"inference\"";
   return verification;
-}
-
-function probeFailureMessage(model: string, probe: ProbeResult): string {
-  const reason = probe.reason ?? "unknown probe failure";
-  if (probe.status === "retired") return `model ${model} has been retired (end of life): ${reason}`;
-  if (probe.status === "wrong_endpoint") {
-    const hint = /404\s*page\s*not\s*found/i.test(reason)
-      ? model.startsWith("nvidia/")
-        ? " Use the model's NVIDIA VLM or Biology endpoint instead of the LLM chat endpoint."
-        : " The provider does not expose this model through the configured endpoint."
-      : " The catalog entry is not deployed for this account's LLM endpoint.";
-    return `model ${model} is not usable through this endpoint: ${reason}.${hint}`;
-  }
-  return `model ${model} is unavailable: ${reason}`;
 }
 
 const MAX_VERIFY_TARGETS = 12;
@@ -247,19 +227,6 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       }
     }
 
-    if (parsed.verification === "inference" && !isV2()) {
-      for (const change of parsed.changes) {
-        for (const entry of change.entries) {
-          const ref = parseModelReference(entry.model);
-          if (ref === null) continue;
-          const probe: ProbeResult = await probeModel(deps, ref.providerID, ref.modelID);
-          if (probe.status === "retired" || probe.status === "wrong_endpoint" || probe.status === "unavailable") {
-            return c.json({ error: probeFailureMessage(entry.model, probe) }, 400);
-          }
-        }
-      }
-    }
-
     // Single snapshot/write/restart for the whole batch
     const batchChanges = parsed.changes.map((change) => ({ agent: change.agent.trim(), entries: change.entries }));
     const results = await lib.applyAndVerifyBatch(batchChanges, parsed.verification);
@@ -293,14 +260,9 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
         return c.json({ error: "entries must be an array of { model, variant? }" }, 400);
       }
       if (ent !== null) {
-        if (isV2()) {
-          if (ent.length !== 0) {
-            const e = validateAgentChain(ent);
-            if (e !== null) return c.json({ error: e }, 400);
-          }
-        } else {
-          const error = validateFallbackModels({ entries: ent });
-          if (error !== null) return c.json({ error }, 400);
+        if (ent.length !== 0) {
+          const e = validateAgentChain(ent);
+          if (e !== null) return c.json({ error: e }, 400);
         }
       } else {
         const error = validateFallbackModels(body);
@@ -334,17 +296,6 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
     const catalog = new Set(state.catalog);
     if (entries.some((entry) => !catalog.has(entry.model))) {
       return c.json({ error: "model is not available in the current environment catalog" }, 400);
-    }
-
-    if (verification === "inference" && !isV2()) {
-      for (const entry of entries) {
-        const ref = parseModelReference(entry.model);
-        if (ref === null) continue;
-        const probe: ProbeResult = await probeModel(deps, ref.providerID, ref.modelID);
-        if (probe.status === "retired" || probe.status === "wrong_endpoint" || probe.status === "unavailable") {
-          return c.json({ error: probeFailureMessage(entry.model, probe) }, 400);
-        }
-      }
     }
 
     const result = await reconciler.applyAgent(agent, entries, verification);
@@ -387,29 +338,7 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       return c.json({ error: `too many agents to verify: ${targetAgents.length} exceeds limit ${MAX_VERIFY_TARGETS}` }, 400);
     }
 
-    const probeCache = new Map<string, ProbeResult>();
     const deadlineAt = Date.now() + VERIFY_TOTAL_DEADLINE_MS;
-    async function probeForModel(model: string): Promise<ProbeResult> {
-      const cached = probeCache.get(model);
-      if (cached !== undefined) return cached;
-      const ref = parseModelReference(model);
-      if (ref === null) return { status: "unavailable", reason: "invalid model reference" };
-      const remainingMs = deadlineAt - Date.now();
-      if (remainingMs <= 0) return { status: "timeout", reason: "verification deadline exceeded" };
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        const result = await Promise.race([
-          probeModel(deps, ref.providerID, ref.modelID),
-          new Promise<ProbeResult>((resolve) => {
-            timer = setTimeout(() => resolve({ status: "timeout", reason: "verification deadline exceeded" }), remainingMs);
-          }),
-        ]);
-        probeCache.set(model, result);
-        return result;
-      } finally {
-        if (timer !== undefined) clearTimeout(timer);
-      }
-    }
 
     const results: Record<string, { readonly model: string | null; readonly requestModel?: string; readonly status: string; readonly reason?: string; readonly verification: VerificationMode }> = {};
     for (const agent of targetAgents) {
@@ -417,11 +346,6 @@ export function createAgentModelsRoutes(deps: AgentModelsDeps): Hono {
       const model = entries[0]?.model ?? null;
       if (model === null) {
         results[agent] = { model: null, status: "unconfigured", reason: "agent has no configured primary model", verification };
-        continue;
-      }
-      if (verification === "inference" && !isV2()) {
-        const probe = await probeForModel(model);
-        results[agent] = { model, status: probe.status, ...(probe.reason !== undefined ? { reason: probe.reason } : {}), verification };
         continue;
       }
       let check: ApplyResult;

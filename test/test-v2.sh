@@ -44,7 +44,7 @@ cell1() {
   [ "$(docker exec ai-engkit-v2dev jq -r '.default_agent' /home/devuser/.config/opencode/opencode.json)" = "sisyphus" ]
   echo "PASS: opencode.json default_agent is sisyphus"
   docker exec ai-engkit-v2dev test ! -f /home/devuser/.omo/omo.jsonc
-  echo "PASS: no ~/.omo/omo.jsonc (OMO lifecycle skipped)"
+  echo "PASS: fresh V2 config did not create a legacy ~/.omo/omo.jsonc file"
   [ "$(docker exec ai-engkit-v2dev find /home/devuser/workspace/.opencode/agents -name '*.md' | wc -l)" -eq 12 ]
   echo "PASS: 12 native agents visible in V2 workspace"
 

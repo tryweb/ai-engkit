@@ -15,21 +15,11 @@ export type RecentRequestModelsResult = {
 };
 
 function buildRecentRequestModelsScript(auth: string): string {
-  const isV2 = process.env.OMO_ENABLED === "0";
-  const messageUrl = isV2 ? `"$BASE/api/session/\${SESSION}/message"` : `"$BASE/session/\${SESSION}/message"`;
-  const messageFilter = isV2
-    ? `'[.data[]?
+  const messageUrl = `"$BASE/api/session/\${SESSION}/message"`;
+  const messageFilter = `'[.data[]?
         | select(.type == "assistant" and (.error == null)
           and (.model.id | type == "string") and (.model.providerID | type == "string"))
         | {agent: (.agent // $agent), modelID: .model.id, providerID: .model.providerID,
-           completedAt: ((.time.completed // .time.created // 0)
-             | if type == "number" then . else (try (fromdateiso8601 * 1000) catch 0) end)}]
-      | map(select(.agent | type == "string"))
-      | if length == 0 then empty else max_by(.completedAt) end'`
-    : `'[.[]?.info
-        | select(.role == "assistant" and (.error == null)
-          and (.modelID | type == "string") and (.providerID | type == "string"))
-        | {agent: (.agent // $agent), modelID, providerID,
            completedAt: ((.time.completed // .time.created // 0)
              | if type == "number" then . else (try (fromdateiso8601 * 1000) catch 0) end)}]
       | map(select(.agent | type == "string"))

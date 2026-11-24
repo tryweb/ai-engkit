@@ -2,27 +2,30 @@
 
 ## Context
 
-The Admin test suite runs under Bun and includes tests that mock modules and mutate process-wide environment variables. The V2 CI job runs Admin tests inside the V2 image, where the runtime's `OMO_ENABLED=0` default differs from the legacy tests' V1 assumptions.
+The Admin test suite runs under Bun and includes tests that mock modules and mutate process-wide environment variables. V2 image tests run in the build image; V2 integration tests run in the Compose admin container. The V2 branch is native-only and no longer uses `OMO_ENABLED` as a mode selector.
 
 ## Problem
 
 - A module-scope `mock.module("node:fs", ...)` polluted other tests and interfered with filesystem-dependent behavior.
 - `src/admin/server.test.ts` set `process.env.ADMIN_PASSWORD` at module scope without restoring the caller's environment.
 - A partial `mock.module("../lib/agent-model-reconciler", ...)` replaced exports for later test files; CI then reported `TypeError: reconciler.suggestExplicit is not a function`.
-- LSP route tests probed the live V2 `ai-dev` container and received HTTP 409 instead of exercising V1 behavior.
-- Test files require different `OMO_ENABLED` modes, and fake Docker/environment state can leak when the full suite runs in one process.
+- LSP route tests probed the live V2 `ai-dev` container instead of injecting the OpenCode capability result.
+- Fake Docker/environment state can leak when the full suite runs in one process.
 
 ## Solution
 
 - Inject filesystem checks such as `composeFileExists` into `createRealCommandDeps()` instead of mocking `node:fs` globally.
 - In tests that set `ADMIN_PASSWORD`, save the original value and restore it in `afterAll`; delete it when it was originally unset.
 - Inject `isOpenCodeV2` into `createLspRoutes()` so route tests can supply V1/V2 outcomes without probing the live container.
-- Set the Admin CI test process to `OMO_ENABLED=1`; V2-specific tests opt into `OMO_ENABLED=0` and restore it.
+- Run V2 Admin tests without setting `OMO_ENABLED`; V2 no longer supports a legacy mode.
 - Use local test seams rather than a partial `mock.module()` replacement, and run the V2 Admin suite with `bun test --parallel=4` for worker/per-file module isolation.
+- V2 fixtures must return wrapped `/api/agent`, `/api/provider` and `/api/model` responses and use `routing.json` chains; V1 arrays, `.omo` config and OMO provider caches are not V2 fixtures.
+- Readiness returns `configured` without inference; inference verifies the actual SubAgent request against any configured chain entry, not against the Markdown assignment or a separate V1 model probe.
+- `AgentModelStateSource.readRoutingConfig` is required; do not restore the removed `readAgentModelsConfig` fallback to accommodate old mocks.
 
 ## Why It Works
 
-Dependency injection limits test doubles to the code path that needs them. A mode baseline per test file preserves V1/V2 expectations, and parallel Bun workers isolate module/global state between files. `process.env` is still mutable process-wide state and must be restored explicitly.
+Dependency injection limits test doubles to the code path that needs them. Parallel Bun workers isolate module/global state between files. `process.env` is still mutable process-wide state and must be restored explicitly.
 
 ## Side Effects / Tradeoffs
 
@@ -34,12 +37,15 @@ Dependency injection limits test doubles to the code path that needs them. A mod
 
 ## Evidence
 
+- Native-only review fixes: both `bun test --parallel=4` and CI's `bun test --isolate` passed with `1482 pass`, `10 skip`, `0 fail` across 108 files; `bun run typecheck` passed. Existing skips were not increased.
+
 - `bun test` in `/opt/admin`: `Ran 435 tests across 40 files. [8.35s]`, exit code `0`.
 - Focused server test: `3 pass`, `0 fail`.
 - Docker image rebuild and `ai-admin` recreation completed successfully.
 - `git diff --check` passed after the implementation.
 - CI run `37784678050`: Admin suite reported `1294 pass`, `0 fail`, `2 skip` across 96 files; V2 integration and typecheck passed.
-- The same four route test files passed `68/68` locally under `OMO_ENABLED=1`.
+- Historical note: the same four route test files passed `68/68` under the
+  former `OMO_ENABLED=1` legacy mode; that is not V2 release evidence.
 - The V2 integration job's runtime/diagnostics cells and Admin HTTP smoke passed.
 
 ## Related Files
@@ -54,4 +60,4 @@ Dependency injection limits test doubles to the code path that needs them. A mod
 
 ## Tags
 
-`bun` `testing` `dependency-injection` `mock-isolation` `environment-cleanup` `OMO_ENABLED` `v2-ci` `admin`
+`bun` `testing` `dependency-injection` `mock-isolation` `environment-cleanup` `v2-ci` `admin`

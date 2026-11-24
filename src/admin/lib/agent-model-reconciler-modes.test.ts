@@ -120,6 +120,8 @@ describe("reconciler suggestExplicit", () => {
     globalThis.fetch = (async () =>
       jsonRes(payload)) as unknown as typeof fetch;
     const { deps } = stubDeps([
+      { match: /\/api\/provider\b/, stdout: '{"data":[{"id":"openai"}]}' },
+      { match: /\/api\/model\b/, stdout: '{"data":[{"id":"free-a","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}},{"id":"paid-a","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}}]}' },
       { match: /jq -c '\.agents/, stdout: "{}" },
       {
         match: /\/provider\b/,
@@ -289,6 +291,8 @@ describe("reconciler suggestExplicit", () => {
     globalThis.fetch = (async () =>
       jsonRes(payload)) as unknown as typeof fetch;
     const { deps } = stubDeps([
+      { match: /\/api\/provider\b/, stdout: '{"data":[{"id":"openai"}]}' },
+      { match: /\/api\/model\b/, stdout: '{"data":[{"id":"m1","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}}]}' },
       { match: /jq -c '\.agents/, stdout: "{}" },
       {
         match: /\/provider\b/,

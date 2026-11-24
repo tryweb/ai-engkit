@@ -2,8 +2,8 @@
 
 ## Context
 
-On the V2 line (`OMO_ENABLED=0`) the Admin agent-models feature writes a
-fallback chain to `~/.config/opencode/routing.json` and mirrors the chain head
+On the V2 line the Admin agent-models feature writes a fallback chain to
+`~/.config/opencode/routing.json` and mirrors the chain head
 into `~/.config/opencode/opencode.json` via `buildRoutingWriteCommand`. Startup
 reconciliation (`scripts/reconcile-agent-models.sh` →
 `bun run /opt/admin/lib/agent-model-reconcile-cli.ts`) uses the same write path.
@@ -67,8 +67,10 @@ paths, which share `buildRoutingWriteCommand`.
 - Unit regression `src/admin/lib/agent-model-config.test.ts` executes the
   command with `sh -c` against a missing `routing.json` and asserts exit `0`
   plus both files updated.
-- Admin suite in CI mode (`OMO_ENABLED=1`): `1296 pass`, `2 skip`, `0 fail`
-  across 96 files; `bun run typecheck` clean.
+- Historical Admin suite result (`OMO_ENABLED=1`): `1296 pass`, `2 skip`,
+  `0 fail` across 96 files; this forced the legacy mode and is **not** valid V2
+  verification. V2 checks must run without the override (or with the V2-native
+  mode); `bun run typecheck` was clean.
 - CI run `37862545802` (commit `e533508`, branch `trial/opencode-v2`) passed all
   V2 jobs: `build-v2` Admin unit tests `1296 pass / 0 fail`, `compose
   isolation: PASS`; `trial-v2` log now reads

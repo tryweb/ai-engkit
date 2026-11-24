@@ -8,14 +8,19 @@ const NORMALISE_BEGIN = "# >>> lean-ctx native-tool permission normalisation >>>
 const NORMALISE_END = "# <<< lean-ctx native-tool permission normalisation <<<";
 
 describe("managed V2 startup configuration", () => {
-  for (const mode of ["0", "1"]) {
-    test(`startup preserves managed values only on V2 (OMO_ENABLED=${mode})`, async () => {
+  test("fresh V2 startup does not invoke the deferred V1 config importer", async () => {
+    const source = await readFile(new URL(ENTRYPOINT, import.meta.url), "utf8");
+    expect(source).not.toContain("migrate-omo-to-native.sh");
+  });
+
+  test("V2 startup preserves existing managed config", async () => {
       const source = await readFile(new URL(ENTRYPOINT, import.meta.url), "utf8");
       const captureStart = source.indexOf('V2_MANAGED_CONFIG="{}"');
-      const captureEnd = source.indexOf("# Always regenerate", captureStart);
-      const mergeStart = source.indexOf('if [ "${OMO_ENABLED:-1}" = "0" ]; then', source.indexOf('echo "Updating opencode.json'));
+      const captureEnd = source.indexOf("# V2 config additions", captureStart);
+      const mergeStart = source.indexOf('OPCODE_CONFIG=$(printf', source.indexOf('echo "Updating opencode.json'));
       const mergeEnd = source.indexOf('echo "$OPCODE_CONFIG" >', mergeStart);
       expect(captureStart).toBeGreaterThan(0);
+      expect(captureEnd).toBeGreaterThan(captureStart);
       expect(mergeStart).toBeGreaterThan(captureStart);
       const directory = await mkdtemp(join(tmpdir(), "v2-managed-startup-"));
       const path = join(directory, "opencode.json");
@@ -24,19 +29,22 @@ describe("managed V2 startup configuration", () => {
         await writeFile(path, JSON.stringify(original));
         const script = `${source.slice(captureStart, captureEnd)}\n${source.slice(mergeStart, mergeEnd)}\nprintf '%s' "$OPCODE_CONFIG"`;
         const process = Bun.spawn(["bash", "-c", script], {
-          env: { ...Bun.env, OMO_ENABLED: mode, OPCODE_CONFIG_FILE: path, OPCODE_CONFIG: '{"plugin":[],"mcp":{"codegraph":{"enabled":true}}}' },
+          env: {
+            ...Bun.env,
+            OPCODE_CONFIG_FILE: path,
+            OPCODE_CONFIG: '{"plugin":[],"mcp":{"codegraph":{"enabled":true}}}',
+            V2_EXTRA: '{"default_agent":"sisyphus"}',
+          },
         });
         const [stdout, stderr, exitCode] = await Promise.all([new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited]);
         expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
         const parsed: unknown = JSON.parse(stdout);
         expect(parsed).toMatchObject({ plugin: [], mcp: { codegraph: { enabled: true } } });
-        if (mode === "0") expect(parsed).toMatchObject({ agent: original.agent, providers: original.providers });
-        else expect(parsed).not.toHaveProperty("providers");
+        expect(parsed).toMatchObject({ agent: original.agent, providers: original.providers });
       } finally {
         await rm(directory, { recursive: true, force: true });
       }
     });
-  }
 });
 
 describe("lean-ctx native-tool permission normalisation", () => {

@@ -73,14 +73,10 @@ export interface AgentModelsDeps {
   readonly reconcileLockPath?: string;
 }
 
-export const OMO_CONFIG = "~/.omo/omo.jsonc";
 export const MANAGED_OPENCODE_DIR = "$HOME/.config/openchamber/managed-opencode";
-export const CONFIGURABLE_NATIVE_AGENTS = ["general", "plan"] as const;
 export const VARIANTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-// ── Native routing (v2) — flag-gated via OMO_ENABLED === "0" ──
-// V1 path (OMO_ENABLED=1 or unset) : OMO_CONFIG / CONFIGURABLE_NATIVE_AGENTS(2) remain canonical.
-// V2 path (OMO_ENABLED=0)          : ROUTING_CONFIG + OPENCODE_JSON + configurable subagents.
+// V2 native routing configuration.
 export const ROUTING_CONFIG = "~/.config/opencode/routing.json";
 export const OPENCODE_JSON = "~/.config/opencode/opencode.json";
 
@@ -108,14 +104,6 @@ export const V2_HIDDEN_MECHANISM_AGENTS = ["build", "compaction", "title", "summ
 // V2 built-ins that share the same chain namespace (B1 §4.3) — kept separate
 // from NATIVE12 for UI filtering but valid as routing keys.
 export const V2_BUILTIN_AGENTS = ["build", "general", "scout", "compaction", "title", "summary"] as const;
-
-export function isNativeV2Enabled(): boolean {
-  return process.env.OMO_ENABLED === "0";
-}
-
-export function getConfigurableNativeAgents(): readonly string[] {
-  return isNativeV2Enabled() ? V2_SUBAGENT_AGENTS : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
-}
 
 // ── Chain types per trial/B1-ROUTING-SPEC.md:§4.4 ──
 export interface ChainEntry {

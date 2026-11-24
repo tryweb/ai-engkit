@@ -8,9 +8,8 @@ import { readAgentModelPolicy } from "./agent-model-policy";
 import { readPinnedAgents } from "./agent-model-pinned";
 import { capabilityScore, compareReferences, suggestForMode, type PolicyCapabilityCatalog, type SuggestionMode } from "./agent-model-suggestion-policy";
 import { profileForAgent } from "./agent-model-role-profiles";
-import { parseModelReference, probeModel, pruneStaleProbeCacheForProvider, type ProbeResult } from "./model-probe";
+import { parseModelReference, probeModel, type ProbeResult } from "./model-probe";
 import {
-  CONFIGURABLE_NATIVE_AGENTS,
   MANAGED_OPENCODE_DIR,
   V2_SUBAGENT_AGENTS,
   V2_HIDDEN_MECHANISM_AGENTS,
@@ -66,13 +65,13 @@ function sameEntries(left: readonly FallbackModelEntry[], right: readonly Fallba
   });
 }
 
-function resultForNoop(entries: readonly FallbackModelEntry[], v2: boolean): ApplyResult {
+function resultForNoop(entries: readonly FallbackModelEntry[]): ApplyResult {
   const resolved = entries[0]?.model;
   if (resolved === undefined) return { ok: true, status: "cleared", resolved: null, requestVerified: null };
   const parsed = parseModelReference(resolved);
   return {
     ok: true,
-    status: v2 ? "configured" : "verified",
+    status: "configured",
     resolved: parsed === null ? null : { providerID: parsed.providerID, modelID: parsed.modelID },
     requestVerified: null,
   };
@@ -220,27 +219,23 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     return null;
   }
 
-  function isV2(): boolean { return process.env.OMO_ENABLED === "0"; }
-
   async function namesAndResolved(
     password: string,
-    config: Readonly<Record<string, { readonly models?: readonly FallbackModelEntry[] }>> | RoutingConfig,
+    config: RoutingConfig,
   ): Promise<{ readonly names: readonly string[]; readonly resolved: ReadonlyMap<string, ResolvedModel> }> {
     const [names, resolvedMap] = await Promise.all([
       lib.fetchSubagentNames(password),
       lib.fetchResolvedAgentModels(password),
     ]);
-    const keys = isV2() && (config as RoutingConfig).chains !== undefined
-      ? Object.keys((config as RoutingConfig).chains)
-      : Object.keys(config as Record<string, unknown>);
+    const keys = Object.keys(config.chains);
     const knownKeys = new Set(keys);
-    const gatingAgents: readonly string[] = isV2() ? V2_SUBAGENT_AGENTS : (CONFIGURABLE_NATIVE_AGENTS as readonly string[]);
+    const gatingAgents: readonly string[] = V2_SUBAGENT_AGENTS;
     const configurable = new Set<string>();
     for (const name of names) {
       const key = displayNameToKey(name, knownKeys) ?? name.toLowerCase();
-      if (isV2() ? (gatingAgents as readonly string[]).includes(key) : ((gatingAgents as readonly string[]).includes(key) || knownKeys.has(key))) configurable.add(key);
+      if (gatingAgents.includes(key)) configurable.add(key);
     }
-    if (isV2()) {
+    {
       for (const agent of V2_SUBAGENT_AGENTS) configurable.add(agent);
       for (const k of keys) if ((gatingAgents as readonly string[]).includes(k)) configurable.add(k);
       for (const k of V2_HIDDEN_MECHANISM_AGENTS) configurable.delete(k);
@@ -256,15 +251,12 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
   async function runOnce(): Promise<ReconcileSummary> {
     const password = lib.getServerPassword();
     if (password === null) return { changed: 0, applied: 0, failed: 0, agents: [], results: [] };
-    const v2 = isV2();
-    const config = v2 && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function"
-      ? await (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig()
-      : await lib.readAgentModelsConfig();
+    const config = await lib.readRoutingConfig();
     const [snapshot, state] = await Promise.all([
       lib.fetchProviderSnapshot(password),
-      namesAndResolved(password, config as unknown as Record<string, { readonly models?: readonly FallbackModelEntry[] }>),
+      namesAndResolved(password, config),
     ]);
-    if (v2) {
+    {
       const policyMode = await readAgentModelPolicy(deps);
       const capabilities = await fetchCapabilityCatalog(deps, password);
       const metadata = await fetchModelMetadata();
@@ -433,92 +425,6 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
         results,
       };
     }
-    await Promise.all(snapshot.connectedProviders.map((providerID) => pruneStaleProbeCacheForProvider(deps, providerID)));
-    const capabilities = await fetchCapabilityCatalog(deps, password);
-    const connected = new Set(snapshot.connectedProviders);
-    const changed: AgentModelChange[] = [];
-    const decisions: Array<Record<string, unknown>> = [];
-    const getChain = (agent: string): readonly ChainEntry[] | readonly FallbackModelEntry[] => {
-      if (v2 && (config as RoutingConfig).chains !== undefined) return ((config as RoutingConfig).chains[agent]?.chain ?? []) as readonly ChainEntry[];
-      return ((config as Record<string, { models?: readonly FallbackModelEntry[] }>)[agent]?.models ?? []);
-    };
-    for (const agent of state.names) {
-      const configured = getChain(agent) as readonly FallbackModelEntry[];
-      const primary = configured[0];
-      const resolved = state.resolved.get(agent);
-      const resolvedRef = resolved === undefined ? null : `${resolved.providerID}/${resolved.modelID}`;
-      let observedStatus = "not_checked";
-      let desired: readonly FallbackModelEntry[] | null = null;
-      if (primary !== undefined) {
-        const parsed = parseModelReference(primary.model);
-        const status = parsed === null
-          ? await probe(primary.model)
-          : !connected.has(parsed.providerID) ? null : await probe(primary.model);
-        observedStatus = status?.status ?? "not_checked";
-        if (status?.status === "healthy" || (status !== null && !["unavailable", "retired", "wrong_endpoint"].includes(status.status))) {
-          desired = [primary];
-        } else {
-          const candidates = sortedCandidates(agent, snapshot.catalog, capabilities, null);
-          const selected = await pickFirstHealthy(candidates);
-          if (selected !== null) desired = [{ model: selected }];
-          else desired = null;
-        }
-      } else {
-        if (resolved !== undefined && resolvedRef !== null && connected.has(resolved.providerID)) {
-          const status = await probe(resolvedRef);
-          observedStatus = status.status;
-          if (status.status === "healthy" || !["unavailable", "retired", "wrong_endpoint"].includes(status.status)) {
-            desired = [];
-          }
-        }
-        if (desired === null) {
-          const candidates = sortedCandidates(agent, snapshot.catalog, capabilities, null);
-          const selected = await pickFirstHealthy(candidates);
-          if (selected !== null) desired = [{ model: selected }];
-          else desired = null;
-        }
-      }
-      const changedForAgent = desired !== null && !sameEntries(configured, desired);
-      const decision = desired === null
-        ? "no_usable_model"
-        : changedForAgent
-          ? primary === undefined ? "configure_candidate" : "replace_unusable_configured"
-          : primary === undefined ? "keep_healthy_assigned" : "keep_healthy_configured";
-      decisions.push({
-        agent,
-        configured: primary?.model ?? null,
-        assigned: resolvedRef,
-        probe: observedStatus,
-        desired: desired?.[0]?.model ?? null,
-        changed: changedForAgent,
-        decision,
-      });
-      if (changedForAgent && desired !== null) changed.push({ agent, entries: desired });
-    }
-    for (const decision of decisions) {
-      console.error(`[agent-models] decision ${JSON.stringify(decision)}`);
-    }
-    let failed = 0;
-    const results: ReconcileAgentResult[] = [];
-    const batchResults = await lib.applyAndVerifyBatch(changed, "inference");
-    for (const { agent } of changed) {
-      const result = batchResults.get(agent)
-        ?? { ok: false, status: "write_failed" as const, error: "agent model batch returned no result" };
-      if (!result.ok) failed += 1;
-      results.push({
-        agent,
-        status: result.status,
-        error: "error" in result ? result.error ?? null : null,
-        resolved: "resolved" in result ? result.resolved ?? null : null,
-      });
-    }
-    return {
-      changed: changed.length,
-      applied: changed.length - failed,
-      failed,
-      agents: changed.map(({ agent }) => agent),
-      results,
-    };
   }
 
   async function suggestExplicit(
@@ -541,10 +447,7 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
       fetchModelMetadata(metadataOptions),
       lib.fetchProviderSnapshot(password),
       (async () => {
-        const cfg = isV2() && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function"
-          ? await (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig()
-          : await lib.readAgentModelsConfig();
-        return namesAndResolved(password, cfg as unknown as Record<string, { readonly models?: readonly FallbackModelEntry[] }>);
+        return namesAndResolved(password, await lib.readRoutingConfig());
       })(),
       fetchCapabilityCatalog(deps, password),
     ]);
@@ -581,12 +484,10 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
     if (password === null) return new Map();
     probes.clear();
     probeCount = 0;
-    const config = isV2() && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function"
-      ? await (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig()
-      : await lib.readAgentModelsConfig();
+    const config = await lib.readRoutingConfig();
     const [snapshot, state] = await Promise.all([
       lib.fetchProviderSnapshot(password),
-      namesAndResolved(password, config as unknown as Record<string, { readonly models?: readonly FallbackModelEntry[] }>),
+      namesAndResolved(password, config),
     ]);
     const allowed = providers === null ? null : new Set(providers);
     const capabilities = await fetchCapabilityCatalog(deps, password);
@@ -631,25 +532,16 @@ export function createAgentModelReconciler(deps: AgentModelsDeps) {
   }
 
   async function applyAgent(agent: string, entries: readonly FallbackModelEntry[], verification: VerificationMode = "readiness"): Promise<ApplyResult> {
-    const v2 = isV2();
     const fallback: ApplyResult = verification === "inference"
       ? { ok: false, status: "unverified", error: "verification was skipped because model reconciliation is already active" }
-      : resultForNoop(entries, v2);
+      : resultForNoop(entries);
     return withLock(async () => {
-      if (v2 && typeof (lib as unknown as { readRoutingConfig?: () => Promise<RoutingConfig> }).readRoutingConfig === "function") {
-        const routing = await (lib as unknown as { readRoutingConfig: () => Promise<RoutingConfig> }).readRoutingConfig();
+        const routing = await lib.readRoutingConfig();
         const current = (routing.chains[agent]?.chain ?? []) as readonly FallbackModelEntry[];
         if (sameEntries(current, entries)) {
-          return verification === "inference" ? lib.verifyAgent(agent, entries, verification) : resultForNoop(entries, v2);
+          return verification === "inference" ? lib.verifyAgent(agent, entries, verification) : resultForNoop(entries);
         }
         return lib.applyAndVerify(agent, entries, verification);
-      }
-      const config = await lib.readAgentModelsConfig();
-      const current = config[agent]?.models ?? [];
-      if (sameEntries(current, entries)) {
-        return verification === "inference" ? lib.verifyAgent(agent, entries, verification) : resultForNoop(entries, v2);
-      }
-      return lib.applyAndVerify(agent, entries, verification);
     }, fallback);
   }
 

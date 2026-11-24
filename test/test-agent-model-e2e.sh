@@ -2,10 +2,12 @@
 set -uo pipefail
 
 # ============================================================
-# Agent Model E2E Test
+# Historical V1-only Agent Model E2E Test
+# This script exercises the retired OMO config/runtime path; do not run it
+# against a V2 container. V2 routing uses routing.json and native OpenCode APIs.
 # Usage: ./test/test-agent-model-e2e.sh [container_name]
 #
-# Proves native and OMO subagent model paths end-to-end:
+# Proves native and OMO subagent model paths end-to-end on V1:
 #   set → restart → live resolution → child execution → restore
 # Restoration and test-session cleanup are trap-guaranteed.
 # ============================================================

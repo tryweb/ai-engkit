@@ -16,7 +16,6 @@ ARG BUN_VERSION=1.4.5
 ARG GH_VERSION=2.105.0
 ARG MARKSMAN_VERSION=2026-02-08
 ARG LEANCTX_VERSION=3.12.7
-ARG OH_MY_OPENAGENT_VERSION=4.19.4
 ARG OPENSPEC_VERSION=2.1.1
 ARG CODEGRAPH_VERSION=1.6.4
 ARG AI_ENGKIT_VERSION=dev
@@ -246,7 +245,6 @@ PY
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION}
 ENV PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
-ENV OH_MY_OPENAGENT_VERSION=${OH_MY_OPENAGENT_VERSION}
 # cdn.playwright.dev intermittently answers HTTP 400, so the fetch is retried —
 # but never masked: on failure the build must fail rather than ship an image whose
 # browser payload is missing. PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD is deliberately NOT
@@ -289,14 +287,8 @@ USER root
 # 完整 MCP 設定由 entrypoint.d/02-init-config.sh 在每次啟動時重新生成。
 RUN <<'EOF'
 mkdir -p /etc/opencode
-# The V1 line declares the oh-my-openagent plugin; the V2 line carries no OMO
-# (D1) and must not reference it, so its default config ships an empty plugin
-# list. OPENCODE_CLI_PACKAGE is the V1/V2 discriminator used throughout this file.
-if [ "$OPENCODE_CLI_PACKAGE" = "@opencode/cli" ]; then
-  PLUGIN_JSON='[]'
-else
-  PLUGIN_JSON=$(printf '%s' "oh-my-openagent@${OH_MY_OPENAGENT_VERSION}" | jq -R . | jq -s .)
-fi
+# V2 repo ships no OMO runtime: default config carries an empty plugin list.
+PLUGIN_JSON='[]'
 jq -n \
   --argjson plugins "$PLUGIN_JSON" \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
@@ -365,8 +357,7 @@ RUN chown -R ${USERNAME}:${USERNAME} /opt/opencode/baked-skills
 # ~/.config/opencode/plugins/ does NOT get `@opencode/plugin` resolved by the
 # runtime ("Cannot find package '@opencode/plugin'"); each bundle must inline
 # it. Built here with the matching @opencode/plugin version; single .js files
-# ship, and entrypoint.d/08-deploy-v2-plugins.sh deploys them only on the V2
-# line (OMO_ENABLED=0). Sources: src/v2-plugins/b1-routing,
+# ship, and entrypoint.d/08-deploy-v2-plugins.sh deploys them on the V2 runtime. Sources: src/v2-plugins/b1-routing,
 # src/v2-plugins/m3-enforcer (see docs/knowledge/tooling/v2-plugin-bake.md plus
 # trial/B1-VERIFY.md, trial/M3-VERIFY.md). The build dir is discarded.
 # Runs in the root section (USER root above): /opt/opencode is app-owned here,

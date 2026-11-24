@@ -1,5 +1,7 @@
 # Native Agent Bridge Reconcile Race (OMO → opencode.json Stale After Startup Reconcile)
 
+> Historical V1-to-native transition incident; current V2 routing is native.
+
 ## Context
 
 `ai-dev` startup has two phases that must agree on native agent models (`general`, `plan`):

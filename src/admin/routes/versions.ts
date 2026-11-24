@@ -2,7 +2,6 @@ import { readFileSync } from "fs";
 import { Hono } from "hono";
 import { execInAiDev, dockerCommand, getAiDevContainerRef, getSelfContainerRef } from "../lib/docker";
 import { readEnvFile } from "../lib/env";
-import { isNativeV2Enabled } from "../lib/agent-model-types";
 import type { VersionsViewData } from "../views/versions";
 
 /**
@@ -81,15 +80,14 @@ export function isRollingV2Dev(current: string, configured: string | null): bool
 
 export function resolveStableTagFromEnv(): string {
   const configured = readEnvFile().AI_ENGKIT_VERSION?.trim() ?? null;
-  // Defer current resolution to async check; for buildLatest we use isNativeV2Enabled plus rolling check via env only
   // If AI_ENGKIT_VERSION is v2-dev, that opts into rolling channel regardless of line.
   if (configured === "v2-dev") return "v2-dev";
-  return isNativeV2Enabled() ? "v2" : "latest";
+  return "v2";
 }
 
 export function resolveUpdateStableTag(current: string, configured: string | null): string {
   if (isRollingV2Dev(current, configured)) return "v2-dev";
-  return isNativeV2Enabled() ? "v2" : "latest";
+  return "v2";
 }
 
 async function getRemoteDigest(tag?: string): Promise<string | null> {
@@ -255,7 +253,7 @@ versions.get("/api/versions/image", async (c) => {
  * - Playwright is probed via the installed `playwright` binary, never bare
  *   `bunx playwright` (which would also resolve npm latest on a cold cache).
  */
-export function buildVersionCategories(isV2: boolean): Record<string, Record<string, string>> {
+export function buildVersionCategories(): Record<string, Record<string, string>> {
   return {
     core: {
       "OpenCode": "opencode --version 2>/dev/null || echo 'unavailable'",
@@ -281,16 +279,12 @@ export function buildVersionCategories(isV2: boolean): Record<string, Record<str
     skills: {
       "superpowers": "jq -r .version /opt/opencode/baked-plugins/superpowers/package.json 2>/dev/null || echo 'unavailable'",
     },
-    ...(isV2 ? {} : {
-      plugin: {
-        "oh-my-openagent": "bunx oh-my-openagent --version 2>/dev/null || echo 'unavailable'",
-      },
-    }),
+    // V2-only: oh-my-openagent plugin probe (V1 only) omitted.
   };
 }
 
 versions.get("/api/versions", async (c) => {
-  const categoryCommands = buildVersionCategories(isNativeV2Enabled());
+  const categoryCommands = buildVersionCategories();
 
   const result: Record<string, Record<string, string>> = {};
   for (const [category, commands] of Object.entries(categoryCommands)) {

@@ -80,8 +80,8 @@ export async function createProject(
     }
     await command(
       `cd ${projectDir(workspaceRoot, name)} && ` +
-      `grep -qs '^\\.omo/' .gitignore 2>/dev/null || ` +
-      `printf '\\n# AI-EngKit system directories\\n.omo/\\n.playwright-mcp/\\n.codegraph/\\n.sisyphus/\\n.tmp/\\n.env\\nnode_modules/\\nbackups/\\n' >> .gitignore`,
+      `grep -qs '^\\.playwright-mcp/' .gitignore 2>/dev/null || ` +
+      `printf '\\n# AI-EngKit system directories\\n.playwright-mcp/\\n.codegraph/\\n.sisyphus/\\n.tmp/\\n.env\\nnode_modules/\\nbackups/\\n' >> .gitignore`,
       10_000,
     );
   } else if (gitInit) {
@@ -97,7 +97,7 @@ export async function createProject(
     }
     await command(
       `cd ${projectDir(workspaceRoot, name)} && ` +
-      `printf '%s\\n' '' '# AI-EngKit system directories' '.omo/' '.playwright-mcp/' '.codegraph/' '.sisyphus/' '.tmp/' '.env' 'node_modules/' 'backups/' > .gitignore`,
+      `printf '%s\\n' '' '# AI-EngKit system directories' '.playwright-mcp/' '.codegraph/' '.sisyphus/' '.tmp/' '.env' 'node_modules/' 'backups/' > .gitignore`,
       10_000,
     );
     await command(

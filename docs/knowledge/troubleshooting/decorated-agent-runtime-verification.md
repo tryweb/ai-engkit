@@ -1,5 +1,7 @@
 # Decorated Agent Runtime Verification
 
+> Historical V1/OMO investigation; the V2 runtime uses native OpenCode agents.
+
 ## Context
 
 Agent model configuration is keyed by short OMO names such as `metis`, `momus`, and `sisyphus-junior`. Managed OpenCode can expose the same agents through `/agent` with decorated runtime names such as `Metis - Plan Consultant`.

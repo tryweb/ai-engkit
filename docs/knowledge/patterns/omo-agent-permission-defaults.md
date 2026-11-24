@@ -1,5 +1,8 @@
 # OMO Unified Agent Permission Defaults
 
+> Historical V1-only implementation record; V2 agent permissions are defined
+> in `.opencode/agents/*.md` and OpenCode configuration.
+
 ## Context
 
 ai-engkit uses oh-my-openagent (OMO) which registers 11 agents (explore, oracle, librarian, sisyphus, etc.). Each agent needs explicit permission configuration to access lean-ctx tools (`ctx_shell`, `ctx_search`, `ctx_read`). Previously, agent permissions were embedded inline in the Dockerfile and entrypoint script's jq templates, making maintenance difficult — any permission change required a full image rebuild.

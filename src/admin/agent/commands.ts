@@ -360,8 +360,6 @@ function parseSecretSet(payload: unknown): SecretSetPayload | null {
 
 const AGENT_MODEL_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
-function isV2Commands(): boolean { return process.env.OMO_ENABLED === "0"; }
-
 function parseAgentModelSet(payload: unknown): AgentModelSetPayload | null {
   if (!isRecord(payload)) return null;
   const agent = payload["agent"];
@@ -371,14 +369,11 @@ function parseAgentModelSet(payload: unknown): AgentModelSetPayload | null {
   if (!Array.isArray(chainRaw)) {
     if (validateFallbackModels(payload) !== null) return null;
   } else {
-    if (isV2Commands()) {
-      // An empty chain is the "clear the configured model" command (applyAgentModel
-      // reports status "cleared"); validateAgentChain requires 1..10 entries, so
-      // only non-empty chains are validated here.
-      if (chainRaw.length > 0 && validateAgentChain(chainRaw) !== null) return null;
-    } else {
-      if (validateFallbackModels({ entries: chainRaw }) !== null) return null;
-    }
+    // V2-only: validate as native agent chain. An empty chain is the "clear the
+    // configured model" command (applyAgentModel reports status "cleared");
+    // validateAgentChain requires 1..10 entries, so only non-empty chains are
+    // validated here.
+    if (chainRaw.length > 0 && validateAgentChain(chainRaw) !== null) return null;
   }
   const rawEntries = (raw.chain ?? raw.entries) as unknown;
   const entries: FallbackModelEntry[] = Array.isArray(rawEntries)

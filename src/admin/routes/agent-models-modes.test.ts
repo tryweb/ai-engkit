@@ -1,19 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { stubDeps, listHandlers } from "./agent-models-test-support";
+import { stubDeps, listHandlers, nativeFixture } from "./agent-models-test-support";
 import { clearModelMetadataCache } from "../lib/model-metadata";
 
 const { createAgentModelsRoutes } = await import("./agent-models");
 
-let previousOmoEnabled: string | undefined;
+const originalFetch = globalThis.fetch;
 beforeEach(() => {
-  previousOmoEnabled = process.env.OMO_ENABLED;
-  process.env.OMO_ENABLED = "1";
   clearModelMetadataCache();
 });
 
 afterEach(() => {
-  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
-  else process.env.OMO_ENABLED = previousOmoEnabled;
+  globalThis.fetch = originalFetch;
+  clearModelMetadataCache();
 });
 
 function jsonRes(body: unknown, status = 200): Response {
@@ -131,6 +129,8 @@ describe("explicit mode schema and provider scope", () => {
     globalThis.fetch = (async () => jsonRes(providers)) as unknown as typeof fetch;
     // need provider capabilities to pass filter: tool_call true etc
     const handlers = [
+      { match: /\/api\/provider\b/, stdout: '{"data":[{"id":"openai"},{"id":"opencode-go"}]}' },
+      { match: /\/api\/model\b/, stdout: '{"data":[{"id":"free-model","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}},{"id":"kimi-k3","providerID":"opencode-go","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}}]}' },
       {
         match: /\/provider\b/,
         stdout: JSON.stringify({
@@ -209,6 +209,8 @@ describe("explicit mode schema and provider scope", () => {
     };
     globalThis.fetch = (async () => jsonRes(providersPayload)) as unknown as typeof fetch;
     const handlers = [
+      { match: /\/api\/provider\b/, stdout: '{"data":[{"id":"openai"},{"id":"opencode-go"}]}' },
+      { match: /\/api\/model\b/, stdout: '{"data":[{"id":"a-model","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}},{"id":"b-model","providerID":"opencode-go","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}}]}' },
       {
         match: /\/provider\b/,
         stdout: JSON.stringify({
@@ -303,6 +305,8 @@ describe("metadata unavailable", () => {
     };
     globalThis.fetch = (async () => jsonRes(payload)) as unknown as typeof fetch;
     const handlers = [
+      { match: /\/api\/provider\b/, stdout: '{"data":[{"id":"openai"}]}' },
+      { match: /\/api\/model\b/, stdout: '{"data":[{"id":"paid-model","providerID":"openai","enabled":true,"status":"active","capabilities":{"reasoning":true,"tools":true}}]}' },
       {
         match: /\/provider\b/,
         stdout: JSON.stringify({
@@ -359,21 +363,20 @@ describe("no probe/write/restart in explicit mode", () => {
 
 describe("agent verification semantics", () => {
   test("readiness does not report an unprobed agent as healthy", async () => {
-    const { deps, cleanup } = stubDeps(listHandlers());
+    const { deps } = nativeFixture();
     const app = createAgentModelsRoutes(deps);
     const response = await app.request("http://localhost/api/agent-models/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agents: ["plan"], verification: "readiness" }),
+      body: JSON.stringify({ agents: ["general"], verification: "readiness" }),
     });
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.results.plan.status).toBe("configured");
-    expect(body.results.plan.reason).toContain("no SubAgent request was sent");
+    expect(body.results.general.status).toBe("configured");
+    expect(body.results.general.reason).toContain("no SubAgent request was sent");
     expect(body.summary.configured).toBe(1);
     expect(body.summary.healthy).toBe(0);
-    cleanup();
   });
 
   test("V2 inference verifies the configured SubAgent route, not a model pinned to title", async () => {

@@ -13,8 +13,7 @@ You are Atlas — coordination and mapping execution agent.
 - Maintain structural awareness during large refactors and migrations
 
 ## Tool Restrictions
-Mirrors `.opencode/omo.jsonc.default` `atlas: {}` (no explicit deny) and Execution/coordination group `allow | allow | allow | allow`
-- No `permission` block — full allow
+- No restrictive permissions are declared; this agent has full tool access
 - Equivalent to executor family (Sisyphus, Hephaestus, Sisyphus-Junior)
 
 ## V2 Compatibility Notes

@@ -1,5 +1,7 @@
 # opencode Session 自動封存（30 天機制）診斷與還原
 
+> Historical V1/OMO package investigation; V2 does not ship or load that plugin.
+
 ## Context
 
 opencode server 管理 session 的 SQLite 資料庫位於 `/home/devuser/.local/share/opencode/opencode.db`（container 內）。OpenChamber（port 3000）透過 opencode server（`opencode serve --hostname 127.0.0.1 --port 36147`）操作 session。2026-08 檢查發現 806 個 session 被自動標記 `time_archived`，從 OpenChamber / opencode 的未封存列表消失。

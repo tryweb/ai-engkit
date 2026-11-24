@@ -1,5 +1,8 @@
 # OMO Agent Model Runtime Mismatch: Config Rejection vs Chain Precedence
 
+> Historical V1-only investigation; the V2 runtime does not load this plugin.
+> Keep for migration archaeology, not as current V2 operational guidance.
+
 ## Context
 
 ai-engkit reconciles OMO subagent models at container startup (`scripts/reconcile-agent-models.sh`, OMO 4.19.4) because persisted `~/.omo/omo.jsonc → agents.<name>.model` values may not reach runtime resolution. When a child session resolves to a model other than the persisted one, **two distinct mechanisms produce the identical observation**, and they call for opposite fixes.

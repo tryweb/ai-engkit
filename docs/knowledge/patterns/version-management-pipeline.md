@@ -1,5 +1,8 @@
 # Local Version Management Pipeline
 
+> OMO pin/schema-sync examples below describe the retired V1 pipeline and are
+> historical; the V2 branch does not track or install OMO.
+
 ## Context
 
 ai-engkit pins all dependency versions in `Dockerfile` as ARGs (DOCKER_VERSION,

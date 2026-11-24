@@ -27,13 +27,12 @@ Single filename end to end (V1 shape, V2 name):
 | Host checkout file | `.env.v2` (from `.env.v2.example`) | created by `install-v2.sh` (`ENV_FILE=".env.v2"`) |
 | ai-dev container env | `.env.v2` (relative `env_file`) | resolves against the checkout on host runs, against `/opt/ai-engkit` on Admin-side runs — the same filename exists in both |
 | ai-admin read/write | `/opt/ai-engkit/.env.v2` | single bind `./.env.v2:/opt/ai-engkit/.env.v2:rw` |
-| Compose `--env-file` flags | line-aware `resolveEnvPath()` | `.env.v2` on V2, `.env` on V1 |
+| Compose `--env-file` flags | `resolveEnvPath()` | `.env.v2` on V2 |
 | V2 dev stack / CI | `.env` (from `.env.v2.example`) | `docker-compose.v2.dev.yml` hard-requires `.env`; CI runs `cp .env.v2.example .env` |
 
-Admin code resolves the path per line (`resolveEnvPath()` in
-`src/admin/lib/env.ts`, backed by `isNativeV2Enabled()`), so the same image
-keeps reading `/opt/ai-engkit/.env` on V1. Call sites evaluate it at call
-time, never at module load, so tests can toggle lines via `OMO_ENABLED`.
+Admin code resolves the V2 path (`resolveEnvPath()` in `src/admin/lib/env.ts`)
+unconditionally; this branch no longer selects V1 behavior through
+`OMO_ENABLED`.
 
 Password semantics are unchanged and independent of filename:
 

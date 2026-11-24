@@ -1,5 +1,8 @@
 # V2 admin live integration: false 401 / unreachable failures
 
+> Historical diagnostics for the former OMO_ENABLED-based V1/V2 Admin split.
+> V2 Admin now uses `.env.v2` unconditionally.
+
 ## Context
 
 `test/test-v2-admin-integration.sh` is the Admin live-check gate for the

@@ -1,5 +1,10 @@
 # OMO unified config
 
+> **Historical V1-only specification.** This spec describes the retired OMO
+> runtime and does not apply to the V2 branch. V2 does not install, configure,
+> or invoke the OMO plugin; only the explicit legacy-data import in
+> `scripts/migrate-omo-to-native.sh` remains.
+
 ## Purpose
 
 Ship pinned OMO agent defaults in a unified config while preserving user customizations and preventing legacy migration failures.

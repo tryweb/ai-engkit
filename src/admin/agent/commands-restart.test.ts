@@ -1,19 +1,7 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createRealCommandDeps } from "./commands";
 import { resolveEnvPath } from "../lib/env";
 import type { EffectiveCompose } from "../lib/compose-overlay";
-
-// These tests cover the V1 line contract (compose.yml, :latest image,
-// .env). The dev stack exports OMO_ENABLED=0, so pin the marker instead of
-// inheriting the host env.
-const PREV_OMO_ENABLED = process.env.OMO_ENABLED;
-beforeAll(() => {
-  process.env.OMO_ENABLED = "1";
-});
-afterAll(() => {
-  if (PREV_OMO_ENABLED === undefined) delete process.env.OMO_ENABLED;
-  else process.env.OMO_ENABLED = PREV_OMO_ENABLED;
-});
 
 // Focused tests for the REAL restartContainer implementation inside
 // createRealCommandDeps (the dispatch-level tests in commands.test.ts mock
@@ -57,7 +45,7 @@ const restartDeps = {
 
 // Force the compose branch even in dev environments where
 // /opt/ai-engkit/compose.yml does not exist.
-const PULL_CMD = "pull ghcr.io/tryweb/ai-engkit:latest 2>&1";
+const PULL_CMD = "pull ghcr.io/tryweb/ai-engkit:v2 2>&1";
 const aiDevComposeCmd = () =>
   `compose -p test-proj --env-file ${resolveEnvPath()} -f /opt/ai-engkit/compose.yml up -d --force-recreate ai-dev 2>&1`;
 const aiAdminHelperArgs = () => {
@@ -68,7 +56,7 @@ const aiAdminHelperArgs = () => {
   "-v", `${envSource}:${envSource}:ro`,
   "-v", "/root/docker-compose.yml:/root/docker-compose.yml:ro",
   "-v", "/var/run/docker.sock:/var/run/docker.sock",
-  "ghcr.io/tryweb/ai-engkit:latest",
+  "ghcr.io/tryweb/ai-engkit:v2",
   "compose", "-p", "test-proj",
   "--env-file", envSource,
   "-f", "/root/docker-compose.yml",
@@ -131,7 +119,7 @@ describe("real restartContainer", () => {
       "-v", `${bindSources[resolveEnvPath()] ?? "/root/.env"}:${bindSources[resolveEnvPath()] ?? "/root/.env"}:ro`,
       "-v", "/root/admin-data/upgrade-base.yml:/root/admin-data/upgrade-base.yml:ro",
       "-v", "/var/run/docker.sock:/var/run/docker.sock",
-      "ghcr.io/tryweb/ai-engkit:latest",
+      "ghcr.io/tryweb/ai-engkit:v2",
       "compose", "-p", "test-proj",
       "--project-directory", "/root",
       "--env-file", bindSources[resolveEnvPath()] ?? "/root/.env",
@@ -169,19 +157,13 @@ describe("real restartContainer", () => {
 });
 
 describe("real restartContainer (V2 line)", () => {
-  let savedOmo: string | undefined;
-  beforeAll(() => {
-    savedOmo = process.env.OMO_ENABLED;
-    process.env.OMO_ENABLED = "0";
-  });
-  afterAll(() => {
-    if (savedOmo === undefined) delete process.env.OMO_ENABLED;
-    else process.env.OMO_ENABLED = savedOmo;
-  });
-
   const V2_PULL_CMD = "pull ghcr.io/tryweb/ai-engkit:v2 2>&1";
 
   test("ai-admin pulls the v2 image, then recreates from compose via a helper container", async () => {
+    bindSources = {
+      "/opt/ai-engkit/.env.v2": "/root/.env.v2",
+      "/opt/ai-engkit/compose.yml": "/root/docker-compose.yml",
+    };
     dockerCalls.length = 0;
     runCommandCalls.length = 0;
     const deps = createRealCommandDeps(() => true, restartDeps);

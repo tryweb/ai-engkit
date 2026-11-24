@@ -115,8 +115,8 @@ including foreground calls that automatically detach.
 - If the job fails, is cancelled, times out, or becomes unavailable, resolve
   or report that condition before proceeding. Do not blindly rerun a
   state-changing command whose outcome is unknown.
-- `shell_*` IDs belong to lean-ctx polling, not OMO `background_output`;
-  OMO `bg_*` task notifications are a separate mechanism.
+- `shell_*` IDs belong to lean-ctx polling; do not confuse them with other
+  background-job identifiers.
 
 Tracking: https://github.com/yvgude/lean-ctx/issues/1722
 

@@ -128,23 +128,28 @@ ADMIN_V2_URL="${BASE_ADMIN:-http://localhost:8083}" \
 ADMIN_PASSWORD=testadmin123 bash test/test-v2-admin-integration.sh
 
 # === 3. Admin suite — run exactly as CI does ===
-# build-v2 runs the plain form inside the image; test-v2 adds OMO_ENABLED=1 and
-# --parallel=4 for worker/per-file module isolation. A single-process run
-# WITHOUT --parallel leaks module state and shows spurious failures
+# build-v2 runs the plain form inside the image. test-v2 runs in the Compose
+# admin container. V2 Admin is native-only; do not set OMO_ENABLED.
+# --parallel=4 provides worker/per-file module isolation
 # (see docs/knowledge/patterns/admin-test-isolation.md).
 docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev \
   --cwd /opt/admin test
-docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2dev \
+docker exec ai-engkit-admin-v2dev \
   bun --cwd /opt/admin test --parallel=4
 docker exec ai-engkit-admin-v2dev bun run --cwd /opt/admin typecheck
 
 # To exercise HEAD from the repo checkout instead of the baked image:
-#   (cd src/admin && OMO_ENABLED=1 bun test --parallel=4 && bun run typecheck)
+#   (cd src/admin && bun test --parallel=4 && bun run typecheck)
 
 # === 4. OpenChamber update guard regression (CI build-v2) ===
 docker run --rm --pull never -v "$PWD:/repo" -w /repo \
   --entrypoint /bin/bash ai-engkit-ai-v2dev test/test-openchamber-update-guard.sh
 ```
+
+On a Docker-out-of-Docker host, the Docker daemon may not share this
+container's checkout path, so that bind mount can expose an empty directory.
+Run `bash test/test-openchamber-update-guard.sh` directly from the checkout in
+that environment; CI uses the container command above on a shared runner path.
 
 If any step fails, stop and report the failures. Do not proceed with release.
 Note which steps could not run locally (typically the image build) and confirm
@@ -494,6 +499,5 @@ After push, inform the user:
 - **V2 line only**: the dev stack is `docker-compose.v2.dev.yml`
   (`ai-engkit-v2dev` / `ai-engkit-admin-v2dev`); the V1 helpers
   (`run-tests.sh`, `test-admin.sh`, `test-admin-ui.sh`, `docker-compose.dev.yml`)
-  do not apply. Run the admin suite with `OMO_ENABLED=1 … --parallel=4` or it
-  reports spurious serial-state failures.
+  do not apply. Do not set `OMO_ENABLED`; the V2 Admin has no legacy mode.
 - **Publish branch is `v2`**, not `main`.

@@ -3,10 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  buildJqWriteCommand,
   buildRoutingWriteCommand,
   displayNameToKey,
-  OMO_CONFIG,
   validateFallbackModels,
 } from "./agent-models";
 
@@ -61,46 +59,6 @@ describe("validateFallbackModels", () => {
     expect(validateFallbackModels({ entries: [{ model: "provider/" }] })).toContain("provider/model");
     expect(validateFallbackModels({ entries: [{ model: "pro vider/model" }] })).toContain("provider/model");
     expect(validateFallbackModels({ entries: [{ model: "provider/mod el" }] })).toContain("provider/model");
-  });
-});
-
-describe("buildJqWriteCommand", () => {
-  test("delete case drops only model keys without changing sibling settings", () => {
-    const command = buildJqWriteCommand("sisyphus", []);
-    expect(command).toContain(
-      `del(.agents[$agent].model, .agents[$agent].variant, .agents[$agent].models, .agents[$agent].fallback_models)`,
-    );
-    expect(command).not.toContain(".agents[$agent].permission");
-    expect(command).toContain(`mv /tmp/omo.jsonc.tmp ${OMO_CONFIG}`);
-    expect(command).not.toContain("base64");
-  });
-
-  test("single-entry case writes the model string plus variant", () => {
-    const command = buildJqWriteCommand("sisyphus-junior", [{ model: "gpt-5.6-sol", variant: "medium" }]);
-    expect(command).toContain(`--arg agent 'sisyphus-junior'`);
-    expect(command).toContain(`--arg model 'gpt-5.6-sol'`);
-    expect(command).toContain(`.agents[$agent].model = $model`);
-    expect(command).toContain(`.agents[$agent].variant = "medium"`);
-    expect(command).toContain(`del(.agents[$agent].models, .agents[$agent].fallback_models)`);
-    expect(command).not.toContain(".agents[$agent].permission");
-    expect(command).not.toContain("$schema");
-    expect(command).not.toContain(".agents[$agent].other");
-  });
-
-  test("shell-quotes model values containing apostrophes", () => {
-    const command = buildJqWriteCommand("explore", [{ model: "provider/model'; echo pwn" }]);
-
-    expect(command).toContain(`--arg model 'provider/model'"'"'; echo pwn'`);
-  });
-
-  test("clear case removes all model keys without changing sibling settings", () => {
-    const command = buildJqWriteCommand("explore", []);
-    expect(command).toContain(
-      `del(.agents[$agent].model, .agents[$agent].variant, .agents[$agent].models, .agents[$agent].fallback_models)`,
-    );
-    expect(command).not.toContain(".agents[$agent].permission");
-    expect(command).not.toContain("$schema");
-    expect(command).not.toContain(".agents[$agent].other");
   });
 });
 

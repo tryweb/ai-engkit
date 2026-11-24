@@ -1,5 +1,8 @@
 # Native Agent Model Override Bridge
 
+> Historical V1-to-native transition record; current V2 model routing is native
+> and must not depend on the legacy plugin config.
+
 ## Context
 
 ai-engkit regenerates `~/.config/opencode/opencode.json` from environment defaults on every `ai-dev` start. Admin Agent Models persists selections in the `omo-config` volume at `~/.omo/omo.jsonc`.

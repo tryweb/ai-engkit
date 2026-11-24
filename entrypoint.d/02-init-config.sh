@@ -213,23 +213,6 @@ expected_plugin_names() {
   done | sort | tr '\n' ','
 }
 
-normalize_omo_plugin_versions() {
-  local plugins="$1"
-  local plugin
-  local normalized=()
-
-  IFS=',' read -ra plugin_list <<< "$plugins"
-  for plugin in "${plugin_list[@]}"; do
-    plugin="${plugin//[[:space:]]/}"
-    if [ "$plugin" = "oh-my-openagent" ]; then
-      plugin="oh-my-openagent@${OH_MY_OPENAGENT_VERSION}"
-    fi
-    [ -n "$plugin" ] && normalized+=("$plugin")
-  done
-
-  (IFS=,; printf '%s\n' "${normalized[*]}")
-}
-
 # --- lean-ctx XDG migration (v3.8.5+) ---
 # Detect legacy single-dir layout (~/.config/lean-ctx with data files)
 # and migrate to XDG split (config→XDG_CONFIG_HOME, data→XDG_DATA_HOME, …).
@@ -252,42 +235,30 @@ fi
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 V2_MANAGED_CONFIG="{}"
-if [ "${OMO_ENABLED:-1}" = "0" ] && [ -f "$OPCODE_CONFIG_FILE" ]; then
+if [ -f "$OPCODE_CONFIG_FILE" ]; then
   # Note: `{k: (.x // empty)}` would void the whole object when the key is
   # absent (empty propagates out of `{}`), so the optional key is spliced
   # with `+ if` instead — absent stays absent, present is preserved.
   V2_MANAGED_CONFIG=$(jq '{agent: (.agent // {}), providers: (.providers // {})} + (if has("default_agent") then {default_agent} else {} end)' "$OPCODE_CONFIG_FILE")
 fi
-# V2-only additions. The V1/OMO line gets context7 injected at runtime by the
-# oh-my-openagent plugin; with OMO_ENABLED=0 nothing injects it, so register it
-# here (remote MCP, no OAuth) and allow `context7_*` for every agent. The
+# V2 config additions: no OMO plugin runs, so register context7 directly
+# (remote MCP, no OAuth) and allow `context7_*` for every agent. The
 # explicit allow is deliberate: a bare deny hides the tools from the whole
 # session (only agent-level rules are appended after global ones, so a
 # librarian-only grant leaves every other agent unable to look up docs).
 # .opencode/agents/librarian.md still names context7 first in its lookup flow;
 # its rules are appended last and win where they differ.
 # Kept as a literal so the V2_MANAGED_CONFIG merge slice stays self-contained.
-# default_agent: Sisyphus is the v2 default primary agent (mode: primary in
-# .opencode/agents/sisyphus.md). It lives in V2_EXTRA (not the base template)
-# so the V1/OMO line keeps upstream `build` fallback behavior unchanged.
+# default_agent: Sisyphus is the V2 default primary agent (mode: primary in
+# .opencode/agents/sisyphus.md).
 # Merge order below (extra, then managed) lets a user hand-edited
 # default_agent survive restarts: managed wins over this default.
-V2_EXTRA='{}'
-if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  V2_EXTRA='{"default_agent":"sisyphus","mcp":{"servers":{"context7":{"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}}},"permissions":[{"action":"context7_*","resource":"*","effect":"allow"}]}'
-fi
+V2_EXTRA='{"default_agent":"sisyphus","mcp":{"servers":{"context7":{"type":"remote","url":"https://mcp.context7.com/mcp","oauth":false}}},"permissions":[{"action":"context7_*","resource":"*","effect":"allow"}]}'
 
-# Always regenerate opencode.json from OPENCODE_PLUGINS to ensure consistency.
-# Trial Cell 1 (no-OMO baseline): OMO_ENABLED=0 emits a plugin-free config and
-# skips the ~/.omo lifecycle below. Default keeps V1/OMO behavior unchanged.
-if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  PLUGINS=""
-  PLUGIN_JSON="[]"
-  echo "OMO disabled (OMO_ENABLED=0): writing plugin-free opencode.json"
-else
-  PLUGINS="$(normalize_omo_plugin_versions "${OPENCODE_PLUGINS:-oh-my-openagent}")"
-  PLUGIN_JSON=$(echo "$PLUGINS" | tr ',' '\n' | jq -R . | jq -s .)
-fi
+# V2 runtime: always emit a plugin-free opencode.json (no OMO runtime).
+PLUGINS=""
+PLUGIN_JSON="[]"
+echo "V2 runtime: writing plugin-free opencode.json"
 # Catalog of admin-controlled LSP servers (id -> command/extensions),
 # mirroring src/admin/lib/lsp-catalog.ts. Version pinning is applied via
 # BUN_PACKAGES in 01-install-packages.sh, not in this lsp block.
@@ -346,9 +317,7 @@ OPCODE_CONFIG=$(jq -n \
     }
   }')
 echo "Updating opencode.json with plugins: $PLUGINS"
-if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  OPCODE_CONFIG=$(printf '%s' "$OPCODE_CONFIG" | jq --argjson extra "$V2_EXTRA" '. * $extra' | jq --argjson managed "$V2_MANAGED_CONFIG" '. * $managed')
-fi
+OPCODE_CONFIG=$(printf '%s' "$OPCODE_CONFIG" | jq --argjson extra "$V2_EXTRA" '. * $extra' | jq --argjson managed "$V2_MANAGED_CONFIG" '. * $managed')
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
 
 # --- Custom provider injection (from OPENCODE_PROVIDER env var) ---
@@ -400,16 +369,6 @@ if [ -f "$OPCODE_CONFIG_FILE" ] && jq -e 'has("permission")' "$OPCODE_CONFIG_FIL
   unset PERMISSION_MODE
 fi
 # <<< lean-ctx native-tool permission normalisation <<<
-
-if [ "${OMO_ENABLED:-1}" = "0" ]; then
-  for _migrate in "/opt/ai-engkit/scripts/migrate-omo-to-native.sh" "$(dirname "$0")/../scripts/migrate-omo-to-native.sh" "./scripts/migrate-omo-to-native.sh"; do
-    if [ -x "$_migrate" ]; then
-      "$_migrate" || true
-      break
-    fi
-  done
-  unset _migrate
-fi
 
 merge_project_lsp_config
 
@@ -539,7 +498,6 @@ AI_ENGKIT_AGENTS_DEFAULT="/etc/opencode/AGENTS.md.default"
 USER_AGENTS_MD="$OPCODE_CONFIG_DIR/AGENTS.md"
 
 sync_global_agent_definitions() {
-  [ "${OMO_ENABLED:-1}" = "0" ] || return 0
   local source_dir="${AI_ENGKIT_AGENT_DEFINITIONS:-/opt/opencode/agents}"
   local target_dir="$OPCODE_CONFIG_DIR/agents"
   [ -d "$source_dir" ] || return 0

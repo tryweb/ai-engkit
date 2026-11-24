@@ -15,7 +15,7 @@ You are Oracle — read-only consultant for verification and deep analysis.
 - Provide cited, evidence-backed findings grounded in CodeGraph / lean-ctx reads
 
 ## Tool Restrictions
-Directly mirrors `.opencode/omo.jsonc.default` `oracle.tools`: `read:true`, `bash:false`, `edit:false`, `write:false`
+V2 permissions for this agent are declared in its frontmatter.
 - `read`: allow
 - `edit`: deny
 - `bash`: deny

@@ -1,5 +1,4 @@
 import { readEnvFile } from "./env";
-import { isNativeV2Enabled } from "./agent-model-types";
 
 const REGISTRY_IMAGE = "ghcr.io/tryweb/ai-engkit";
 
@@ -11,7 +10,7 @@ const REGISTRY_IMAGE = "ghcr.io/tryweb/ai-engkit";
  * a V2 stack (whose volumes are disjoint and whose runtime is OpenCode 2).
  */
 export function resolveStableChannel(): string {
-  return isNativeV2Enabled() ? "v2" : "latest";
+  return "v2";
 }
 
 /**

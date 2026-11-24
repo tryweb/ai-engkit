@@ -7,8 +7,9 @@ describe("buildRequestVerificationScript agent routing", () => {
     process.env.OMO_ENABLED = "1";
     try {
     const exec = async (command: string, _timeoutMs?: number) => {
-      expect(command).toContain('jq -nc --arg agent "$AGENT"');
-      expect(command).toContain("'{agent:$agent,parts:[{type:");
+      expect(command).toContain('--arg agent "$AGENT"');
+      expect(command).toContain('agent:$agent');
+      expect(command).toContain("/api/session");
       expect(command).toContain("SESSION");
       return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
     };
@@ -22,7 +23,7 @@ describe("buildRequestVerificationScript agent routing", () => {
   });
 });
 
-describe("fetchSubagentNames V2-first with V1 fallback", () => {
+describe("fetchSubagentNames native V2", () => {
   test("V2 success: parses /api/agent wrapped response and returns subagent ids", async () => {
     const v2Payload = JSON.stringify({
       location: { directory: "/home/devuser" },
@@ -48,7 +49,7 @@ describe("fetchSubagentNames V2-first with V1 fallback", () => {
     expect(calls[0]).toContain(`Authorization: Basic ${expectedAuth}`);
   });
 
-  test("V2 fail fallback: V2 returns HTML (parse null) then falls back to V1 /agent array", async () => {
+  test("HTML from V2 returns no names and never consults V1", async () => {
     const v1Payload = JSON.stringify([
       { name: "general", mode: "subagent" },
       { name: "explore", mode: "subagent" },
@@ -66,14 +67,12 @@ describe("fetchSubagentNames V2-first with V1 fallback", () => {
     };
     const lib = createAgentModelLiveClient({ exec });
     const names = await lib.fetchSubagentNames("testpass");
-    expect(names).toEqual(["general", "explore"]);
-    expect(calls).toHaveLength(2);
+    expect(names).toEqual([]);
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/api/agent");
-    expect(calls[1]).toContain("/agent");
-    expect(calls[1]).not.toContain("/api/agent");
   });
 
-  test("V2 unreachable (exit 2): falls back to V1 and preserves byte-identical V1 behavior", async () => {
+  test("unreachable V2 returns no names without reading V1 endpoints", async () => {
     const v1Payload = JSON.stringify([
       { name: "librarian", mode: "subagent" },
       { name: "oracle", mode: "subagent" },
@@ -86,10 +85,9 @@ describe("fetchSubagentNames V2-first with V1 fallback", () => {
     };
     const lib = createAgentModelLiveClient({ exec });
     const names = await lib.fetchSubagentNames("testpass");
-    expect(names).toEqual(["librarian", "oracle"]);
-    expect(calls).toHaveLength(2);
+    expect(names).toEqual([]);
+    expect(calls).toHaveLength(1);
     expect(calls[0]).toContain("/api/agent");
-    expect(calls[1]).toContain("/agent");
   });
 
   test("V1 unchanged: when both fail, returns empty array", async () => {
@@ -155,7 +153,7 @@ describe("fetchProviderSnapshot V2-first with split provider/model", () => {
     expect(calls[0]).toContain(`Authorization: Basic ${expectedAuth}`);
   });
 
-  test("V2 fail fallback: V2 returns HTML then falls back to V1 /provider", async () => {
+  test("HTML from V2 reports unavailable instead of trusting V1 catalog", async () => {
     const v1Payload = JSON.stringify({
       connected: ["opencode-go"],
       all: [{ id: "opencode-go", models: { "longcat-2.5-preview-free": {}, "mimo-v2.5-free": {} } }],
@@ -169,15 +167,12 @@ describe("fetchProviderSnapshot V2-first with split provider/model", () => {
     };
     const lib = createAgentModelLiveClient({ exec });
     const snap = await lib.fetchProviderSnapshot("testpass");
-    expect(snap.source).toBe("live");
-    expect(snap.connectedProviders).toEqual(["opencode-go"]);
-    expect(snap.catalog).toEqual(["opencode-go/longcat-2.5-preview-free", "opencode-go/mimo-v2.5-free"]);
+    expect(snap).toEqual({ source: "unavailable", connectedProviders: [], catalog: [] });
     expect(calls[0]).toContain("/api/provider");
-    expect(calls[1]).toContain("/provider");
-    expect(calls[1]).not.toContain("/api/provider");
+    expect(calls).toHaveLength(1);
   });
 
-  test("V2 model unreachable (exit 2): falls back to V1", async () => {
+  test("unreachable V2 models report unavailable without V1 or OMO cache fallback", async () => {
     const v2Providers = JSON.stringify({
       location: { directory: "/home/devuser" },
       data: [{ id: "opencode-go" }],
@@ -196,9 +191,9 @@ describe("fetchProviderSnapshot V2-first with split provider/model", () => {
     };
     const lib = createAgentModelLiveClient({ exec });
     const snap = await lib.fetchProviderSnapshot("testpass");
-    expect(snap.source).toBe("live");
-    expect(snap.catalog).toEqual(["opencode-go/fallback-model"]);
-    expect(calls).toHaveLength(3);
+    expect(snap.source).toBe("unavailable");
+    expect(snap.catalog).toEqual([]);
+    expect(calls).toHaveLength(2);
   });
 
   test("both V2 and V1 fail: preserves unavailable with cache chain exhausted", async () => {
@@ -319,15 +314,14 @@ describe("fetchSuccessfulRequestModel V2 gated on OMO_ENABLED=0", () => {
     }
   });
 
-  test("V1 remains byte-behavior unchanged when OMO_ENABLED !=0", async () => {
+  test("uses native V2 session creation without a mode marker", async () => {
     const prev = process.env.OMO_ENABLED;
     delete process.env.OMO_ENABLED;
     try {
       const exec = async (command: string, _timeoutMs?: number) => {
-        expect(command).toContain('jq -nc --arg agent "$AGENT"');
-        expect(command).toContain('{agent:$agent,parts:[{type:"text",text:"Reply with exactly OK."}]}');
-        expect(command).toContain('"$BASE/session"');
-        expect(command).not.toContain("/api/session");
+        expect(command).toContain('jq -nc');
+        expect(command).toContain("/api/session");
+        expect(command).not.toContain('"$BASE/session"');
         return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
       };
       const lib = createAgentModelLiveClient({ exec });
@@ -367,14 +361,14 @@ describe("buildRecentRequestScript V2 wrapped envelopes", () => {
     }
   });
 
-  test("V1 recent lookup unchanged when OMO_ENABLED !=0 uses bare /session", async () => {
+  test("recent lookup uses native V2 endpoints without a mode marker", async () => {
     const prev = process.env.OMO_ENABLED;
     delete process.env.OMO_ENABLED;
     try {
       const exec = async (command: string, _timeoutMs?: number) => {
-        expect(command).toContain('"$BASE/session?limit=100"');
-        expect(command).toContain('"$BASE/session/${SESSION}/message"');
-        expect(command).not.toContain("/api/session");
+        expect(command).toContain("/api/session");
+        expect(command).toContain('/api/session/${SESSION}/message');
+        expect(command).not.toContain('"$BASE/session?limit=100"');
         return { exitCode: 0, stdout: JSON.stringify({ info: { role: "assistant", modelID: "mimo-v2.5-free", providerID: "opencode" } }), stderr: "" };
       };
       const lib = createAgentModelLiveClient({ exec });

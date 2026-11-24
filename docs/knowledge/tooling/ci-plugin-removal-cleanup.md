@@ -1,5 +1,8 @@
 # CI Plugin Removal Cleanup Pattern
 
+> Historical cleanup record from the OMO-enabled V1 setup. V2 no longer ships
+> the OMO plugin or its version pin.
+
 ## Context
 PR #63 moved SuperPower from a global baked plugin to a per-project feature managed from the admin Projects drawer. CI integration tests failed (exit code 1) because test scripts still asserted global superpowers presence.
 

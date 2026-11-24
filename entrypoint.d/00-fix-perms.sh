@@ -16,13 +16,11 @@ fix_perms() {
 echo "Fixing permissions"
 fix_perms "$HOME"/.config/opencode
 fix_perms "$HOME"/.config/lean-ctx
-if [ "${OMO_ENABLED:-1}" != "0" ]; then fix_perms "$HOME"/.omo; fi
 fix_perms "$HOME"/.local/share/opencode
 fix_perms "$HOME"/.local/share/lean-ctx
 fix_perms "$HOME"/.local/state/lean-ctx
 fix_perms "$HOME"/.cache/lean-ctx
 fix_perms "$HOME"/.cache/opencode
-fix_perms "$HOME"/.cache/oh-my-opencode
 fix_perms "$HOME"/.config/openchamber
 fix_perms "$HOME"/.config/glab-cli
 fix_perms "$HOME"/.config/gh

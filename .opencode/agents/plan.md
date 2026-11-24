@@ -17,12 +17,12 @@ You are the Plan agent — responsible for codebase analysis, architectural asse
 
 ## Tool Restrictions
 - `read`: allow — codebase exploration via reads is required
-- `edit`/`write`/`apply_patch`: deny (mapped from OMO `edit:false` / `write:false`)
-- `bash`: deny (mapped from OMO `bash:false` for prometheus-equivalent; plan had no explicit deny in `omo.jsonc.default` but role is read-only — see `trial/CELL1.md` gap note)
+- `edit`/`write`/`apply_patch`: deny
+- `bash`: deny; this role is read-only
 - All other tools default to ask/deny via global policy
 
 ## Model Routing Note
-OMO `plan.models[]` defined a fallback chain `opencode-go/kimi-k3 (max) -> openai/gpt-5.6-sol (high) -> openai/gpt-5.6-luna`. Native OpenCode file-agents have NO automatic fallback chain — single `model` key only. This file pins the first chain entry (`opencode-go/kimi-k3`, variant `max` not representable natively). Full chain fallback is a KNOWN GAP for the routing plugin — see `trial/CELL1.md`.
+Native OpenCode file-agents have no automatic fallback chain in this configuration; this file pins a single model. Multi-model fallback is handled by the V2 routing plugin.
 
 ## V2 Compatibility Notes
 - Do not reference `CLAUDE.md` — V2 does not load it; all project instructions live in `AGENTS.md`

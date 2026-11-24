@@ -456,8 +456,7 @@ export async function probeModel(
   }
   const auth = Buffer.from(`opencode:${password}`).toString("base64");
 
-  const isV2 = process.env.OMO_ENABLED === "0";
-  const script = isV2 ? buildV2ProbeScript(auth, "title", { providerID, modelID }) : buildProbeScript(auth, providerID, modelID);
+  const script = buildV2ProbeScript(auth, "title", { providerID, modelID });
   const result = await deps.exec(script, 90_000);
   let probe: ProbeResult;
   if (result.exitCode !== 0 || !result.stdout.trim()) {

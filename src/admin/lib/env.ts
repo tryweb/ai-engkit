@@ -1,15 +1,11 @@
 import { readFileSync, writeFileSync, statSync } from "node:fs";
-import { isNativeV2Enabled } from "./agent-model-types";
-
-const V1_ENV_PATH = "/opt/ai-engkit/.env";
 const V2_ENV_PATH = "/opt/ai-engkit/.env.v2";
 
 /**
- * Line-aware env file path: the V2 line reads `.env.v2`, V1 reads `.env`.
- * Evaluated at call time so tests can toggle lines via `OMO_ENABLED`.
+ * V2 Admin always uses the V2 environment file.
  */
 export function resolveEnvPath(): string {
-  return isNativeV2Enabled() ? V2_ENV_PATH : V1_ENV_PATH;
+  return V2_ENV_PATH;
 }
 
 export interface EnvVars {

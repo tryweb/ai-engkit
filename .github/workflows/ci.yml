@@ -84,6 +84,9 @@ jobs:
       - name: Version-pin checker regression
         run: bash test/test-check-versions.sh
 
+      - name: Deferred legacy config importer regression
+        run: bash test/test-migrate-omo-to-native.sh
+
       # Pins come from docker-compose.v2.dev.yml (single source of truth for the
       # V2 line: OpenCode 2 CLI package/version, OpenChamber 2.x, no OMO).
       - name: Build V2 image

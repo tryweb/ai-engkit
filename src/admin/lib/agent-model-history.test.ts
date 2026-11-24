@@ -74,7 +74,7 @@ describe("agent model history aggregation", () => {
     }
   });
 
-  test("keeps the V1 message endpoint and response shape", async () => {
+  test("uses V2 message envelopes without an environment mode marker", async () => {
     const previous = process.env.OMO_ENABLED;
     delete process.env.OMO_ENABLED;
     try {
@@ -86,10 +86,10 @@ describe("agent model history aggregation", () => {
         },
       }).fetchRecentRequestModels("testpass");
 
-      expect(command).toContain("$BASE/session/${SESSION}/message");
-      expect(command).toContain(".[]?.info");
-      expect(command).toContain(".modelID");
-      expect(command).not.toContain("$BASE/api/session/${SESSION}/message");
+      expect(command).toContain("$BASE/api/session/${SESSION}/message");
+      expect(command).toContain(".data[]?");
+      expect(command).toContain(".model.id");
+      expect(command).not.toContain("$BASE/session/${SESSION}/message");
     } finally {
       if (previous === undefined) delete process.env.OMO_ENABLED;
       else process.env.OMO_ENABLED = previous;

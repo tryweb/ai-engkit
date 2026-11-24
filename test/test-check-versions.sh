@@ -135,7 +135,7 @@ fi
 # OpenCode arm introduced by the V2 cross-major switch
 # (`OPENCODE_VERSION|OPENCODE_CLI_VERSION)`) counts once, not zero.
 pin_count="$(grep -cE '^[[:space:]]+[A-Z_|]+_VERSION\)[[:space:]]+source=' "$WORKFLOW")"
-assert_eq "ci-workflow-expects-15-pins" "15" "$pin_count"
+assert_eq "ci-workflow-expects-14-pins" "14" "$pin_count"
 
 echo ""
 echo "passed: $PASS    failed: $FAIL"

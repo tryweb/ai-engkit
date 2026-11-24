@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Manual legacy-config importer only. V2 startup intentionally does not invoke
+# this partial OMO-to-routing conversion; it is not a full V1-to-V2 migration.
 set -euo pipefail
 OMO_FILE="$HOME/.omo/omo.jsonc"
 ROUTING_FILE="$HOME/.config/opencode/routing.json"
@@ -87,5 +89,5 @@ fi
 if jq -e '.agents | to_entries[] | select(.value | has("models") or has("fallback_models"))' "$OMO_FILE" >/dev/null 2>&1; then
   echo "[migrate-omo] ignored OMO chain keys (models/fallback_models) for some agents — chain config was not effective on V1 per knowledge pattern" >&2
 fi
-echo "[migrate-omo] OMO volume retained for rollback; prune with: docker volume rm omo-config-v2 (after verifying routing)" >&2
+echo "[migrate-omo] legacy OMO config left unchanged for rollback" >&2
 exit 0
