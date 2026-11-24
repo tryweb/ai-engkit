@@ -188,6 +188,27 @@ Examples:
 
 Run the relevant checks before opening a pull request.
 
+### Unit tests
+
+```bash
+bun test --isolate
+bun run --cwd src/admin typecheck
+```
+
+Use file isolation: module mocks and environment overrides must not leak between
+test files. Legacy V1 fixtures explicitly set `OMO_ENABLED=1`; V2 fixtures set
+`OMO_ENABLED=0`. Do not force the entire suite into V1 mode to hide failures.
+The Admin package's `test` script enables isolation automatically.
+
+### Browser tests
+
+The root Bun suite excludes `e2e/`, which uses the Playwright runner. Install its
+locked dependencies with `bun install --frozen-lockfile` from `e2e/`.
+Run browser tests only against a disposable stack: they change configuration,
+create projects, and deliberately write malformed LeanCTX configuration.
+Set an explicit `ADMIN_BASE_URL`, `AI_DEV_CONTAINER`, and test-only
+`ADMIN_PASSWORD`; never point them at production or your active workspace.
+
 ### Standard test run
 
 ```bash

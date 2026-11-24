@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { rmSync } from "node:fs";
 import { stubDeps, listHandlers } from "./agent-models-test-support";
@@ -6,9 +6,17 @@ import { clearModelMetadataCache } from "../lib/model-metadata";
 
 const { createAgentModelsRoutes } = await import("./agent-models");
 
+let previousOmoEnabled: string | undefined;
 beforeEach(() => {
+  previousOmoEnabled = process.env.OMO_ENABLED;
+  process.env.OMO_ENABLED = "1";
   rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
   clearModelMetadataCache();
+});
+
+afterEach(() => {
+  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = previousOmoEnabled;
 });
 
 function jsonRes(body: unknown, status = 200): Response {

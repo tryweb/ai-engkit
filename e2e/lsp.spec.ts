@@ -4,6 +4,7 @@ test.describe.configure({ mode: "serial" });
 
 const NPM_PACKAGE = "typescript-language-server";
 const SERVER_KEY = "typescript";
+const MUTATION_KEY = "json";
 
 async function signIn(page: Page) {
   await page.goto("/login");
@@ -46,12 +47,13 @@ function baseRows(overrides: Partial<Record<string, unknown>> = {}): Array<Recor
       installedVersion: null,
       inLspBlock: false,
       drift: null,
+      builtinBacked: false,
       ...overrides,
     },
   ];
 }
 
-test("LSP page lists the catalog servers and version dropdown", async ({ page }) => {
+test("LSP page lists the catalog servers and reports v2 unavailability", async ({ page }) => {
   await signIn(page);
   await stubLspApi(page, baseRows());
   await page.goto("/lsp");
@@ -60,32 +62,33 @@ test("LSP page lists the catalog servers and version dropdown", async ({ page })
   const row = page.locator(`tr[data-key="${SERVER_KEY}"]`);
   await expect(row).toBeVisible();
   await expect(row).toContainText(NPM_PACKAGE);
-  await expect(page.getByRole("button", { name: "Apply Changes" })).toBeEnabled();
 
   const versionSelect = row.locator(`.lsp-version[data-row="${SERVER_KEY}"]`);
-  await expect(versionSelect).toBeEnabled();
-  // Newest version is exposed as an option after the versions load.
+  await expect(versionSelect).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Apply Changes" })).toBeDisabled();
+  await expect(page.locator(".lsp-v2-notice")).toBeVisible();
+  await expect(page.locator(".lsp-v2-notice")).toContainText("OpenCode v2");
+
+  // Versions still load into the (disabled) dropdown.
   await expect(page.locator(`select.lsp-version[data-row="${SERVER_KEY}"] option[value="6.1.0"]`)).toHaveCount(1);
 });
 
-test("LSP page persists an enabled + pinned override and reports apply", async ({ page }) => {
+test("LSP mutations are blocked on OpenCode v2", async ({ page }) => {
   await signIn(page);
   await stubLspApi(page, baseRows());
   await page.goto("/lsp");
 
-  const row = page.locator(`tr[data-key="${SERVER_KEY}"]`);
-  await row.locator(`.lsp-toggle[data-row="${SERVER_KEY}"]`).check();
+  const row = page.locator(`tr[data-key="${MUTATION_KEY}"]`);
+  await expect(row.locator(`.lsp-toggle[data-row="${MUTATION_KEY}"]`)).toBeDisabled();
+  await expect(row.locator(`.lsp-version[data-row="${MUTATION_KEY}"]`)).toBeDisabled();
 
-  const versionSelect = row.locator(`.lsp-version[data-row="${SERVER_KEY}"]`);
-  await expect(versionSelect.locator(`option[value="6.0.0"]`)).toHaveCount(1);
-  await versionSelect.selectOption("6.0.0");
-
-  let applyCalled = false;
-  page.on("request", (req) => {
-    if (req.url().endsWith("/api/lsp") && req.method() === "PUT") applyCalled = true;
-    if (req.url().endsWith("/api/lsp/apply") && req.method() === "POST") applyCalled = true;
+  const put = await page.request.put("/api/lsp", {
+    data: { overrides: { [MUTATION_KEY]: { enabled: true, version: "6.0.0" } } },
   });
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Apply Changes" }).click();
-  await expect.poll(() => applyCalled).toBe(true);
+  expect(put.status()).toBe(409);
+  expect((await put.json()).error).toContain("unavailable on OpenCode v2");
+
+  const apply = await page.request.post("/api/lsp/apply");
+  expect(apply.status()).toBe(409);
+  expect((await apply.json()).error).toContain("unavailable on OpenCode v2");
 });

@@ -435,7 +435,7 @@ process.once("SIGTERM", stopSchedulers);
 process.once("SIGINT", stopSchedulers);
 
 // Bun binds the declarative server after module evaluation; defer the agent until the next event-loop turn.
-setTimeout(() => {
+if (import.meta.main) setTimeout(() => {
   try {
     startAgent({ env: { ...process.env, ...readEnvFile() } });
   } catch (error: unknown) {

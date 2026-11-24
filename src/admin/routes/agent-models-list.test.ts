@@ -1,6 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createAgentModelsRoutes } from "./agent-models";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
+
+let previousOmoEnabled: string | undefined;
+beforeEach(() => {
+  previousOmoEnabled = process.env.OMO_ENABLED;
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = previousOmoEnabled;
+});
 
 describe("createAgentModelsRoutes — GET /api/agent-models", () => {
   test("returns configured live subagents and excludes primary agents", async () => {

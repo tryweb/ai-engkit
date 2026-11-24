@@ -1,4 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+let previousOmoEnabled: string | undefined;
+beforeEach(() => {
+  previousOmoEnabled = process.env.OMO_ENABLED;
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = previousOmoEnabled;
+});
 import { createAgentModelReconciler } from "./agent-model-reconciler";
 import { V2_SUBAGENT_AGENTS, type AgentModelsDeps } from "./agent-model-types";
 import type { ExecResult } from "./docker";

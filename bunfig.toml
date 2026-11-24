@@ -1,0 +1,3 @@
+[test]
+# Browser specs use the Playwright runner, not bun:test.
+pathIgnorePatterns = ["e2e/**"]

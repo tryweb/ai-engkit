@@ -100,7 +100,7 @@ jobs:
           echo "PASS: V2 image builds with baked routing/enforcer plugins"
 
       - name: V2 Admin unit tests
-        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev --cwd /opt/admin test
+        run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev --cwd /opt/admin test --isolate
 
       - name: V2 Admin typecheck
         run: docker run --rm --entrypoint /home/devuser/.bun/bin/bun ai-engkit-ai-v2dev run --cwd /opt/admin typecheck
@@ -172,7 +172,7 @@ jobs:
         run: bash test/test-v2-admin-integration.sh
 
       - name: V2 Admin integration unit tests
-        run: docker exec -e OMO_ENABLED=1 ai-engkit-admin-v2dev bun --cwd /opt/admin test --parallel=4
+        run: docker exec ai-engkit-admin-v2dev bun --cwd /opt/admin test --parallel=4
 
       - name: V2 Admin integration typecheck
         run: docker exec ai-engkit-admin-v2dev bun run --cwd /opt/admin typecheck

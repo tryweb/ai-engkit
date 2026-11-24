@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,18 @@ import {
   type UpgradeDeps,
 } from "./upgrade";
 import type { ExecResult } from "./docker";
+
+// These describes cover the V1 line contract (compose.yml, :latest image).
+// The dev stack exports OMO_ENABLED=0, so pin the marker instead of
+// inheriting the host env.
+const PREV_OMO_ENABLED = process.env.OMO_ENABLED;
+beforeAll(() => {
+  process.env.OMO_ENABLED = "1";
+});
+afterAll(() => {
+  if (PREV_OMO_ENABLED === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = PREV_OMO_ENABLED;
+});
 
 describe("resolveBackupRetention", () => {
   test("defaults to 5 when BACKUP_RETENTION is missing", () => {
@@ -393,6 +405,50 @@ describe("runUpgrade health timeout", () => {
       expect(readFileSync(world.composeFile, "utf-8")).toBe(world.originalComposeBytes);
       expect(world.dockerOps).not.toContain("pruneImages");
       expect(world.pruneOldCalls).toBe(0);
+    } finally {
+      world.cleanup();
+    }
+  });
+});
+
+describe("runUpgrade compose fetch failure (V2 line)", () => {
+  let savedOmo: string | undefined;
+  beforeAll(() => {
+    savedOmo = process.env.OMO_ENABLED;
+    process.env.OMO_ENABLED = "0";
+  });
+  afterAll(() => {
+    if (savedOmo === undefined) delete process.env.OMO_ENABLED;
+    else process.env.OMO_ENABLED = savedOmo;
+  });
+
+  test("fails closed before recreating ai-dev or pruning backups", async () => {
+    let composeWrites = 0;
+    let projectLookups = 0;
+    const world = makeWorld({
+      fetchComposeText: async () => null,
+      writeComposeText: () => {
+        composeWrites++;
+      },
+      getProject: async () => {
+        projectLookups++;
+        return "ai-engkit";
+      },
+    });
+    try {
+      const result = await runUpgrade(world.deps);
+      expect(result).toBe(false);
+      expect(getState()).toBe("failed");
+      const failure = getEventLog().find((e) => e.status === "failure");
+      expect(failure?.step).toBe("recreate");
+      expect(failure?.message).toContain("Failed to fetch latest docker-compose.v2.yml");
+      expect(composeWrites).toBe(0);
+      expect(projectLookups).toBe(1);
+      expect(world.composeUpCalls).toBe(1);
+      expect(world.pruneOldCalls).toBe(0);
+      expect(world.dockerOps).not.toContain("pruneImages");
+      expect(readFileSync(world.composeFile, "utf-8")).toBe(world.originalComposeBytes);
+      expect(readFileSync(world.envFile, "utf-8")).toBe(world.originalEnvBytes);
     } finally {
       world.cleanup();
     }

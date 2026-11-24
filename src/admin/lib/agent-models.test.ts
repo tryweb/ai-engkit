@@ -1,4 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+let previousOmoEnabled: string | undefined;
+beforeEach(() => {
+  previousOmoEnabled = process.env.OMO_ENABLED;
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (previousOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = previousOmoEnabled;
+});
 import { collectAgentModelState, createAgentModelsLib, type AgentModelStateSource, type AgentModelsDeps } from "./agent-models";
 import type { ExecResult as DockerExecResult } from "./docker";
 import { V2_SUBAGENT_AGENTS, type ResolvedModel } from "./agent-model-types";

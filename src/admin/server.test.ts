@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { createSessionCookie } from "./lib/auth";
+import { getAgentStatus } from "./agent";
 
 const originalAdminPassword = process.env.ADMIN_PASSWORD;
 process.env.ADMIN_PASSWORD = "test-admin-password";
@@ -11,7 +12,14 @@ afterAll(() => {
   }
 });
 
-const { app } = await import("./server");
+const { app, maintenanceScheduler, hostMaintenanceScheduler } = await import("./server");
+
+test("importing the app does not start background services", async () => {
+  await Bun.sleep(10);
+  expect(maintenanceScheduler.isStarted()).toBe(false);
+  expect(hostMaintenanceScheduler.isStarted()).toBe(false);
+  expect(getAgentStatus().state).toBe("disabled");
+});
 
 test("OpenChamber settings API requires an admin session", async () => {
   const response = await app.request("http://localhost/api/openchamber/settings");
