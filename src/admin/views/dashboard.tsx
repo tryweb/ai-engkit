@@ -293,6 +293,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               <StatusPill tone="neutral" label="unavailable" ariaLabel="Database health unavailable" />
             )}
             <a href="/retention-policy" class="db-health__link">Configure retention →</a>
+            <a href="/host-maintenance" class="db-health__link">Host maintenance →</a>
           </div>
         </div>
         {data.dbHealth ? (

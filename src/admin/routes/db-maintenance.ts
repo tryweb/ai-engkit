@@ -19,6 +19,7 @@ import {
   nextDailyOccurrence,
   type SchedulerStatus,
 } from "../lib/maintenance-scheduler";
+import { handleSseLog } from "./sse-log";
 
 export interface DbMaintenanceRoutesDeps {
   getState?: typeof getMaintenanceState;
@@ -107,61 +108,7 @@ export function createDbMaintenanceRoutes(options: DbMaintenanceRoutesDeps = {})
   });
 
   router.get("/api/admin/db-maintenance/log", (c) => {
-    const history = c.req.query("history");
-    if (history === "1") {
-      return c.json(deps.getEventLog());
-    }
-
-    c.header("Content-Type", "text/event-stream");
-    c.header("Cache-Control", "no-cache");
-    c.header("Connection", "keep-alive");
-
-    let closed = false;
-    let cleaned = false;
-    let unsub: (() => void) | null = null;
-    let ctrl: ReadableStreamDefaultController<string> | null = null;
-    const cleanup = (): void => {
-      if (cleaned) return;
-      cleaned = true;
-      unsub?.();
-    };
-    const safeClose = (): void => {
-      if (closed) return;
-      closed = true;
-      cleanup();
-      try {
-        ctrl?.close();
-      } catch (error: unknown) {
-        if (!(error instanceof TypeError)) throw error;
-      }
-    };
-    const safeEnqueue = (data: string): void => {
-      if (closed) return;
-      ctrl?.enqueue(data);
-    };
-    const stream = new ReadableStream<string>({
-      start(controller) {
-        ctrl = controller;
-        for (const event of deps.getEventLog()) {
-          safeEnqueue(`data: ${JSON.stringify(event)}\n\n`);
-        }
-        unsub = deps.subscribe((event) => {
-          safeEnqueue(`data: ${JSON.stringify(event)}\n\n`);
-          if (event.step === "verify" && (event.status === "success" || event.status === "failure")) {
-            cleanup();
-            setTimeout(() => safeClose(), 1000);
-          }
-        });
-        c.req.raw.signal.addEventListener("abort", () => {
-          safeClose();
-        }, { once: true });
-      },
-      cancel() {
-        safeClose();
-      },
-    });
-
-    return c.body(stream);
+    return handleSseLog(c, { getEventLog: deps.getEventLog, subscribe: deps.subscribe });
   });
 
   router.post("/api/admin/db-maintenance/run", async (c) => {

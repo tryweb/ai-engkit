@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/secrets", label: "Secrets", icon: "🔐" },
   { href: "/separator3", label: "", icon: "" },
   { href: "/upgrade", label: "Versions & Upgrade", icon: "▲" },
+  { href: "/host-maintenance", label: "Host Maintenance", icon: "🧹" },
   { href: "/leanctx", label: "LeanCTX Config", icon: "📐" },
   { href: "/lsp", label: "LSP Servers", icon: "🧩" },
   { href: "/agent", label: "Center Connection", icon: "⇄" },

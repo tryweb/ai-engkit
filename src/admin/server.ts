@@ -25,6 +25,8 @@ import agentRoutes from "./routes/agent";
 import agentModelsRoutes from "./routes/agent-models";
 import openChamberRoutes from "./routes/openchamber";
 import { createRetentionPolicyRoutes } from "./routes/retention-policy";
+import { createHostMaintenanceRoutes } from "./routes/host-maintenance";
+import { HostMaintenancePage } from "./views/host-maintenance";
 import { getUpdateCheck } from "./routes/versions";
 import { getStatus as getUpgradeStatus } from "./lib/upgrade";
 import { DashboardPage } from "./views/dashboard";
@@ -44,6 +46,8 @@ import { collectProvidersMeta } from "./lib/provider-meta";
 import { collectAgentModelState, createAgentModelsLib } from "./lib/agent-models";
 import { createLspReconciler } from "./lib/lsp-reconciler";
 import { createMaintenanceScheduler } from "./lib/maintenance-scheduler";
+import { createHostMaintenanceScheduler } from "./lib/host-maintenance-scheduler";
+import { getHostMaintenanceState } from "./lib/host-maintenance";
 import { createGitHostingAuthScheduler } from "./lib/git-hosting-auth-scheduler";
 import { loadGitHostingAuthState } from "./lib/git-hosting-auth-state";
 
@@ -143,6 +147,11 @@ app.route("/", secretsRoutes);
 app.route("/", providersRoutes);
 app.route("/", openChamberRoutes);
 app.route("/", createRetentionPolicyRoutes({ onPolicySaved: () => maintenanceScheduler.reschedule() }));
+app.route("/", createHostMaintenanceRoutes({
+  onPolicySaved: () => hostMaintenanceScheduler.reschedule(),
+  getSchedulerStatus: () => hostMaintenanceScheduler.getStatus(),
+}));
+app.get("/host-maintenance", (c) => c.html(HostMaintenancePage()));
 app.route("/", leanctxRoutes);
 app.route("/", lspRoutes);
 app.route("/", dbHealthRoutes);
@@ -385,6 +394,10 @@ export default {
 };
 
 export const maintenanceScheduler = createMaintenanceScheduler();
+export const hostMaintenanceScheduler = createHostMaintenanceScheduler({
+  getUpgradeState: () => getUpgradeStatus().state,
+  getHostState: () => getHostMaintenanceState(),
+});
 export const gitHostingAuthScheduler = createGitHostingAuthScheduler();
 
 const stopSchedulers = (): void => {
@@ -405,6 +418,11 @@ setTimeout(() => {
     maintenanceScheduler.start();
   } catch (error: unknown) {
     console.error("Maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
+  }
+  try {
+    hostMaintenanceScheduler.start();
+  } catch (error: unknown) {
+    console.error("Host maintenance scheduler startup failed:", error instanceof Error ? error.message : String(error));
   }
   try {
     gitHostingAuthScheduler.start();
