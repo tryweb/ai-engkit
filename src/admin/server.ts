@@ -400,6 +400,7 @@ app.get("/api/openapi.json", (c) => {
     paths: {
       "/healthz": { get: { summary: "Liveness probe", responses: { "200": { description: "OK" } } } },
       "/api/status": { get: { summary: "System status", responses: { "200": { description: "Status JSON" } } } },
+      "/api/admin/ai-dev-uptime": { get: { summary: "AI-dev container uptime", responses: { "200": { description: "Uptime seconds or null" } } } },
       "/api/login": { post: { summary: "Authenticate", requestBody: { content: { "application/json": { schema: { type: "object", properties: { password: { type: "string" } } } } } }, responses: { "200": { description: "OK" } } } },
       "/api/logout": { post: { summary: "Logout", responses: { "200": { description: "OK" } } } },
       "/api/setup": { post: { summary: "Initial setup", responses: { "200": { description: "OK" } } } },

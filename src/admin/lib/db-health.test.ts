@@ -149,11 +149,24 @@ describe("collectHostDbHealth via execInAiDev", () => {
     };
     const health = await collectHostDbHealth(fakeExec, "/fake/opencode.db", "/fake");
     expect(health.fileSizeBytes).toBe(8192);
+    expect(health.estimatedRequiredBytes).toBe(Math.ceil(8192 * 1.2));
     expect(health.freelistCount).toBe(3);
     expect(health.rowCounts).toEqual({ session: 5, event: 7, message: 3, part: 11 });
     expect(health.freeSpaceBytes).toBe(987654321);
     expect(health.dbPath).toBe("/fake/opencode.db");
     expect(health.freeSpacePath).toBe("/fake");
+  });
+
+  test("keeps the space estimate unknown when the DB file size probe fails", async () => {
+    const fakeExec = async (cmd: string) => {
+      if (cmd.includes("stat -c")) return { stdout: "", stderr: "", exitCode: 0 };
+      if (cmd.includes("df -B1")) return { stdout: "987654321", stderr: "", exitCode: 0 };
+      return { stdout: "0", stderr: "", exitCode: 0 };
+    };
+    const health = await collectHostDbHealth(fakeExec, "/missing/opencode.db", "/fake");
+    expect(health.fileSizeBytes).toBe(0);
+    expect(health.estimatedRequiredBytes).toBeNull();
+    expect(health.freeSpaceBytes).toBe(987654321);
   });
 
   test("Given exec uses mode=ro URI, Then commands are read-only", async () => {

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSelfContainerRef } from "../lib/docker";
+import { dockerCommand, runCommand, getComposeProject, getSelfBindSource, getSelfContainerRef, getAiDevUptime } from "../lib/docker";
 import type { ExecResult } from "../lib/docker";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
@@ -17,6 +17,7 @@ export interface AdminRoutesDeps {
   readonly runCommand: (args: string[], timeoutMs: number) => Promise<ExecResult>;
   readonly schedule: (fn: () => void, delayMs: number) => void;
   readonly resolveEffectiveAiAdmin: () => EffectiveCompose;
+  readonly getAiDevUptime?: () => Promise<number | null>;
 }
 
 const REAL_DEPS: AdminRoutesDeps = {
@@ -27,6 +28,7 @@ const REAL_DEPS: AdminRoutesDeps = {
     setTimeout(fn, delayMs);
   },
   resolveEffectiveAiAdmin: () => resolveEffectiveCompose(resolveOverlay({ readEnv: readEnvFile })),
+  getAiDevUptime,
 };
 
 /**
@@ -83,6 +85,15 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
       image_digest: imageDigest,
       uptime_seconds: uptime,
     });
+  });
+
+  admin.get("/api/admin/ai-dev-uptime", async (c) => {
+    try {
+      const uptime = deps.getAiDevUptime ? await deps.getAiDevUptime() : null;
+      return c.json({ uptime_seconds: typeof uptime === "number" && Number.isFinite(uptime) ? uptime : null });
+    } catch {
+      return c.json({ uptime_seconds: null });
+    }
   });
 
   /**

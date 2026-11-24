@@ -15,6 +15,7 @@ describe("heartbeat status report", () => {
     const status: StatusResponse = {
       container_status: "running",
       uptime_seconds: 3_600,
+      ai_dev_health: { status: "healthy", http_code: 200, latency_ms: 8 },
       containers: {
         "ai-dev": { status: "running", uptime_seconds: 3_600, version: "1.2.3" },
         "ai-admin": { status: "running", uptime_seconds: 8_450, version: "1.2.3" },
@@ -172,6 +173,7 @@ function depsForHeartbeat(): HeartbeatDeps {
     collectStatus: async () => ({
       container_status: "running",
       uptime_seconds: 1,
+      ai_dev_health: { status: "unknown", http_code: null, latency_ms: null },
       containers: {
         "ai-dev": { status: "stopped", uptime_seconds: null, version: "" },
         "ai-admin": { status: "stopped", uptime_seconds: null, version: "" },

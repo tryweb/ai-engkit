@@ -26,6 +26,7 @@ interface UpgradeEventSource {
 const STATUS: StatusResponse = {
   container_status: "running",
   uptime_seconds: 42,
+  ai_dev_health: { status: "healthy", http_code: 200, latency_ms: 8 },
   containers: {
     "ai-dev": { status: "running", uptime_seconds: 42, version: "1.2.3" },
     "ai-admin": { status: "running", uptime_seconds: 8450, version: "1.2.3" },

@@ -109,6 +109,12 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
   const isRunning = data.container_status === "running";
   const isUpgrading = data.upgrade_state === "running";
   const { gain, leanctx, valueReport, proveReport, savingsReport } = data;
+  const dbEstimateRequired = data.dbHealth?.estimatedRequiredBytes ?? null;
+  const dbEstimateFree = data.dbHealth?.freeSpaceBytes ?? null;
+  const dbEstimateStatus = dbEstimateRequired === null || dbEstimateFree === null
+    ? "unknown"
+    : dbEstimateFree >= dbEstimateRequired ? "estimate met" : "below estimate";
+  const dbEstimateTone = dbEstimateStatus === "estimate met" ? "success" : dbEstimateStatus === "below estimate" ? "warning" : "neutral";
   const uptime = data.uptime_seconds != null ? `${Math.floor(data.uptime_seconds / 60)}m` : null;
   const center = data.center ?? { state: "unavailable" as const, label: "Unavailable", tone: "danger" as const, href: "/agent" as const, ariaLabel: "Center Unavailable" };
   const runtimeProfile = data.runtimeProfile ?? { applyState: "runtime-unavailable" as const, source: "unavailable" as const, compressionLevel: null, toolProfile: null, permissionInheritance: null, crossProjectSearch: null, secretDetectionEnabled: null, secretRedactionEnabled: null, allowIdeConfigDirs: null, archiveEnabled: null, archiveMaxAgeHours: null, archiveMaxDiskMb: null };
@@ -122,7 +128,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
       <section class="site-summary" aria-label="Site summary">
         <span class="site-summary__item">
           <StatusPill tone={isRunning ? "success" : "danger"} label={data.container_status} />
-          {uptime && <span class="site-summary__value">{uptime} uptime</span>}
+          <span id="ai-dev-uptime-summary" class="site-summary__value">{uptime ? `${uptime} uptime` : "unknown"}</span>
         </span>
         <a href="/projects" class="site-summary__item site-summary__item--link" aria-label={`Projects ${data.project_count} workspace projects`}>
           <span class="site-summary__label">Projects</span>
@@ -249,7 +255,8 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           <h3>Container Status</h3>
           <div class="flex items-center gap-2">
             <span class={`badge ${isRunning ? "badge-success" : "badge-danger"}`}>{data.container_status}</span>
-            {data.uptime_seconds != null && <span class="text-sm text-muted">Uptime: {Math.floor(data.uptime_seconds / 60)}m</span>}
+            <span id="ai-dev-uptime-container" class="text-sm text-muted">Uptime: {data.uptime_seconds != null ? `${Math.floor(data.uptime_seconds / 60)}m` : "unknown"}</span>
+            <span id="ai-dev-health" class="status-pill status-pill--neutral">health unknown</span>
           </div>
           {isRunning && (
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
@@ -320,6 +327,12 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
         ) : (
           <p class="text-sm text-muted">Health data unavailable — probe failed or timed out.</p>
         )}
+        <div class="db-health__estimate" style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);">
+          <span id="db-space-estimate-status" class={`status-pill status-pill--${dbEstimateTone}`}>{dbEstimateStatus}</span>
+          <span id="db-space-estimate-detail" class="text-sm text-muted" style="flex:1;min-width:220px;white-space:normal;overflow-wrap:anywhere;">
+            Estimated required: {dbEstimateRequired === null ? "unknown" : formatBytesEnUs(dbEstimateRequired)} · Available: {dbEstimateFree === null ? "unknown" : formatBytesEnUs(dbEstimateFree)}. DB-only estimate (DB file size + 20% margin); sidecars and disk usage changes are not included. The actual prod gate is authoritative.
+          </span>
+        </div>
       </section>
       <section class="db-health card" aria-label="Host Storage">
         <div class="db-health__header">
@@ -588,6 +601,7 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
           try {
             var res = await fetch("/api/env/restart", { method: "POST" });
             if (res.ok) {
+              await refreshAiDevUptime();
               status.textContent = "Restarted ✔";
               setTimeout(function () { status.textContent = ""; btn.disabled = false; }, 3000);
             } else {
@@ -600,6 +614,25 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
             btn.disabled = false;
           }
         }
+        async function refreshAiDevUptime() {
+          var summary = document.getElementById("ai-dev-uptime-summary");
+          var container = document.getElementById("ai-dev-uptime-container");
+          try {
+            var res = await fetch("/api/admin/ai-dev-uptime");
+            var body = res.ok ? await res.json() : {};
+            var seconds = body && typeof body.uptime_seconds === "number" && isFinite(body.uptime_seconds) ? body.uptime_seconds : null;
+            var value = seconds === null ? "unknown" : Math.floor(seconds / 60) + "m";
+            if (summary) summary.textContent = seconds === null ? "unknown" : value + " uptime";
+            if (container) container.textContent = "Uptime: " + value;
+          } catch (_) {
+            if (summary) summary.textContent = "unknown";
+            if (container) container.textContent = "Uptime: unknown";
+          }
+        }
+        setInterval(refreshAiDevUptime, 60000);
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") refreshAiDevUptime();
+        });
         function ensureProgressElements() {
           var card = document.getElementById("versions-card");
           if (!card) return null;
@@ -681,6 +714,13 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               if (s.gain) {
                 setCard("metric-savings", fmtInt(s.gain.netTokensSaved), "$" + Number(s.gain.netUsdSaved).toFixed(2) + " net saved", Number(s.gain.compressionPct).toFixed(1) + "% compression");
               }
+              var health = s.ai_dev_health || {};
+              var healthPill = document.getElementById("ai-dev-health");
+              if (healthPill) {
+                var healthTone = health.status === "healthy" ? "success" : health.status === "unhealthy" ? "danger" : "neutral";
+                healthPill.className = "status-pill status-pill--" + healthTone;
+                healthPill.textContent = health.status === "unknown" ? "health unknown" : "health " + health.status + (typeof health.http_code === "number" ? " · HTTP " + health.http_code : "") + (typeof health.latency_ms === "number" ? " · " + health.latency_ms + "ms" : "");
+              }
               if (s.leanctx) {
                 setCard("metric-memory", fmtInt(s.leanctx.totalMemoryFacts), fmtInt(s.leanctx.projectsWithFacts) + " projects with facts", fmtInt(s.leanctx.healthCoverage) + " projects with health score");
                 setCard("metric-activity", fmtInt(s.leanctx.activeProjects24h), "active in last 24h", s.gain ? (s.gain.ledgerVerified ? "✓ ledger intact · " + fmtInt(s.gain.ledgerEvents) + " events" : "⚠ ledger unverified") : undefined);
@@ -697,6 +737,18 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
                 setCard("metric-db-events", fmtInt(h.rowCounts.event), undefined, undefined);
                 setCard("metric-db-messages", fmtInt(h.rowCounts.message), undefined, undefined);
                 setCard("metric-db-parts", fmtInt(h.rowCounts.part), undefined, undefined);
+                var estimateStatus = document.getElementById("db-space-estimate-status");
+                var estimateDetail = document.getElementById("db-space-estimate-detail");
+                var required = typeof h.estimatedRequiredBytes === "number" && isFinite(h.estimatedRequiredBytes) ? h.estimatedRequiredBytes : null;
+                var available = typeof h.freeSpaceBytes === "number" && isFinite(h.freeSpaceBytes) ? h.freeSpaceBytes : null;
+                var state = required === null || available === null ? "unknown" : available >= required ? "estimate met" : "below estimate";
+                if (estimateStatus) {
+                  estimateStatus.textContent = state;
+                  estimateStatus.className = "status-pill status-pill--" + (state === "estimate met" ? "success" : state === "below estimate" ? "warning" : "neutral");
+                }
+                if (estimateDetail) {
+                  estimateDetail.textContent = "Estimated required: " + (required === null ? "unknown" : fmtBytes(required)) + " · Available: " + (available === null ? "unknown" : fmtBytes(available)) + ". DB-only estimate (DB file size + 20% margin); sidecars and disk usage changes are not included. The actual prod gate is authoritative.";
+                }
               }
             }
           } catch (_) {}

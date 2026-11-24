@@ -4,6 +4,7 @@ import { execInAiDev as defaultExecInAiDev, type ExecResult } from "./docker";
 
 export const DEFAULT_DB_PATH = "/home/devuser/.local/share/opencode/opencode.db";
 export const DEFAULT_FREE_SPACE_PATH = "/home/devuser/.local/share/opencode";
+const DB_ESTIMATE_MARGIN = 0.2;
 
 export interface DbHealthRowCounts {
   readonly session: number;
@@ -14,6 +15,7 @@ export interface DbHealthRowCounts {
 
 export interface DbHealth {
   readonly fileSizeBytes: number;
+  readonly estimatedRequiredBytes: number | null;
   readonly freelistCount: number;
   readonly rowCounts: DbHealthRowCounts;
   readonly freeSpaceBytes: number | null;
@@ -28,6 +30,13 @@ function parseCount(raw: string): number {
   const n = parseInt(raw.trim(), 10);
   if (Number.isNaN(n) || n < 0) return 0;
   return n;
+}
+
+function parseFileSize(raw: string, exitCode: number): number | null {
+  const value = raw.trim();
+  if (exitCode !== 0 || !/^\d+$/.test(value)) return null;
+  const size = Number(value);
+  return Number.isSafeInteger(size) && size > 0 ? size : null;
 }
 
 function countOrZero(db: Database, table: string): number {
@@ -109,6 +118,7 @@ export async function probeLocalDbHealth(
 
   return {
     fileSizeBytes,
+    estimatedRequiredBytes: Math.ceil(fileSizeBytes * (1 + DB_ESTIMATE_MARGIN)),
     freelistCount,
     rowCounts,
     freeSpaceBytes,
@@ -142,7 +152,8 @@ export async function collectHostDbHealth(
   const v2 = schemaRaw.exitCode === 0 && schemaRaw.stdout.trim() === "session_v2";
   const sourceTables = [v2 ? "session_v2" : "session", "event", v2 ? "session_message" : "message", v2 ? "session_part" : "part"];
   const countRaws = await Promise.all(sourceTables.map((t) => execFn(sqliteRo(`SELECT COUNT(*) FROM "${t}";`))));
-  const fileSizeBytes = parseCount(fileSizeRaw.stdout);
+  const parsedFileSizeBytes = parseFileSize(fileSizeRaw.stdout, fileSizeRaw.exitCode);
+  const fileSizeBytes = parsedFileSizeBytes ?? 0;
   const freelistCount = freelistRaw.exitCode === 0 ? parseCount(freelistRaw.stdout) : 0;
   const rowCounts: DbHealthRowCounts = {
     session: countRaws[0].exitCode === 0 ? parseCount(countRaws[0].stdout) : 0,
@@ -158,6 +169,9 @@ export async function collectHostDbHealth(
 
   return {
     fileSizeBytes,
+    estimatedRequiredBytes: parsedFileSizeBytes === null
+      ? null
+      : Math.ceil(parsedFileSizeBytes * (1 + DB_ESTIMATE_MARGIN)),
     freelistCount,
     rowCounts,
     freeSpaceBytes,

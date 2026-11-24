@@ -60,11 +60,29 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
       fn();
     },
     resolveEffectiveAiAdmin: () => state.effective,
+    getAiDevUptime: async () => 1234,
     ...overrides,
   };
 
   return { deps, state };
 }
+
+describe("GET /api/admin/ai-dev-uptime", () => {
+  test("returns uptime from the lightweight probe", async () => {
+    const app = createAdminRoutes(createDeps().deps);
+    const res = await app.request("http://localhost/api/admin/ai-dev-uptime");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ uptime_seconds: 1234 });
+  });
+
+  test("returns null when the uptime probe fails", async () => {
+    const { deps } = createDeps({ getAiDevUptime: async () => { throw new Error("docker unavailable"); } });
+    const app = createAdminRoutes(deps);
+    const res = await app.request("http://localhost/api/admin/ai-dev-uptime");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ uptime_seconds: null });
+  });
+});
 
 describe("POST /api/admin/restart — bind-source preflight", () => {
   let originalError: typeof console.error;

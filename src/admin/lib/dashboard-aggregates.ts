@@ -316,6 +316,7 @@ export interface DbHealthCounts {
 
 export interface DbHealthSummary {
   readonly fileSizeBytes: number;
+  readonly estimatedRequiredBytes: number | null;
   readonly freelistCount: number;
   readonly rowCounts: DbHealthCounts;
   readonly freeSpaceBytes: number | null;

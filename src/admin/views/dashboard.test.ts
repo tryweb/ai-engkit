@@ -230,6 +230,38 @@ describe("dashboard polish — dev Latest hidden and AI Runtime header removed",
     expect(html).not.toContain('onclick="restartAdmin(event)"');
   });
 
+  test("renders shared uptime targets, health status, and full-width DB-only space estimate", () => {
+    const html = String(DashboardPage(baseData({
+      dbHealth: {
+        fileSizeBytes: 1000,
+        estimatedRequiredBytes: 1200,
+        freelistCount: 0,
+        rowCounts: { session: 1, event: 2, message: 3, part: 4 },
+        freeSpaceBytes: 1500,
+        freeSpacePath: "/tmp",
+        dbPath: "/tmp/opencode.db",
+        collectedAt: "2026-11-24T00:00:00Z",
+      },
+    })));
+    expect(html).toContain('id="ai-dev-uptime-summary"');
+    expect(html).toContain('id="ai-dev-uptime-container"');
+    expect(html).toContain('id="ai-dev-health"');
+    expect(html).toContain('id="db-space-estimate-status"');
+    expect(html).toContain("DB-only estimate (DB file size + 20% margin)");
+    expect(html).toContain("The actual prod gate is authoritative.");
+    expect(html).toContain("/api/admin/ai-dev-uptime");
+    expect(html).toContain("visibilitychange");
+  });
+
+  test("keeps estimate visible and unknown when initial DB health is unavailable", () => {
+    const html = String(DashboardPage(baseData({ dbHealth: null })));
+    expect(html).toContain('id="db-space-estimate-status"');
+    expect(html).toContain('id="db-space-estimate-detail"');
+    expect(html).toContain(">unknown</span>");
+    expect(html).toContain("h.estimatedRequiredBytes");
+    expect(html).toContain("h.freeSpaceBytes");
+  });
+
   test("keeps the restart action for different digests even with identical version strings", () => {
     const html = String(DashboardPage(baseData({
       versions: { "AI-EngKit": "v2.0.23" },

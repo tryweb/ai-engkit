@@ -60,6 +60,7 @@ describe("collectStatus", () => {
     expect(Object.keys(status).sort()).toEqual([
       "admin_version",
       "admin_version_mismatch",
+      "ai_dev_health",
       "container_status",
       "containers",
       "gain",
@@ -77,6 +78,7 @@ describe("collectStatus", () => {
     ]);
     expect(status).toMatchObject({
       container_status: "running",
+      ai_dev_health: { status: "unknown", http_code: null, latency_ms: null },
       uptime_seconds: 3600,
       restart_count: 0,
       gh_auth: "authenticated",
@@ -87,6 +89,22 @@ describe("collectStatus", () => {
       git_hosting_auth: { available: false },
     });
     expect(typeof status.admin_version).toBe("string");
+  });
+
+  test("includes ai-dev health status, HTTP code, and latency from the probe", async () => {
+    const status = await collectStatus({
+      ...makeDeps(),
+      probeAiDevHealth: async () => ({ status: "healthy", http_code: 200, latency_ms: 12 }),
+    });
+    expect(status.ai_dev_health).toEqual({ status: "healthy", http_code: 200, latency_ms: 12 });
+  });
+
+  test("reports a responding non-2xx health endpoint as unhealthy", async () => {
+    const status = await collectStatus({
+      ...makeDeps(),
+      probeAiDevHealth: async () => ({ status: "unhealthy", http_code: 503, latency_ms: 24 }),
+    });
+    expect(status.ai_dev_health).toEqual({ status: "unhealthy", http_code: 503, latency_ms: 24 });
   });
 
   test("reports per-container status, uptime, and version for ai-dev and ai-admin", async () => {
