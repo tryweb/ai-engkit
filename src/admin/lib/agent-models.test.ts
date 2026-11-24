@@ -1,9 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createAgentModelsLib, type AgentModelsDeps } from "./agent-models";
 import type { ExecResult as DockerExecResult } from "./docker";
 
 type ExecResponse = { match?: RegExp; stdout: string; stderr?: string; exitCode?: number };
 const SNAPSHOT_FILE = "/tmp/omo.jsonc.snapshot-test";
+const originalOmoEnabled = process.env.OMO_ENABLED;
+
+beforeEach(() => {
+  // These compatibility tests exercise the OMO backend; do not inherit the
+  // host's Native-mode setting when running the suite.
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = originalOmoEnabled;
+});
 type StubOptions = {
   readonly password?: string | null;
   readonly restart?: AgentModelsDeps["restart"];

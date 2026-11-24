@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createAgentModelReconciler } from "./agent-model-reconciler";
 import { clearModelMetadataCache } from "./model-metadata";
 import type { AgentModelsDeps } from "./agent-model-types";
@@ -10,6 +10,19 @@ type Fixture = {
   readonly applied: Array<readonly [string, readonly { readonly model: string }[]]>;
   readonly cleanup: () => void;
 };
+
+const originalOmoEnabled = process.env.OMO_ENABLED;
+
+beforeEach(() => {
+  // Reconciliation is currently an OMO-backend operation; isolate these
+  // behavior tests from the runner's Native-mode environment.
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = originalOmoEnabled;
+});
 
 function fixture(config: string, provider: string, agents: string, probes: Record<string, string> = {}): Fixture {
   const calls: string[] = [];

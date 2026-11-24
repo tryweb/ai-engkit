@@ -1,10 +1,23 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentModelsDeps } from "../lib/agent-models";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
 
 const { createAgentModelsRoutes } = await import("./agent-models");
+
+const originalOmoEnabled = process.env.OMO_ENABLED;
+
+beforeEach(() => {
+  // Legacy endpoint cases below use OMO config fixtures. Native routing cases
+  // opt in explicitly through their injected environment.
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = originalOmoEnabled;
+});
 
 beforeEach(() => {
   rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });

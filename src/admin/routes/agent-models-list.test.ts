@@ -1,9 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createAgentModelsRoutes } from "./agent-models";
 import type { AgentModelsDeps } from "../lib/agent-models";
 import type { ExecResult } from "../lib/docker";
 import { listHandlers, stubDeps } from "./agent-models-test-support";
 import { CONFIGURABLE_NATIVE_AGENTS } from "../lib/agent-model-types";
+
+const originalOmoEnabled = process.env.OMO_ENABLED;
+
+beforeEach(() => {
+  process.env.OMO_ENABLED = "1";
+});
+
+afterEach(() => {
+  if (originalOmoEnabled === undefined) delete process.env.OMO_ENABLED;
+  else process.env.OMO_ENABLED = originalOmoEnabled;
+});
 
 describe("createAgentModelsRoutes — GET /api/agent-models", () => {
   test("keeps the GET response shape and exposes a native chain in configured", async () => {
