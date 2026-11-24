@@ -1,5 +1,4 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -60,8 +59,4 @@ export async function waitForExecCommand(path: string, pattern: string): Promise
     await Bun.sleep(0);
   }
   return readExecCommands(path);
-}
-
-export function clearReconcileLock(): void {
-  rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
 }

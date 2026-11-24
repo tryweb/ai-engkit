@@ -1,12 +1,8 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { join } from "node:path";
-import { rmSync } from "node:fs";
 import { clearModelMetadataCache } from "./model-metadata";
 import { probeModel, hasAuthMarker } from "./model-probe";
 
 beforeEach(() => {
-  rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
-  rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-health.json"), { force: true });
   clearModelMetadataCache();
 });
 
@@ -46,7 +42,6 @@ describe("V2 probe via title", () => {
       };
       const res = await probeModel(deps, "openai", "free-a");
       expect(res.status).toBe("unavailable");
-      rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-health.json"), { force: true });
     }
     process.env.OMO_ENABLED = prev;
   });

@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { rmSync } from "node:fs";
 import { stubDeps, listHandlers } from "./agent-models-test-support";
 import { clearModelMetadataCache } from "../lib/model-metadata";
 
@@ -10,7 +8,6 @@ let previousOmoEnabled: string | undefined;
 beforeEach(() => {
   previousOmoEnabled = process.env.OMO_ENABLED;
   process.env.OMO_ENABLED = "1";
-  rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
   clearModelMetadataCache();
 });
 

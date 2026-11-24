@@ -14,6 +14,10 @@ code paths without any source change.
   connecting to a real Center during unit tests.
 - Running Playwright specs with `bun test` produced module-load errors rather
   than browser results. Shared module mocks could also conceal failures.
+- Parallel workers also shared `$HOME/.cache/openchamber/agent-model-reconcile.lock`.
+  Module isolation does not isolate files: a competing worker caused `EEXIST`
+  and a no-op reconciliation, reproducing 14 failures. Several fixtures also
+  deleted this shared lock, potentially removing another writer's lock.
 
 ## Solution
 
@@ -26,12 +30,20 @@ code paths without any source change.
   Root `bunfig.toml` excludes `e2e/**`; run those with Playwright separately.
 - Use a disposable `HOME` when checking independence from user configuration;
   run mutating browser specs only against disposable containers.
+- Inject `AgentModelsDeps.reconcileLockPath` into every reconciler test fixture.
+  `createTestReconcileLock()` allocates a private temporary directory and removes
+  it after the test. Never delete the real HOME lock in test setup.
+- Keep lock contention coverage: another owner's held lock must block work
+  without being removed; work resumes after release, independent fixture paths
+  do not interfere, and exceptions release locks. Keep the concurrent-run test.
 
 ## Why It Works
 
 Fixtures select the contract they exercise, not the shell's deployment mode.
 File isolation prevents module mocks from leaking across suites; import-safe
 startup prevents unit tests from launching production background services.
+Temporary lock namespaces isolate filesystem state between workers while the
+production default lock path and locking behavior remain unchanged.
 
 ## Side Effects / Tradeoffs
 
@@ -44,7 +56,8 @@ startup prevents unit tests from launching production background services.
 
 ## Evidence
 
-Verified 2026-11-24 with Bun 1.4.4:
+Initial validation on 2026-11-24 with Bun 1.4.4 (did not establish
+filesystem isolation; the later Bun 1.4.5 dev-container gate exposed the race):
 
 - Root `bun test`, `bun test --isolate`, and `bun test --parallel=4`:
   **1610 pass, 10 skip, 0 fail** across 121 files.
@@ -59,12 +72,30 @@ Verified 2026-11-24 with Bun 1.4.4:
 - Executing `server.ts` in the disposable stack still starts the background
   callback: DB and host maintenance endpoints report `isStarted: true`.
 
+Filesystem-isolation follow-up, 2026-11-24:
+
+- Checkout parallel suite with a pre-existing default lock in a temporary HOME:
+  **1613 pass, 10 skip, 0 fail**; the lock owner's marker remains unchanged.
+- Rebuilt image and actual dev Admin container (Bun 1.4.5), no forced V1 mode:
+  `bun --cwd /opt/admin test --parallel=4` gives
+  **1525 pass, 10 skip, 0 fail**. The dev run passes twice.
+- Five reconciler files repeated five times with four workers:
+  **215 pass, 0 fail**, including lock contention and exception cleanup.
+- Checkout and dev-container typechecks and `git diff --check` pass.
+- Extra full-suite `--rerun-each=3` exposes four `provider-meta.test.ts`
+  failures. These also reproduce in the pre-fix image
+  `46a209cf7051` with that file alone repeated three times (26 pass, 4 fail);
+  they are a separate existing test re-entry issue, not evidence of lock
+  isolation failure. Do not describe that stress run as passing.
+
 ## Related Files
 
 - `src/admin/server.ts`
 - `src/admin/server.test.ts`
 - `src/admin/lib/agent-models.test.ts`
 - `src/admin/lib/agent-model-reconciler.test.ts`
+- `src/admin/lib/agent-model-reconciler-test-support.ts`
+- `src/admin/lib/agent-model-types.ts`
 - `src/admin/lib/upgrade.test.ts`
 - `src/admin/agent/commands-restart.test.ts`
 - `bunfig.toml`

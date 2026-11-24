@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { join } from "node:path";
-import { rmSync } from "node:fs";
+import { createTestReconcileLock } from "./agent-model-reconciler-test-support";
 import { clearModelMetadataCache } from "./model-metadata";
 import type { NormalizedModelMetadata } from "./model-metadata";
 import { createAgentModelReconciler, parseCapabilities } from "./agent-model-reconciler";
@@ -13,13 +12,13 @@ function jsonRes(body: unknown): Response {
 }
 
 beforeEach(() => {
-  rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
   clearModelMetadataCache();
 });
 
 function makeDeps(handlers: Array<{ match: RegExp; stdout?: string }>): { deps: AgentModelsDeps; calls: string[] } {
   const calls: string[] = [];
   const deps: AgentModelsDeps = {
+    reconcileLockPath: createTestReconcileLock(),
     exec: async (cmd: string): Promise<ExecResult> => {
       calls.push(cmd);
       for (const h of handlers) if (h.match.test(cmd)) return { stdout: h.stdout ?? "", stderr: "", exitCode: 0 };

@@ -13,6 +13,9 @@ afterEach(() => {
 import { createAgentModelReconciler } from "./agent-model-reconciler";
 import { V2_SUBAGENT_AGENTS, type AgentModelsDeps } from "./agent-model-types";
 import type { ExecResult } from "./docker";
+import { createTestReconcileLock } from "./agent-model-reconciler-test-support";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 type Fixture = {
   readonly deps: AgentModelsDeps;
@@ -25,6 +28,7 @@ function fixture(config: string, provider: string, agents: string, probes: Recor
   const calls: string[] = [];
   const applied: Array<readonly [string, readonly { readonly model: string }[]]> = [];
   const deps: AgentModelsDeps = {
+    reconcileLockPath: createTestReconcileLock(),
     exec: async (command: string): Promise<ExecResult> => {
       calls.push(command);
       if (command.includes(".agents // {}")) return { stdout: config, stderr: "", exitCode: 0 };
@@ -166,6 +170,59 @@ describe("agent model reconciler", () => {
     await Promise.all([first, second]);
     expect(entered).toBe(2);
     ctx.cleanup();
+  });
+
+  test("does not remove another owner's lock and resumes after it is released", async () => {
+    const ctx = fixture(
+      JSON.stringify({ general: {} }),
+      JSON.stringify({ connected: ["p"], all: [{ id: "p", models: { alpha: { capabilities: {} } } }] }),
+      liveAgents,
+    );
+    const lockPath = ctx.deps.reconcileLockPath!;
+    mkdirSync(lockPath);
+    const marker = join(lockPath, "owner");
+    writeFileSync(marker, "another writer");
+    const reconciler = createAgentModelReconciler(ctx.deps);
+
+    const blocked = await reconciler.reconcileAll();
+    expect(blocked).toEqual({ changed: 0, applied: 0, failed: 0, agents: [], results: [] });
+    expect(ctx.calls).toEqual([]);
+    expect(readFileSync(marker, "utf8")).toBe("another writer");
+    const inference = await reconciler.applyAgent("general", [{ model: "p/alpha" }], "inference");
+    expect(inference.ok).toBe(false);
+    expect(inference.status).toBe("unverified");
+    expect(ctx.calls).toEqual([]);
+    expect(existsSync(marker)).toBe(true);
+
+    rmSync(lockPath, { recursive: true });
+    expect((await reconciler.reconcileAll()).changed).toBe(2);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
+  test("a held fixture lock does not block an independent fixture", async () => {
+    const first = fixture("{}", JSON.stringify({ connected: [], all: [] }), liveAgents);
+    const second = fixture("{}", JSON.stringify({ connected: [], all: [] }), liveAgents);
+    expect(first.deps.reconcileLockPath).not.toBe(second.deps.reconcileLockPath);
+    mkdirSync(first.deps.reconcileLockPath!);
+
+    await createAgentModelReconciler(second.deps).reconcileAll();
+    expect(second.calls.length).toBeGreaterThan(0);
+    expect(existsSync(first.deps.reconcileLockPath!)).toBe(true);
+    expect(existsSync(second.deps.reconcileLockPath!)).toBe(false);
+  });
+
+  test("releases its lock when reconciliation throws", async () => {
+    const ctx = fixture("{}", JSON.stringify({ connected: [], all: [] }), liveAgents);
+    const failing = createAgentModelReconciler({
+      ...ctx.deps,
+      exec: async () => { throw new Error("fixture read failed"); },
+    });
+    await expect(failing.reconcileAll()).rejects.toThrow("fixture read failed");
+    expect(existsSync(ctx.deps.reconcileLockPath!)).toBe(false);
+
+    await createAgentModelReconciler(ctx.deps).reconcileAll();
+    expect(ctx.calls.length).toBeGreaterThan(0);
+    expect(existsSync(ctx.deps.reconcileLockPath!)).toBe(false);
   });
 
   test("keeps inconclusive primary probes fail-open", async () => {
@@ -651,6 +708,7 @@ describe("agent model reconciler", () => {
       const provider = JSON.stringify({ connected: ["p"], all: [{ id: "p", models: { alpha: { capabilities: {} } } }] });
       const calls: string[] = [];
       const deps: AgentModelsDeps = {
+        reconcileLockPath: createTestReconcileLock(),
         exec: async (command: string): Promise<ExecResult> => {
           calls.push(command);
           if (command.includes("routing.json")) return { stdout: emptyRouting, stderr: "", exitCode: 0 };

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createAgentModelsRoutes } from "./agent-models";
 import type { AgentModelsDeps } from "../lib/agent-model-types";
 import type { ExecResult } from "../lib/docker";
+import { createTestReconcileLock } from "../lib/agent-model-reconciler-test-support";
 
 function stubDeps(policyStdout: string, writeOk = true): { deps: AgentModelsDeps; calls: string[] } {
   const calls: string[] = [];
@@ -20,6 +21,7 @@ function stubDeps(policyStdout: string, writeOk = true): { deps: AgentModelsDeps
     },
     restart: async () => ({ ok: true }),
     readEnv: () => ({ OPENCODE_SERVER_PASSWORD: "pw", OMO_ENABLED: "0" }),
+    reconcileLockPath: createTestReconcileLock(),
   };
   return { deps, calls };
 }

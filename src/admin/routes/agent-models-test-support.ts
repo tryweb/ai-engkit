@@ -1,5 +1,6 @@
 import type { AgentModelsDeps } from "../lib/agent-models";
 import type { ExecResult } from "../lib/docker";
+import { createTestReconcileLock } from "../lib/agent-model-reconciler-test-support";
 
 export interface ExecHandler {
   readonly match: RegExp;
@@ -63,6 +64,7 @@ export function stubDeps(handlers: readonly ExecHandler[], password: string | nu
     },
     restart: async () => ({ ok: true }),
     readEnv: (): Record<string, string> => password === null ? {} : { OPENCODE_SERVER_PASSWORD: password },
+    reconcileLockPath: createTestReconcileLock(),
   };
   return {
     deps,

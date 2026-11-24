@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -90,7 +89,6 @@ describe("providers OAuth routes", () => {
   beforeEach(() => {
     reconcileAgentModels.mockClear();
     __setReconcileAgentModelsForTest(reconcileAgentModels);
-    rmSync(join(process.env.HOME ?? "", ".cache/openchamber/agent-model-reconcile.lock"), { recursive: true, force: true });
   });
 
   afterEach(() => {

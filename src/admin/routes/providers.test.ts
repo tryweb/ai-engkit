@@ -1,14 +1,22 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { fixture, readExecCommands, readRegistry, waitForExecCommand, clearReconcileLock } from "./providers-test-support";
+import { fixture, readExecCommands, readRegistry, waitForExecCommand } from "./providers-test-support";
+import { REAL_DEPS } from "../lib/agent-models";
+import { createTestReconcileLock } from "../lib/agent-model-reconciler-test-support";
 
 const { default: providers } = await import("./providers");
 
-describe("provider API-key note endpoints", () => {
-  beforeEach(() => {
-    clearReconcileLock();
-  });
+let previousReconcileLockPath: string | undefined;
+beforeEach(() => {
+  previousReconcileLockPath = (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+  (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = createTestReconcileLock();
+});
+afterEach(() => {
+  if (previousReconcileLockPath === undefined) delete (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+  else (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = previousReconcileLockPath;
+});
 
+describe("provider API-key note endpoints", () => {
   test("POST triggers reconciliation after the first key restart succeeds", async () => {
     const f = await fixture(JSON.stringify({ providers: {} }), false);
     const previousPath = Bun.env.PROVIDER_KEYS_PATH;

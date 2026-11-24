@@ -1,13 +1,21 @@
-import { beforeEach, describe, expect, test } from "bun:test";
-import { clearReconcileLock, fixture, readRegistry } from "./providers-test-support";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { fixture, readRegistry } from "./providers-test-support";
+import { REAL_DEPS } from "../lib/agent-models";
+import { createTestReconcileLock } from "../lib/agent-model-reconciler-test-support";
 
 const { default: providers } = await import("./providers");
 
-describe("provider API-key note persistence", () => {
-  beforeEach(() => {
-    clearReconcileLock();
-  });
+let previousReconcileLockPath: string | undefined;
+beforeEach(() => {
+  previousReconcileLockPath = (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+  (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = createTestReconcileLock();
+});
+afterEach(() => {
+  if (previousReconcileLockPath === undefined) delete (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+  else (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = previousReconcileLockPath;
+});
 
+describe("provider API-key note persistence", () => {
   test("POST adds a note without changing legacy keys", async () => {
     const f = await fixture(JSON.stringify({
       providers: {

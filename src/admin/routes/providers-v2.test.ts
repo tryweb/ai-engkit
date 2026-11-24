@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { __resetExecForTest, __setExecForTest } from "../lib/opencode-v2";
 import type { ExecResult } from "../lib/docker";
+import { REAL_DEPS } from "../lib/agent-models";
+import { createTestReconcileLock } from "../lib/agent-model-reconciler-test-support";
 
 const ENV_PATH = "/opt/ai-engkit/.env";
 
@@ -24,8 +26,11 @@ describe("providers V2 routes", () => {
   let credStore: Map<string, Array<{ id: string; label: string; method: "key" | "oauth" }>>;
   let v2FileProviders: Map<string, Record<string, unknown>>;
   let tempKeysPath: string | null = null;
+  let previousReconcileLockPath: string | undefined;
 
   beforeEach(() => {
+    previousReconcileLockPath = (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+    (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = createTestReconcileLock();
     originalEnv = backupEnv();
     credStore = new Map();
     v2FileProviders = new Map();
@@ -38,6 +43,8 @@ describe("providers V2 routes", () => {
   });
 
   afterEach(() => {
+    if (previousReconcileLockPath === undefined) delete (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath;
+    else (REAL_DEPS as { reconcileLockPath?: string }).reconcileLockPath = previousReconcileLockPath;
     __resetExecForTest();
     restoreEnv(originalEnv);
     if (tempKeysPath) {

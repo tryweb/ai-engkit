@@ -69,6 +69,8 @@ export interface AgentModelsDeps {
   readonly exec: (command: string, timeoutMs?: number) => Promise<ExecResult>;
   readonly restart: () => Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
   readonly readEnv: () => Record<string, string>;
+  /** Local lock directory; defaults to the current user's reconciliation lock. */
+  readonly reconcileLockPath?: string;
 }
 
 export const OMO_CONFIG = "~/.omo/omo.jsonc";

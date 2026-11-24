@@ -173,7 +173,7 @@ function isProvenIneligible(
 
 export function createAgentModelReconciler(deps: AgentModelsDeps) {
   const lib: AgentModelsLib = createAgentModelsLib(deps);
-  const lockPath = join(process.env.HOME ?? homedir(), LOCK_SUFFIX);
+  const lockPath = deps.reconcileLockPath ?? join(process.env.HOME ?? homedir(), LOCK_SUFFIX);
   const probes = new Map<string, ProbeResult>();
   let probeCount = 0;
 
