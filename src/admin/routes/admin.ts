@@ -4,6 +4,7 @@ import type { ExecResult } from "../lib/docker";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { readEnvFile } from "../lib/env";
+import { resolveImageRef } from "../lib/image-ref";
 import {
   resolveEffectiveCompose,
   resolveOverlay,
@@ -17,6 +18,7 @@ export interface AdminRoutesDeps {
   readonly runCommand: (args: string[], timeoutMs: number) => Promise<ExecResult>;
   readonly schedule: (fn: () => void, delayMs: number) => void;
   readonly resolveEffectiveAiAdmin: () => EffectiveCompose;
+  readonly resolveHelperImage: () => string;
   readonly getAiDevUptime?: () => Promise<number | null>;
 }
 
@@ -28,7 +30,30 @@ const REAL_DEPS: AdminRoutesDeps = {
     setTimeout(fn, delayMs);
   },
   resolveEffectiveAiAdmin: () => resolveEffectiveCompose(resolveOverlay({ readEnv: readEnvFile })),
+  resolveHelperImage: resolveImageRef,
 };
+
+/** Keep the most recently created exited helper for this project for diagnosis. */
+export async function cleanupAdminRestartHelpers(
+  run: AdminRoutesDeps["runCommand"],
+  project: string,
+): Promise<void> {
+  const result = await run([
+    "docker", "ps", "-a", "--no-trunc",
+    "--filter", "label=ai-engkit.operation=admin-restart",
+    "--filter", `label=ai-engkit.project=${project}`,
+    "--filter", "status=exited",
+    "--format", "{{.ID}}",
+  ], 10_000);
+  if (result.exitCode !== 0) throw new Error(result.stderr || "Could not list restart helpers");
+  // Docker ps lists newest-created first. Only accept full container IDs as argv.
+  const obsolete = result.stdout.trim().split(/\s+/).filter((id) => /^[a-f0-9]{64}$/.test(id)).slice(1);
+  for (const id of obsolete) {
+    // No --force: a container restarted after listing must not be stopped here.
+    const removed = await run(["docker", "rm", id], 10_000);
+    if (removed.exitCode !== 0) throw new Error(removed.stderr || "Could not remove restart helper");
+  }
+}
 
 /**
  * Host installation root for a Compose base bind source. A staged upgrade base
@@ -98,7 +123,7 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
   /**
    * Response sent BEFORE restart to avoid connection drop.
    * Client polls admin status after receiving response.
-   * Uses compose recreate so admin picks up the latest ghcr.io image.
+   * Uses compose recreate with the configured image so admin matches ai-dev.
    * Bind sources are resolved synchronously before returning success,
    * so misconfiguration is surfaced as HTTP 500 instead of silent failure.
    */
@@ -127,16 +152,29 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
     const resolvedEnv = envSource;
     const resolvedBase = baseSource;
     const resolvedProject = project;
+    const helperImage = deps.resolveHelperImage();
+    const helperName = `ai-engkit-admin-restart-${crypto.randomUUID()}`;
     const projectDirectory = overlayActive ? hostProjectDirectory(baseFile, resolvedBase) : null;
 
     deps.schedule(() => {
-      // Run compose in a separate container so it survives admin being killed.
-      // Use --entrypoint /usr/local/bin/docker with direct args to avoid triple-nested
-      // sh -c quoting issues (Bug 4). No shell quoting needed — runCommand passes argv directly.
+      // Detach the helper from this admin container; the Compose recreate stops
+      // admin, and its attached Docker CLI would otherwise be terminated too.
+      // Reuse the configured image rather than pulling an unrelated :latest tag.
       const dockerArgs = [
         "docker",
         "run",
-        "--rm",
+        "--detach",
+        "--name",
+        helperName,
+        "--label",
+        "ai-engkit.operation=admin-restart",
+        "--label",
+        `ai-engkit.project=${resolvedProject}`,
+        "--log-opt",
+        "max-size=1m",
+        "--log-opt",
+        "max-file=1",
+        "--pull=never",
         "--user",
         "0",
         "--entrypoint",
@@ -147,7 +185,7 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
         `${resolvedBase}:${resolvedBase}:ro`,
         "-v",
         "/var/run/docker.sock:/var/run/docker.sock",
-        "ghcr.io/tryweb/ai-engkit:latest",
+        helperImage,
         "compose",
         "-p",
         resolvedProject,
@@ -165,12 +203,21 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
         "--force-recreate",
         "ai-admin",
       );
-      const resultPromise = deps.runCommand(dockerArgs, 120_000);
+      const resultPromise = (async () => {
+        try {
+          await cleanupAdminRestartHelpers(deps.runCommand, resolvedProject);
+        } catch (error: unknown) {
+          // Cleanup failure must not prevent recovery of the admin service.
+          console.warn("[admin] restart helper cleanup failed:", error instanceof Error ? error.message : String(error));
+        }
+        return deps.runCommand(dockerArgs, 120_000);
+      })();
       resultPromise
         .then((result) => {
           if (result.exitCode !== 0) {
             console.error(
               "[admin] ai-admin compose recreate failed:",
+              helperName,
               result.stderr || result.stdout || `exit ${result.exitCode}`,
             );
           }
@@ -178,12 +225,13 @@ export function createAdminRoutes(overrides: Partial<AdminRoutesDeps> = {}): Hon
         .catch((err: unknown) => {
           console.error(
             "[admin] ai-admin compose recreate failed:",
+            helperName,
             err instanceof Error ? err.message : String(err),
           );
         });
     }, 2000);
 
-    return c.json({ ok: true, message: "Admin pulling latest image and recreating..." });
+    return c.json({ ok: true, message: "Admin recreation scheduled", helper: helperName });
   });
 
   return admin;

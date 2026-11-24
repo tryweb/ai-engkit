@@ -187,7 +187,7 @@ export function createHarness(opts: {
     }
     if (url === "/api/admin/restart") {
       if (opts.postOk) {
-        return { ok: true, json: async () => ({ ok: true }) };
+        return { ok: true, json: async () => opts.postBody ?? ({ ok: true }) };
       }
       return {
         ok: false,

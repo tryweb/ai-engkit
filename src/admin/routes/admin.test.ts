@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { createAdminRoutes, type AdminRoutesDeps } from "./admin";
+import { cleanupAdminRestartHelpers, createAdminRoutes, type AdminRoutesDeps } from "./admin";
 import type { ExecResult } from "../lib/docker";
 import type { EffectiveCompose } from "../lib/compose-overlay";
 
@@ -18,6 +18,7 @@ type DepsState = {
   envSource: string | null;
   baseSource: string | null;
   effective: EffectiveCompose;
+  helperImage: string;
   throwOnProject: Error | null;
   throwOnBind: Error | null;
   runCommandResults: ExecResult[];
@@ -31,6 +32,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
     envSource: "/host/.env",
     baseSource: "/host/compose.yml",
     effective: noOverlayEffective,
+    helperImage: "ghcr.io/tryweb/ai-engkit:v1.25.0",
     throwOnProject: null,
     throwOnBind: null,
     runCommandResults: [],
@@ -50,6 +52,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
       return null;
     },
     runCommand: async (args: string[], timeout: number) => {
+      if (args[1] === "ps") return { stdout: "", stderr: "", exitCode: 0 };
       state.runCommandCalls.push({ args, timeout });
       const next = state.runCommandResults.shift();
       if (next !== undefined) return next;
@@ -60,6 +63,7 @@ function createDeps(overrides: Partial<AdminRoutesDeps> = {}): { deps: AdminRout
       fn();
     },
     resolveEffectiveAiAdmin: () => state.effective,
+    resolveHelperImage: () => state.helperImage,
     ...overrides,
   };
 
@@ -99,10 +103,19 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     expect(state.scheduleCalls).toHaveLength(1);
     expect(state.scheduleCalls[0].delay).toBe(2000);
 
-    // Then: runCommand called with helper image literal and compose --env-file
+    // Then: runCommand starts a detached helper using the configured image.
     expect(state.runCommandCalls).toHaveLength(1);
     const args = state.runCommandCalls[0].args;
-    expect(args).toContain("ghcr.io/tryweb/ai-engkit:latest");
+    expect(args).toContain(state.helperImage);
+    expect(args).not.toContain("ghcr.io/tryweb/ai-engkit:latest");
+    expect(args).toContain("--detach");
+    expect(args).not.toContain("--rm");
+    expect(args).toContain("ai-engkit.operation=admin-restart");
+    expect(args).toContain("ai-engkit.project=test-proj");
+    const helperName = args[args.indexOf("--name") + 1];
+    expect(helperName).toStartWith("ai-engkit-admin-restart-");
+    expect(isRecord(body) && body["helper"]).toBe(helperName);
+    expect(args).toContain("--pull=never");
     expect(args).toContain("--env-file");
     const envFileIdx = args.indexOf("--env-file");
     expect(args[envFileIdx + 1]).toBe("/host/.env");
@@ -247,6 +260,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
         fn();
       },
       resolveEffectiveAiAdmin: () => noOverlayEffective,
+      resolveHelperImage: () => "ghcr.io/tryweb/ai-engkit:v1.25.0",
     };
     const app = createAdminRoutes(rejectingDeps);
 
@@ -268,6 +282,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
       envSource: "/host/.env",
       baseSource: "/host/compose.yml",
       effective: noOverlayEffective,
+      helperImage: "ghcr.io/tryweb/ai-engkit:v1.25.0",
       throwOnProject: null,
       throwOnBind: null,
       runCommandResults: [],
@@ -292,6 +307,7 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
         void fn;
       },
       resolveEffectiveAiAdmin: () => state.effective,
+      resolveHelperImage: () => "ghcr.io/tryweb/ai-engkit:v1.25.0",
     };
     const app = createAdminRoutes(deps);
 
@@ -303,6 +319,32 @@ describe("POST /api/admin/restart — bind-source preflight", () => {
     expect(helperStarted).toBe(false);
     expect(state.scheduleCalls.length).toBe(1);
     expect(state.scheduleCalls[0].delay).toBe(2000);
+  });
+});
+
+describe("restart helper retention", () => {
+  test("keeps newest exited helper and removes only older IDs without force", async () => {
+    const newest = "a".repeat(64);
+    const older = "b".repeat(64);
+    const calls: string[][] = [];
+    await cleanupAdminRestartHelpers(async (args) => {
+      calls.push(args);
+      return { stdout: `${newest}\n${older}\ninvalid-id`, stderr: "", exitCode: 0 };
+    }, "test-proj");
+    expect(calls[0]).toContain("status=exited");
+    expect(calls[0]).toContain("label=ai-engkit.operation=admin-restart");
+    expect(calls[0]).toContain("label=ai-engkit.project=test-proj");
+    expect(calls[1]).toEqual(["docker", "rm", older]);
+    expect(calls).toHaveLength(2);
+  });
+
+  test("does not remove anything when listing fails", async () => {
+    const calls: string[][] = [];
+    await expect(cleanupAdminRestartHelpers(async (args) => {
+      calls.push(args);
+      return { stdout: "a".repeat(64), stderr: "daemon unavailable", exitCode: 1 };
+    }, "test-proj")).rejects.toThrow("daemon unavailable");
+    expect(calls).toHaveLength(1);
   });
 });
 

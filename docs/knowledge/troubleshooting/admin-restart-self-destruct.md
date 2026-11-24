@@ -1,5 +1,38 @@
 # Admin Container Self-Destruct on Compose Recreate
 
+## Pinned-image helper download timeout (2026-11-24)
+
+On `192.168.11.196`, two restart attempts started downloading the hardcoded
+`:latest` helper image and exited with 143 exactly 120 seconds later. Admin's
+start time stayed unchanged: this was the command timeout during image pull,
+not proof that Compose had stopped Admin. The requested `v1.25.0` image was
+already present locally.
+
+The Dashboard restart path now uses the configured image, disables implicit
+helper pulls, and starts the helper detached. If the configured image is not
+local, prepare it through the upgrade flow or explicitly pull it before retrying.
+The API response means scheduled, not successfully recreated.
+
+Helpers are retained with an `ai-engkit.operation=admin-restart` label, a project
+label, and a unique name returned as `helper` in the API response. This preserves
+Compose logs and exit status even when Admin is replaced. Inspect on the host:
+
+```bash
+docker ps -a --filter label=ai-engkit.operation=admin-restart
+docker logs <helper-name>
+docker inspect --format '{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}' <helper-name>
+```
+
+Before starting a new helper, cleanup retains the newest exited helper for that
+project and removes older exited helpers without force; running helpers are not
+selected. A new attempt can therefore retain the previous result plus its own.
+Cleanup is best-effort and failures are logged without blocking restart.
+Dashboard timeout feedback includes the new helper name. After diagnosis, a
+specific stopped container can also be removed with `docker rm <helper-name>`.
+Logs are capped to one 1 MB file per helper.
+These changes apply to the Dashboard path, not the Center-agent restart
+path. The historical findings below describe earlier implementations.
+
 ## Context
 
 The AI-EngKit admin container (`ai-engkit-admin`) has a "↻ Restart" button that recreates the container with the latest image from `ghcr.io/tryweb/ai-engkit:latest`. The challenge is that the admin server (Bun process) needs to execute a `docker compose up -d --force-recreate` command that ultimately kills its own process — a self-destruct problem.

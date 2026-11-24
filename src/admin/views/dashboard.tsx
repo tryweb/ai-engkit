@@ -528,11 +528,14 @@ const DashboardContent: FC<{ data: DashboardData }> = ({ data }) => {
               btn.textContent = "↻ Restart";
               return;
             }
+            const restartData = await res.json().catch(() => null);
+            const helperHint = restartData && typeof restartData.helper === "string"
+              ? " (helper: " + restartData.helper + ")" : "";
             const deadline = Date.now() + 120000;
             let observedUnavailability = false;
             const poll = async () => {
               if (Date.now() > deadline) {
-                alert("Admin restart timed out — please check container status and logs");
+                alert("Admin restart timed out — please check container status and logs" + helperHint);
                 btn.disabled = false;
                 btn.textContent = "↻ Restart";
                 return;

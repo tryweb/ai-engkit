@@ -12,6 +12,7 @@ describe("dashboard restartAdmin behavioral — production extraction", () => {
     const harness = createHarness({
       baseline: { uptime: 100, digest: "sha256:abc" },
       postOk: true,
+      postBody: { ok: true, helper: "ai-engkit-admin-restart-test" },
       pollSequence: Array.from({ length: 130 }, () => ({ ok: true, body: { uptime_seconds: 100, image_digest: "sha256:abc" } })),
     });
     const source = getProductionRestartAdminSource();
@@ -28,6 +29,7 @@ describe("dashboard restartAdmin behavioral — production extraction", () => {
       if (harness.getAlerts().some((a) => a.includes("timed out"))) break;
     }
     expect(harness.getAlerts().some((a) => a.includes("timed out"))).toBe(true);
+    expect(harness.getAlerts()[0]).toContain("ai-engkit-admin-restart-test");
     expect(harness.getButton().disabled).toBe(false);
     expect(harness.getButton().textContent).toBe("↻ Restart");
     expect(harness.isReloaded()).toBe(false);
