@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 
+## [2.0.28] - 2026-11-26
+
+### Fixed
+- Pin the Admin restart helper to the configured V2 image and retain helper diagnostics.
+
+### Changed
+- Upgrade Docker Engine from 29.10.0 to 29.10.1.
+- Upgrade OpenCode CLI from 2.4.0 to 2.4.2.
+- Upgrade GitLab CLI from 1.131.0 to 1.133.0.
+- Upgrade GitHub CLI from 2.105.0 to 2.106.0.
+- Upgrade OpenSpec from 2.1.1 to 2.2.0.
+
 ## [2.0.27] - 2026-11-24
 
 ### Added
@@ -2813,5 +2825,6 @@
 [2.0.24]: https://github.com/tryweb/ai-engkit/compare/v2.0.23...v2.0.24
 [2.0.25]: https://github.com/tryweb/ai-engkit/compare/v2.0.24...v2.0.25
 [2.0.26]: https://github.com/tryweb/ai-engkit/compare/v2.0.25...v2.0.26
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.27...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v2.0.28...HEAD
+[2.0.28]: https://github.com/tryweb/ai-engkit/compare/v2.0.27...v2.0.28
 [2.0.27]: https://github.com/tryweb/ai-engkit/releases/tag/v2.0.27
