@@ -20,10 +20,10 @@ services:
       args:
         # V2 image build args (no OMO runtime).
         - OPENCODE_CLI_PACKAGE=${OPENCODE_CLI_PACKAGE:-@opencode/cli}
-        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.4.0}
+        - OPENCODE_CLI_VERSION=${OPENCODE_CLI_VERSION:-2.4.2}
         - OPENCHAMBER_VERSION=2.8.0
         - BUILDX_VERSION=0.39.1
-        - GLAB_VERSION=1.131.0
+        - GLAB_VERSION=1.133.0
         - AI_ENGKIT_VERSION=v2dev
     container_name: ai-engkit-v2dev
     ports:
