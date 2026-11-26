@@ -25,6 +25,7 @@ services:
         required: false
     environment:
       OPENCHAMBER_HOST: ${OPENCHAMBER_HOST:-0.0.0.0}
+      LEANCTX_MCP_WRAPPER: "${LEANCTX_MCP_WRAPPER:-}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

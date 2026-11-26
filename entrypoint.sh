@@ -31,7 +31,7 @@ for script in /entrypoint.d/*.sh; do
   if [[ -f $script ]]; then
     chmod +x "$script"
     case "$(basename "$script")" in
-      00-core-recovery.sh|00-db-compat-gate.sh|00-opencode-selection-repair.sh)
+      00-core-recovery.sh|00-db-compat-gate.sh|00-opencode-selection-repair.sh|00-leanctx-mcp-wrapper.sh)
         if ! "$script"; then
           block_startup
         fi

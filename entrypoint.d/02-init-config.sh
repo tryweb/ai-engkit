@@ -314,6 +314,67 @@ fi
 mkdir -p "$OPCODE_CONFIG_DIR"
 OPCODE_CONFIG_FILE="$OPCODE_CONFIG_DIR/opencode.json"
 
+# BEGIN FUNCTION: build_leanctx_mcp_command_json
+build_leanctx_mcp_command_json() {
+  if [ -z "${LEANCTX_MCP_WRAPPER:-}" ]; then
+    printf '%s\n' '["lean-ctx"]'
+    return 0
+  fi
+  # The wrapper path is data, never shell source. The 00 preflight has already
+  # required an absolute, regular, non-symlink executable file.
+  jq -cn --arg wrapper "$LEANCTX_MCP_WRAPPER" '[ $wrapper ]'
+}
+# END FUNCTION: build_leanctx_mcp_command_json
+
+# BEGIN FUNCTION: build_opencode_mcp_block
+build_opencode_mcp_block() {
+  local leanctx_command_json="${1:?lean-ctx command JSON is required}"
+  jq -n --argjson leanctx_command "$leanctx_command_json" '{
+    codegraph: {
+      type: "local",
+      command: ["codegraph", "serve", "--mcp"],
+      enabled: true
+    },
+    context7: {
+      type: "remote",
+      url: "https://mcp.context7.com/mcp",
+      enabled: true
+    },
+    playwright: {
+      type: "local",
+      command: ["pw-mcp"],
+      enabled: true
+    },
+    "lean-ctx": {
+      type: "local",
+      command: $leanctx_command,
+      enabled: true
+    }
+  }'
+}
+# END FUNCTION: build_opencode_mcp_block
+
+# BEGIN FUNCTION: reapply_configured_leanctx_mcp_command
+reapply_configured_leanctx_mcp_command() {
+  [ -n "${LEANCTX_MCP_WRAPPER:-}" ] || return 0
+
+  local tmp_file
+  tmp_file="$(mktemp "${OPCODE_CONFIG_FILE}.tmp.XXXXXX")" || return 1
+  if ! jq --arg wrapper "$LEANCTX_MCP_WRAPPER" \
+    '.mcp["lean-ctx"].command = [$wrapper]' \
+    "$OPCODE_CONFIG_FILE" > "$tmp_file"; then
+    rm -f "$tmp_file"
+    printf 'lean-ctx: failed to reapply LEANCTX_MCP_WRAPPER to %s\n' "$OPCODE_CONFIG_FILE" >&2
+    return 1
+  fi
+  if ! chmod --reference="$OPCODE_CONFIG_FILE" "$tmp_file" || ! mv "$tmp_file" "$OPCODE_CONFIG_FILE"; then
+    rm -f "$tmp_file"
+    printf 'lean-ctx: failed to atomically update %s with LEANCTX_MCP_WRAPPER\n' "$OPCODE_CONFIG_FILE" >&2
+    return 1
+  fi
+}
+# END FUNCTION: reapply_configured_leanctx_mcp_command
+
 build_opencode_permission_policy() {
   jq -n '{
     read: "allow",
@@ -365,9 +426,13 @@ fi
 LSP_BLOCK=$(jq -n --argjson enabled "$ENABLED_LSP" \
   '{ marksman: { command: ["marksman", "server"], extensions: [".md", ".markdown"] } } * $enabled')
 
+LEANCTX_MCP_COMMAND_JSON="$(build_leanctx_mcp_command_json)"
+MCP_BLOCK="$(build_opencode_mcp_block "$LEANCTX_MCP_COMMAND_JSON")"
+
 OPCODE_CONFIG=$(jq -n \
   --argjson plugins "$PLUGIN_JSON" \
   --argjson lsp "$LSP_BLOCK" \
+  --argjson mcp "$MCP_BLOCK" \
   --argjson permission "$OPENCODE_PERMISSION" \
   --arg playwright_version "${PLAYWRIGHT_VERSION}" \
   --arg playwright_mcp_version "${PLAYWRIGHT_MCP_VERSION}" \
@@ -376,28 +441,7 @@ OPCODE_CONFIG=$(jq -n \
     plugin: $plugins,
     lsp: $lsp,
     permission: $permission,
-    mcp: {
-      codegraph: {
-        type: "local",
-        command: ["codegraph", "serve", "--mcp"],
-        enabled: true
-      },
-      context7: {
-        type: "remote",
-        url: "https://mcp.context7.com/mcp",
-        enabled: true
-      },
-      playwright: {
-        type: "local",
-        command: ["pw-mcp"],
-        enabled: true
-      },
-      "lean-ctx": {
-        type: "local",
-        command: ["lean-ctx"],
-        enabled: true
-      }
-    }
+    mcp: $mcp
   } | if .permission == null then del(.permission) else . end')
 echo "Updating opencode.json with plugins: $PLUGINS"
 echo "$OPCODE_CONFIG" > "$OPCODE_CONFIG_FILE"
@@ -970,3 +1014,8 @@ else
 fi
 
 echo "Default configs initialized"
+
+# lean-ctx init above can rewrite opencode.json on first boot. Reassert an
+# explicit wrapper only after every startup configuration writer has run;
+# leave the unset/default path untouched to preserve existing behavior.
+reapply_configured_leanctx_mcp_command

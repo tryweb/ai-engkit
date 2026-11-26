@@ -38,6 +38,63 @@ extract_function() {
   sed -n "/^# BEGIN FUNCTION: ${func_name}$/,/^# END FUNCTION: ${func_name}$/p" "$src_file"
 }
 
+new_workspace_scratch_dir() {
+  local repo_root
+  repo_root="$(cd "$SCRIPT_DIR/.." && pwd)"
+  mkdir -p "$repo_root/.tmp"
+  mktemp -d "$repo_root/.tmp/entrypoint-test.XXXXXX"
+}
+
+run_leanctx_mcp_command_builder() {
+  local root="$1" wrapper_mode="$2" wrapper_path="${3:-}"
+  local source="$root/build-leanctx-mcp.sh"
+  extract_function "build_leanctx_mcp_command_json" "$SCRIPT_DIR/02-init-config.sh" > "$source"
+  printf '%s\n' 'build_leanctx_mcp_command_json' >> "$source"
+  if [ "$wrapper_mode" = "unset" ]; then
+    env -u LEANCTX_MCP_WRAPPER bash "$source"
+  else
+    LEANCTX_MCP_WRAPPER="$wrapper_path" bash "$source"
+  fi
+}
+
+run_leanctx_mcp_block_builder() {
+  local root="$1" wrapper_mode="$2" wrapper_path="${3:-}"
+  local source="$root/build-leanctx-mcp-block.sh"
+  {
+    extract_function "build_leanctx_mcp_command_json" "$SCRIPT_DIR/02-init-config.sh"
+    extract_function "build_opencode_mcp_block" "$SCRIPT_DIR/02-init-config.sh"
+    printf '%s\n' 'build_opencode_mcp_block "$(build_leanctx_mcp_command_json)"'
+  } > "$source"
+  if [ "$wrapper_mode" = "unset" ]; then
+    env -u LEANCTX_MCP_WRAPPER bash "$source"
+  else
+    LEANCTX_MCP_WRAPPER="$wrapper_path" bash "$source"
+  fi
+}
+
+run_leanctx_mcp_preflight() {
+  local wrapper_mode="$1" wrapper_path="${2:-}"
+  if [ "$wrapper_mode" = "unset" ]; then
+    env -u LEANCTX_MCP_WRAPPER bash "$SCRIPT_DIR/00-leanctx-mcp-wrapper.sh"
+  else
+    LEANCTX_MCP_WRAPPER="$wrapper_path" bash "$SCRIPT_DIR/00-leanctx-mcp-wrapper.sh"
+  fi
+}
+
+run_reapply_leanctx_mcp_command() {
+  local config_file="$1" wrapper_mode="$2" wrapper_path="${3:-}"
+  local source="$(dirname "$config_file")/reapply-leanctx-mcp.sh"
+  {
+    extract_function "reapply_configured_leanctx_mcp_command" "$ENTRYPOINT_FILE"
+    printf '%s\n' 'reapply_configured_leanctx_mcp_command'
+  } > "$source"
+  if [ "$wrapper_mode" = "unset" ]; then
+    env -u LEANCTX_MCP_WRAPPER OPCODE_CONFIG_FILE="$config_file" bash "$source"
+  else
+    LEANCTX_MCP_WRAPPER="$wrapper_path" OPCODE_CONFIG_FILE="$config_file" bash "$source"
+  fi
+}
+
 run_upgrade() {
   local root="$1"
   local skill_name="${2:-knowledge-capture}"
@@ -758,6 +815,81 @@ assert_archive_uses_timestamp_when_backup_exists() {
   rm -rf "$root"
 }
 
+assert_leanctx_mcp_command_default_override_and_preservation() {
+  local root wrapper command_json mcp_json
+  root="$(new_workspace_scratch_dir)"
+  wrapper="$root/bin/wrapper with spaces.py"
+  mkdir -p "$(dirname "$wrapper")"
+  printf '%s\n' '#!/usr/bin/env python3' 'print("wrapper")' > "$wrapper"
+  chmod 755 "$wrapper"
+
+  command_json="$(run_leanctx_mcp_command_builder "$root" unset)"
+  jq -e '. == ["lean-ctx"]' <<< "$command_json" >/dev/null
+
+  run_leanctx_mcp_preflight unset
+  run_leanctx_mcp_preflight set "$wrapper"
+  command_json="$(run_leanctx_mcp_command_builder "$root" set "$wrapper")"
+  jq -e --arg wrapper "$wrapper" '. == [$wrapper]' <<< "$command_json" >/dev/null
+
+  mcp_json="$(run_leanctx_mcp_block_builder "$root" unset)"
+  jq -e '.codegraph.command == ["codegraph", "serve", "--mcp"] and .context7.url == "https://mcp.context7.com/mcp" and .playwright.command == ["pw-mcp"] and .["lean-ctx"].command == ["lean-ctx"]' <<< "$mcp_json" >/dev/null
+
+  mcp_json="$(run_leanctx_mcp_block_builder "$root" set "$wrapper")"
+  jq -e --arg wrapper "$wrapper" '.codegraph.command == ["codegraph", "serve", "--mcp"] and .context7.url == "https://mcp.context7.com/mcp" and .playwright.command == ["pw-mcp"] and .["lean-ctx"].command == [$wrapper]' <<< "$mcp_json" >/dev/null
+  rm -rf "$root"
+}
+
+assert_leanctx_mcp_command_reapplies_after_leanctx_init_only_when_configured() {
+  local root wrapper config_file before after
+  root="$(new_workspace_scratch_dir)"
+  wrapper="$root/bin/wrapper with spaces.py"
+  config_file="$root/opencode.json"
+  mkdir -p "$(dirname "$wrapper")"
+  printf '%s\n' '#!/usr/bin/env python3' 'print("wrapper")' > "$wrapper"
+  chmod 755 "$wrapper"
+
+  # Simulate lean-ctx init normalizing the initial command on first boot.
+  printf '%s\n' '{"mcp":{"lean-ctx":{"type":"local","command":["/usr/local/bin/lean-ctx"],"enabled":true},"codegraph":{"command":["codegraph","serve","--mcp"]}},"plugin":["oh-my-openagent"],"lsp":{"marksman":{"command":["marksman","server"]}},"permission":{"bash":"allow"},"provider":{"custom":{"name":"preserve"}}}' > "$config_file"
+  before="$(jq -c 'del(.mcp["lean-ctx"].command)' "$config_file")"
+  run_reapply_leanctx_mcp_command "$config_file" set "$wrapper"
+  jq -e --arg wrapper "$wrapper" '.mcp["lean-ctx"].command == [$wrapper]' "$config_file" >/dev/null
+  after="$(jq -c 'del(.mcp["lean-ctx"].command)' "$config_file")"
+  test "$before" = "$after"
+  ! compgen -G "$config_file.tmp.*" >/dev/null
+
+  # Unset must not undo existing lean-ctx init behavior.
+  printf '%s\n' '{"mcp":{"lean-ctx":{"command":["/usr/local/bin/lean-ctx"]}}}' > "$config_file"
+  run_reapply_leanctx_mcp_command "$config_file" unset
+  jq -e '.mcp["lean-ctx"].command == ["/usr/local/bin/lean-ctx"]' "$config_file" >/dev/null
+  rm -rf "$root"
+}
+
+assert_leanctx_mcp_wrapper_preflight_fails_closed_without_config_write() {
+  local root valid relative missing non_executable symlink_path status
+  root="$(new_workspace_scratch_dir)"
+  valid="$root/wrapper with spaces.py"
+  relative="relative/wrapper.py"
+  missing="$root/missing-wrapper.py"
+  non_executable="$root/not-executable.py"
+  symlink_path="$root/wrapper-symlink.py"
+  printf '%s\n' '#!/usr/bin/env python3' 'print("wrapper")' > "$valid"
+  cp "$valid" "$non_executable"
+  chmod 755 "$valid"
+  chmod 644 "$non_executable"
+  ln -s "$valid" "$symlink_path"
+  printf '%s\n' '{"preserve":"original"}' > "$root/opencode.json"
+  cp "$root/opencode.json" "$root/opencode.before.json"
+
+  for invalid in "$relative" "$missing" "$non_executable" "$symlink_path"; do
+    status=0
+    run_leanctx_mcp_preflight set "$invalid" > "$root/stdout" 2> "$root/stderr" || status=$?
+    test "$status" -ne 0
+    test -s "$root/stderr"
+    cmp -s "$root/opencode.before.json" "$root/opencode.json"
+  done
+  rm -rf "$root"
+}
+
 assert_normal_sync_is_atomic_and_idempotent
 assert_opencode_permission_policy_allows_shell
 assert_migration_backup_and_marker_boundary
@@ -805,6 +937,9 @@ assert_state_cache_is_noop_when_empty_or_missing
 assert_archive_moves_omo_jsonc_to_backup
 assert_archive_is_noop_when_missing
 assert_archive_uses_timestamp_when_backup_exists
+assert_leanctx_mcp_command_default_override_and_preservation
+assert_leanctx_mcp_command_reapplies_after_leanctx_init_only_when_configured
+assert_leanctx_mcp_wrapper_preflight_fails_closed_without_config_write
 printf '%s\n' 'AGENTS sync tests passed'
 printf '%s\n' 'Bootstrapped skill upgrade tests passed'
 printf '%s\n' 'Native agents deploy tests passed'

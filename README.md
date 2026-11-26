@@ -128,6 +128,7 @@ Copy `.env.example` to `.env` when configuring a checkout manually. The installe
 | `NATIVE_AGENTS` | `1` | Use the baked-in Native agents and routing configuration; set to `0` only for the legacy OMO line |
 | `OPENCODE_PLUGINS` | ignored by Native default | Legacy OMO-line plugin list; Native mode generates a plugin-free OpenCode config |
 | `OPENCODE_PROVIDER` | unset | Custom provider JSON injected into `opencode.json` |
+| `LEANCTX_MCP_WRAPPER` | unset (`lean-ctx`) | Optional absolute path to a consumer-owned LeanCTX MCP wrapper executable inside the persistent `opencode-config` volume; injected into `ai-dev` only |
 | `WORKSPACE_PATH` | named volume | Set a host path for a bind-mounted workspace |
 | `BACKUP_RETENTION` | `5` | Number of upgrade backups to retain |
 | `APT_PACKAGES` | unset | Extra apt packages installed at startup |
@@ -141,6 +142,27 @@ existing `.env` does not silently change its agent runtime; use the Admin
 Dashboard's one-way OMO-to-Native migration to move an existing installation.
 New installs should keep `NATIVE_AGENTS=1`; do not set `OMO_ENABLED=1` alongside
 Native mode.
+
+### LeanCTX MCP wrapper integration
+
+AI-EngKit generates `opencode.json` at every `ai-dev` start. By default,
+LeanCTX MCP uses the built-in `lean-ctx` executable; first-boot LeanCTX
+initialization may normalize the configured command to that executable's
+absolute path. A consumer may opt in to a wrapper by
+installing it as a regular, executable file owned by `devuser` in the persistent
+`opencode-config` volume, then setting `LEANCTX_MCP_WRAPPER` in the host `.env` to
+its absolute **container path**, for example:
+
+```dotenv
+LEANCTX_MCP_WRAPPER=/home/devuser/.config/opencode/bin/leanctx-mcp-wrapper
+```
+
+Recreate `ai-dev` after changing the value so the generated MCP configuration is
+loaded by OpenCode. AI-EngKit validates an explicit path before writing
+`opencode.json`; an invalid path blocks `ai-dev` startup rather than silently
+falling back. To return to the default, unset the variable and recreate `ai-dev`.
+This variable is an `ai-dev` process setting; it is not added to the `ai-admin`
+Compose environment. AI-EngKit does not ship, install, or update the wrapper.
 
 ### Workspace and persistent data
 

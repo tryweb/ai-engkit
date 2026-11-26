@@ -548,6 +548,21 @@ else
   fail "lean-ctx MCP not configured in opencode.json"
 fi
 
+if docker exec "$CONTAINER" sh -c '
+  set -eu
+  command=$(jq -er '\'' .mcp["lean-ctx"].command | select(type == "array" and length == 1) | .[0] '\'' /home/devuser/.config/opencode/opencode.json)
+  if [ -n "${LEANCTX_MCP_WRAPPER:-}" ]; then
+    [ "$command" = "$LEANCTX_MCP_WRAPPER" ]
+  else
+    resolved=$(command -v lean-ctx || true)
+    [ "$command" = "lean-ctx" ] || { [ -n "$resolved" ] && [ "$command" = "$resolved" ]; }
+  fi
+' 2>/dev/null; then
+  pass "generated lean-ctx MCP command matches ai-dev environment"
+else
+  fail "generated lean-ctx MCP command does not match ai-dev environment"
+fi
+
 OPENCODE_MCP_LIST=$(docker exec "$CONTAINER" sh -c 'opencode mcp list' 2>/dev/null || echo "")
 assert_contains "opencode mcp list includes lean-ctx" 'lean-ctx' "$OPENCODE_MCP_LIST"
 assert_contains "opencode mcp list shows lean-ctx connected" 'connected' "$OPENCODE_MCP_LIST"

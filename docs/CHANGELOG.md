@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- Add the optional `LEANCTX_MCP_WRAPPER` setting for `ai-dev`; validate consumer-owned executable paths and preserve explicit overrides after first-boot LeanCTX initialization.
+
 ## [1.25.1] - 2026-11-24
 
 ### Fixed
