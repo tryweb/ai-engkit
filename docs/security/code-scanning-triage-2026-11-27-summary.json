@@ -1,0 +1,63 @@
+{
+  "captured_at": "2026-11-27T08:52:37.384504+00:00",
+  "repository": "tryweb/ai-engkit",
+  "api": "GET /repos/tryweb/ai-engkit/code-scanning/alerts?state=open&per_page=100 (all pages)",
+  "raw_api_sha256": "fa475b9411479ca4fe88b584796e082e63f08448b2658f6fa01be228c92c86d0",
+  "total": 1015,
+  "unique_advisory_ids": 342,
+  "owners": {
+    "ubuntu-24.04-apt": 975,
+    "docker-buildx-go": 2,
+    "ai-engkit-admin-npm": 11,
+    "docker-compose-go": 7,
+    "codegraph-bundled-node": 15,
+    "openchamber-managed-core-npm": 5
+  },
+  "fix_evidence": {
+    "ubuntu-24.04-apt": {
+      "no-version-in-scan": 975
+    },
+    "docker-buildx-go": {
+      "version-reported": 2
+    },
+    "ai-engkit-admin-npm": {
+      "version-reported": 11
+    },
+    "docker-compose-go": {
+      "version-reported": 7
+    },
+    "codegraph-bundled-node": {
+      "version-reported": 15
+    },
+    "openchamber-managed-core-npm": {
+      "version-reported": 5
+    }
+  },
+  "scanner_severity": {
+    "medium": 965,
+    "low": 36,
+    "high": 12,
+    "critical": 2
+  },
+  "github_severity": {
+    "high": 290,
+    "medium": 568,
+    "low": 124,
+    "critical": 31,
+    "unknown": 2
+  },
+  "help_instance_mismatches": [
+    9781
+  ],
+  "refs": [
+    "refs/heads/main"
+  ],
+  "scan_commits": [
+    "42a257cdf297efecdbf0286912d084a1cc7192d1"
+  ],
+  "limits": [
+    "Scanner-reported remediation versions, not independently proven exploitability or verified installed fixes.",
+    "No complete Grype JSON/SBOM, Ubuntu source-package mapping or live APT availability check.",
+    "Open alerts only; ignored/dismissed findings and other branches are outside this snapshot."
+  ]
+}
