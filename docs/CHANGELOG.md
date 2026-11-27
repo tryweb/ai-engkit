@@ -1,7 +1,16 @@
 ## [Unreleased]
 
+
+## [1.26.0] - 2026-11-27
+
 ### Added
 - Add the optional `LEANCTX_MCP_WRAPPER` setting for `ai-dev`; validate consumer-owned executable paths and preserve explicit overrides after first-boot LeanCTX initialization.
+
+### Changed
+- Upgrade Docker Engine from 29.10.0 to 29.10.1.
+- Upgrade GitHub CLI from 2.105.0 to 2.106.0.
+- Upgrade GitLab CLI from 1.131.0 to 1.133.0.
+- Upgrade OpenSpec from 2.1.1 to 2.2.0.
 
 ## [1.25.1] - 2026-11-24
 
@@ -2517,7 +2526,7 @@
 
 ## Format
 
-[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.25.1...HEAD
+[Unreleased]: https://github.com/tryweb/ai-engkit/compare/v1.26.0...HEAD
 [0.3.0]: https://github.com/tryweb/ai-engkit/releases/tag/v0.3.0
 [0.3.3]: https://github.com/tryweb/ai-engkit/compare/v0.3.0...v0.3.3
 [0.5.0]: https://github.com/tryweb/ai-engkit/compare/v0.3.3...v0.5.0
@@ -2724,3 +2733,4 @@
 [1.24.9]: https://github.com/tryweb/ai-engkit/compare/v1.24.8...v1.24.9
 [1.25.0]: https://github.com/tryweb/ai-engkit/compare/v1.24.9...v1.25.0
 [1.25.1]: https://github.com/tryweb/ai-engkit/compare/v1.25.0...v1.25.1
+[1.26.0]: https://github.com/tryweb/ai-engkit/compare/v1.25.1...v1.26.0
